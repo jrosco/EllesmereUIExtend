@@ -22,10 +22,19 @@ function CreateFrame(kind, _, parentFrame, template)
     end
     assert(parentFrame == nil or rawget(parentFrame, "nativeFrame"), "native UI parent required")
     local frame = { nativeFrame = true, events = {}, scripts = {}, scale = 1, alpha = 1, kind = kind, parent = parentFrame, template = template,
-        vertexColor = { 1, 1, 1, 1 } }
+        vertexColor = { 1, 1, 1, 1 }, children = {} }
+    if parentFrame then parentFrame.children[#parentFrame.children + 1] = frame end
     function frame:RegisterEvent(event) self.events[event] = true end
     function frame:UnregisterEvent(event) self.events[event] = nil end
     function frame:SetScript(event, callback) self.scripts[event] = callback end
+    function frame:HookScript(event, callback)
+        local previous = self.scripts[event]
+        self.scripts[event] = function(...)
+            if previous then previous(...) end
+            callback(...)
+        end
+    end
+    function frame:GetChildren() return unpack(self.children) end
     function frame:GetScale() return self.scale end
     function frame:SetScale(value) self.scale = value end
     function frame:GetAlpha() return self.alpha end
@@ -414,18 +423,24 @@ function W:Button(parent, text, y, click)
     if EllesmereUI.IsSearchPrebuild() then return {}, 50 end
     local row = CreateFrame("Frame", nil, parent)
     local button = CreateFrame("Button", nil, row)
+    button:SetScript("OnEnter", function() button.nativeHover = true end)
+    button:SetScript("OnLeave", function() button.nativeHover = false end)
     function row:GetChildren() return button end
     rows[text] = { click = click, row = row, button = button, y = y }
     return row, 50
 end
-function W:WideButton(_, text, _, click)
-    rows[text] = { click = click }
-    return {}, 62
+function W:WideButton(parent, text, _, click)
+    local row = EllesmereUI.IsSearchPrebuild() and {} or CreateFrame("Frame", nil, parent)
+    local button = not EllesmereUI.IsSearchPrebuild() and CreateFrame("Button", nil, row) or nil
+    rows[text] = { click = click, row = row, button = button }
+    return row, 62
 end
 function W:WideDualButton(_, first, second, _, onFirst, onSecond, _)
     local row = EllesmereUI.IsSearchPrebuild() and {} or CreateFrame()
-    rows[first] = { click = onFirst, row = row }
-    rows[second] = { click = onSecond, row = row }
+    local firstButton = not EllesmereUI.IsSearchPrebuild() and CreateFrame("Button", nil, row) or nil
+    local secondButton = not EllesmereUI.IsSearchPrebuild() and CreateFrame("Button", nil, row) or nil
+    rows[first] = { click = onFirst, row = row, button = firstButton }
+    rows[second] = { click = onSecond, row = row, button = secondButton }
     return row, 57
 end
 function W:WideTripleButton(_, first, second, third, _, onFirst, onSecond, onThird, _)
@@ -435,7 +450,7 @@ function W:WideTripleButton(_, first, second, third, _, onFirst, onSecond, onThi
     rows[third] = { click = onThird, row = row }
     return row, 57
 end
-function W:Toggle(_, text, _, get, set) rows[text] = { get = get, set = set }; return {}, 50 end
+function W:Toggle(_, text, _, get, set, tooltip) rows[text] = { get = get, set = set, tooltip = tooltip }; return {}, 50 end
 function W:Spacer(parent, y, height)
     if EllesmereUI.IsSearchPrebuild() then return {}, height end
     local row = CreateFrame("Frame", nil, parent)
@@ -443,8 +458,8 @@ function W:Spacer(parent, y, height)
     row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, y)
     return row, height
 end
-function W:Slider(_, text, _, _, _, _, get, set) rows[text] = { get = get, set = set }; return {}, 50 end
-function W:Dropdown(_, text, _, values, get, set) rows[text] = { get = get, set = set, values = values }; return {}, 50 end
+function W:Slider(_, text, _, _, _, _, get, set, tooltip) rows[text] = { get = get, set = set, tooltip = tooltip }; return {}, 50 end
+function W:Dropdown(_, text, _, values, get, set, _, tooltip) rows[text] = { get = get, set = set, values = values, tooltip = tooltip }; return {}, 50 end
 function W:DualRow(_, _, config, right)
     -- Search DualRow returns a frameless absorber; even its regions are placeholders.
     if EllesmereUI.IsSearchPrebuild() then
@@ -459,9 +474,12 @@ function W:DualRow(_, _, config, right)
         local row = CreateFrame()
         row._leftRegion = CreateFrame("Frame", nil, row)
         row._rightRegion = CreateFrame("Frame", nil, row)
+        for _, cfg in ipairs({ config, right }) do
+            rows[cfg.text] = { tooltip = cfg.tooltip }
+        end
         if right and right.type == "toggle" then
             rows[right.text] = { get = right.getValue, set = right.setValue, row = row,
-                disabled = right.disabled, disabledTooltip = right.disabledTooltip }
+                disabled = right.disabled, disabledTooltip = right.disabledTooltip, tooltip = right.tooltip }
         end
         return row, 50
     end
@@ -471,7 +489,7 @@ function W:DualRow(_, _, config, right)
     for _, cfg in ipairs({ config, right }) do
         if cfg.type == "colorpicker" then assert(type(cfg.getValue()) == "number") end
         rows[cfg.text] = { get = cfg.getValue, set = cfg.setValue, disabled = cfg.disabled,
-            disabledTooltip = cfg.disabledTooltip, values = cfg.values, row = row }
+            disabledTooltip = cfg.disabledTooltip, values = cfg.values, row = row, tooltip = cfg.tooltip }
     end
     return row, 50
 end
@@ -507,6 +525,8 @@ EllesmereUI = {
     end,
     MakeStyledButton = function(button, text, _, _, click)
         rows[text] = { click = click, row = button.parent, button = button }
+        button:SetScript("OnEnter", function() button.nativeHover = true end)
+        button:SetScript("OnLeave", function() button.nativeHover = false end)
     end,
     MakeFont = function(parent) return parent:CreateFontString() end,
     L = function(text) return text end,
@@ -517,7 +537,8 @@ EllesmereUI = {
         local button = CreateFrame("Button", nil, parent)
         button:SetSize(width, 30)
         button:SetFrameLevel(frameLevel)
-        rows[opts.label] = { get = get, set = set, items = items, emptyLabel = opts.emptyLabel, row = parent.parent, button = button }
+        local tooltip = rows[opts.label] and rows[opts.label].tooltip
+        rows[opts.label] = { get = get, set = set, items = items, emptyLabel = opts.emptyLabel, row = parent.parent, button = button, tooltip = tooltip }
         return button, Noop
     end,
     ResolveTexturePath = function(textureTable, key, fallback) return textureTable[key] or fallback end,

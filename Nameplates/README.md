@@ -7,6 +7,8 @@ The **Rules** page starts with **Enable rule styling**, the master switch for th
 
 Under **Rule Order**, Edit rule and Rule name share one row. Add, Copy, Delete, Move Up and Move Down share a single action row that stays together during page search.
 
+Settings, condition choices, cog controls and action buttons have short hover descriptions. Disabled controls explain what to enable or which client/style is required. Condition lists accept any selected choice; leaving them empty means Any, while all condition groups must match.
+
 ## Rules preview header
 
 The **Rules** page has a fixed hero header using EUI's native `SetContentHeader` system, like its built-in Nameplates page. The combined sample contains a health bar, an always-visible cast bar with a repeating three-second cast/timer, and target arrows. It stays above the settings while you scroll and replaces the old inline previews. Profiles, Sharing and About have no preview header.
@@ -186,3 +188,5 @@ Focused follow-up suites are `tests/style-capability.lua`, `tests/cooldown-trans
 `tests/reset-defaults.lua` covers active-profile reset, pristine templates, normalized conditions, Non Target selections and editor/header refresh. `tests/rename.lua` verifies the renamed identity and fresh settings without legacy aliases or migration.
 
 `tests/helpers.lua` covers shared utilities, secret-check availability, numeric fallbacks, deep-copy isolation and texture resolution on older clients. The runtime suite also verifies that Copy Rule isolates deeply nested custom conditions.
+
+`tests/tooltips.lua` checks concise tooltip coverage for settings, condition choices, cogs, rule actions, profiles and sharing, including native button hover behavior, editor-lock explanations and frameless search prebuilds.

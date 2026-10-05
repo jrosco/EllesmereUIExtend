@@ -1,11 +1,11 @@
 local _, addon = ...
 local api = EllesmereUIExtendNameplates
 local OPTIONS = {
-    { key = "healthBar", label = "Health bar", tooltip = "Health bar, its child elements and additional health border." },
-    { key = "castBar", label = "Cast bar", tooltip = "Cast bar, icon, text, shield and borders, including lifted casts." },
-    { key = "classResources", label = "Class resources", tooltip = "Class-resource pips, backgrounds, decorations and resource bars." },
-    { key = "text", label = "Text", tooltip = "Nameplate name, health, level, target-of-target, threat, classification and friendly subtitle text. Cast-bar text follows Cast bar; aura counters follow Other elements." },
-    { key = "other", label = "Other elements", tooltip = "Buffs, debuffs, crowd-control icons, cast-lockout indicators, markers, selection indicators and remaining nameplate elements." },
+    { key = "healthBar", label = "Health bar", tooltip = "Scale the health bar and its borders and glows. Text scales separately." },
+    { key = "castBar", label = "Cast bar", tooltip = "Scale the cast bar, icon, text, borders and glows, including lifted casts." },
+    { key = "classResources", label = "Class resources", tooltip = "Scale class-resource bars and pips." },
+    { key = "text", label = "Text", tooltip = "Scale nameplate labels, including names and health text. Cast text follows Cast bar; aura counters follow Other elements." },
+    { key = "other", label = "Other elements", tooltip = "Scale auras, crowd control, cast-lockout indicators, markers, target arrows and selection indicators." },
 }
 api.ScaleElementOptions = OPTIONS
 local policies = setmetatable({}, { __mode = "k" })

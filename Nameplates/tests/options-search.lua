@@ -20,6 +20,13 @@ function CreateFrame(kind, _, parent)
     function frame:ClearAllPoints() self.point = nil end
     function frame:SetText(text) self.text = text end
     function frame:SetScript(event, fn) self[event] = fn end
+    function frame:HookScript(event, fn)
+        local previous = self[event]
+        self[event] = function(...)
+            if previous then previous(...) end
+            fn(...)
+        end
+    end
     function frame:GetChildren() return unpack(self.children) end
     function frame:CreateFontString() return CreateFrame("FontString", nil, self) end
     function frame:CreateTexture() return CreateFrame("Texture", nil, self) end

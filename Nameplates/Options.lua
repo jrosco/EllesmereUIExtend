@@ -21,10 +21,53 @@ local PLAYER_COMBAT_ORDER = { "any", "inCombat", "outOfCombat" }
 local INSTANCES = { any = "Any instance type", world = "Open world", dungeon = "Dungeon", raid = "Raid",
     battleground = "Battleground", arena = "Arena", scenario = "Scenario", delve = "Delve" }
 local INSTANCE_ORDER = { "any", "world", "dungeon", "raid", "battleground", "arena", "scenario", "delve" }
-local THREAT_TIPS = {
-    nonTank = "Matches when a non-tank (Damage or Healer role) holds this unit's aggro.",
-    tank = "Matches when a tank holds this unit's aggro.",
-    me = "Matches when you hold this unit's aggro, regardless of your role.",
+local CONDITION_TIPS = {
+    unitType = {
+        player = "Player characters.", npc = "Non-player characters, excluding player-controlled pets.",
+        pet = "Player-controlled pets.", creature = "NPCs and player-controlled pets.",
+    },
+    reaction = {
+        friendly = "Units friendly to you.", enemy = "Units you can attack, excluding neutral units.",
+        neutral = "Neutral units, including those you can attack.",
+    },
+    classification = {
+        normal = "Units with normal classification.", elite = "Elite units.", rare = "Rare units.",
+        rareelite = "Rare elite units.", boss = "Units classified as bosses.", minus = "Minor units.",
+    },
+    target = {
+        yes = "Your current target.", no = "Other units while you have a target selected.",
+        none = "Units while you have no target selected.",
+    },
+    threat = {
+        nonTank = "A damage dealer or healer holds this unit's aggro.",
+        tank = "A tank holds this unit's aggro.", me = "You hold this unit's aggro, regardless of your role.",
+    },
+    playerCombat = { inCombat = "Your character is in combat.", outOfCombat = "Your character is out of combat." },
+    instanceType = {
+        world = "Outside an instance.", dungeon = "Inside a dungeon.", raid = "Inside a raid instance.",
+        battleground = "Inside a battleground.", arena = "Inside an arena. Unavailable on WoW Forever.",
+        scenario = "Inside a scenario, excluding delves. Unavailable on WoW Forever.",
+        delve = "Inside a delve, even after completion. Unavailable on WoW Forever.",
+    },
+    castState = {
+        none = "Units with no active cast or channel.",
+        casting = "Any active cast, including channels and empowered casts. Custom color applies to all cast states.",
+        channel = "Units channeling a spell, excluding empowered casts.", empowered = "Units casting an empowered spell.",
+        interruptible = "Cast color when your interrupt is ready. Other appearance settings apply to all active casts.",
+        interruptOnCD = "Cast color when your interrupt is on cooldown. Other appearance settings apply to all active casts.",
+        uninterruptible = "Cast color for spells that cannot be interrupted. Other appearance settings apply to all active casts.",
+    },
+    spellSchool = {
+        physical = "Physical spells.", holy = "Holy spells.", fire = "Fire spells.", nature = "Nature spells.",
+        frost = "Frost spells.", shadow = "Shadow spells.", arcane = "Arcane spells.", mixed = "Spells with more than one school.",
+    },
+}
+local ACTION_TIPS = {
+    ["Add Rule"] = "Add a current-target rule at the top of the list.",
+    ["Copy Rule"] = "Duplicate this rule and place the copy directly below it.",
+    ["Delete Rule"] = "Delete this rule after confirmation. At least one rule must remain.",
+    ["Move Rule Up"] = "Move this rule up to give it higher priority.",
+    ["Move Rule Down"] = "Move this rule down to give it lower priority.",
 }
 local CAST_STATES = {
     any = "Any cast state", none = "Not casting", casting = "Casting", channel = "Channeling",
@@ -149,6 +192,21 @@ local function ProfilePrompt(title, initialText, confirmText, submit)
     })
 end
 
+local function AttachTooltip(control, text)
+    if not control or not text or type(control.HookScript) ~= "function" then return end
+    -- Keep EUI's existing hover styling and click handlers.
+    control:HookScript("OnEnter", function() EllesmereUI.ShowWidgetTooltip(control, text) end)
+    control:HookScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
+end
+
+local function ButtonTooltips(row, ...)
+    -- Search prebuild rows are frameless placeholders, not native controls.
+    if EllesmereUI.IsSearchPrebuild() then return end
+    for index, button in ipairs({ row:GetChildren() }) do
+        AttachTooltip(button, select(index, ...))
+    end
+end
+
 local function BuildProfilesPage(parent, yOffset)
     local W = EllesmereUI.Widgets
     local y = yOffset
@@ -169,22 +227,27 @@ local function BuildProfilesPage(parent, yOffset)
             Changed()
             Rebuild()
         end, order,
-        "Each character chooses a profile. Default is shared by characters that have not selected another profile; assigning the same named profile to multiple characters shares those rules.")
+        "Choose this character's rules profile. Characters using the same profile share its rules.")
     y = y - h
 
-        _, h = W:SectionHeader(parent, "MANAGE PROFILES", y); y = y - h
-        if info.active == "Default" then
-        _, h = W:WideButton(parent, "Create Profile", y,
+    _, h = W:SectionHeader(parent, "MANAGE PROFILES", y); y = y - h
+    if info.active == "Default" then
+        local row
+        row, h = W:WideButton(parent, "Create Profile", y,
             function() ProfilePrompt("Create Nameplate Profile", nil, "Create", addon.CreateProfile) end, 420)
+        ButtonTooltips(row, "Create a profile with the default rules and select it for this character.")
         y = y - h
         _, h = W:SectionHeader(parent, "DEFAULT IS SHARED AND CANNOT BE RENAMED OR DELETED", y); y = y - h
     else
-        _, h = W:WideDualButton(parent, "Create Profile", "Rename Profile", y,
+        local row
+        row, h = W:WideDualButton(parent, "Create Profile", "Rename Profile", y,
             function() ProfilePrompt("Create Nameplate Profile", nil, "Create", addon.CreateProfile) end,
             function() ProfilePrompt("Rename Nameplate Profile", info.active, "Rename", addon.RenameProfile) end,
             210)
+        ButtonTooltips(row, "Create a profile with the default rules and select it for this character.",
+            "Rename this profile for every character using it.")
         y = y - h
-        _, h = W:WideButton(parent, "Delete Active Profile", y, function()
+        row, h = W:WideButton(parent, "Delete Active Profile", y, function()
             EllesmereUI:ShowConfirmPopup({
                 title = "Delete Nameplate Profile?",
                 message = ("Delete '%s'? Characters using it will switch to Default."):format(info.active),
@@ -198,6 +261,7 @@ local function BuildProfilesPage(parent, yOffset)
                 end,
             })
         end, 420)
+        ButtonTooltips(row, "Delete this profile. Characters using it switch to Default.")
         y = y - h
     end
 
@@ -212,8 +276,11 @@ local function BuildSharingPage(parent, yOffset)
     _, h = W:SectionHeader(parent,
         "Export creates a copyable code. Import replaces the rules in the selected character profile.", y)
     y = y - h
-    _, h = W:WideDualButton(parent, "Export Rule Set", "Import Rule Set", y,
+    local row
+    row, h = W:WideDualButton(parent, "Export Rule Set", "Import Rule Set", y,
         ExportRuleSet, ImportRuleSet, 230)
+    ButtonTooltips(row, "Copy a code containing this profile's rules, not its character assignments.",
+        "Replace this profile's rules with a shared code. Other characters using this profile are also affected.")
     y = y - h
     return math.abs(y)
 end
@@ -310,7 +377,7 @@ local function BuildRulesPage(parent, yOffset)
         end
         local function Tip()
             if RuleLocked() then return LockTip() end
-            if not addon.SupportsRuleGlows() then return "Update EllesmereUI to use its shared glow engine." end
+            if not addon.SupportsRuleGlows() then return "Update EllesmereUI to use border glows." end
             return barTip
         end
         local function NoGlow()
@@ -328,9 +395,12 @@ local function BuildRulesPage(parent, yOffset)
                 if not addon.ValidateRuleGlowStyle(value) then return end
                 GetRule().style[prefix .. "GlowStyle"] = value; Changed(); Rebuild()
             end,
-            tooltip = "Animated bar glow alongside the existing border, using this rule's match conditions. The cog edits Pixel Glow parameters or Auto-Cast Shine sparkle size. A plugin cast glow temporarily suppresses EUI's Important Cast Glow. Under restricted Retail visibility, Auto-Cast Shine uses native Pixel Glow instead.",
+            tooltip = (prefix == "health" and "Add an animated glow around the health bar. No custom border is required."
+                or "Add an animated glow around the cast bar. Replaces EUI's Important Cast Glow while active.")
+                .. " Retail may use Pixel Glow when Shine cannot animate.",
         }, { type = "colorpicker", text = title .. " glow color", hasAlpha = false,
-            disabled = NoGlow, disabledTooltip = "Choose a border glow first.",
+            tooltip = "Choose the " .. title:lower() .. " bar's glow color.",
+            disabled = NoGlow, disabledTooltip = function() return Locked() and Tip() or "Choose a border glow first." end,
             getValue = function()
                 local c = addon.GetRuleGlowColor(GetRule().style, prefix)
                 return c.r, c.g, c.b, 1
@@ -347,34 +417,36 @@ local function BuildRulesPage(parent, yOffset)
             end
             EllesmereUI.BuildInlineCog(row._leftRegion, {
                 title = title .. " glow settings", captureRegion = row._leftRegion,
+                tip = "Adjust the glow's appearance and animation.",
                 disabled = function() return Locked() or (NotPixel() and NotShine()) end,
-                disabledTooltip = function() return Locked() and Tip() or "Choose Pixel Glow or Auto-Cast Shine to edit its settings." end,
+                disabledTooltip = function() return Locked() and Tip() or "Choose Pixel Glow or Auto-Cast Shine first." end,
                 rows = rule.style[prefix .. "GlowStyle"] == 3 and {
                     { type = "slider", label = "Sparkle size (%)", min = 50, max = 200, step = 5,
                         disabled = NotShine, disabledTooltip = "Choose Auto-Cast Shine first.",
-                        tooltip = "Changes the size of the individual sparkles, not the bar, orbit speed or sparkle count. 100% is EUI's normal size.",
+                        tooltip = "Size of each sparkle. 100% uses EUI's normal size.",
                         get = function() return rule.style[prefix .. "GlowShineSize"] or 100 end,
                         set = function(value) Set("GlowShineSize", value, true) end },
                 } or {
                     { type = "slider", label = "Lines", min = 2, max = 16, step = 1, disabled = NotPixel,
-                        disabledTooltip = "Choose Pixel Glow to edit its parameters.",
+                        disabledTooltip = "Choose Pixel Glow first.", tooltip = "Number of glowing lines around the bar.",
                         get = function() return rule.style[prefix .. "GlowLines"] or 8 end,
                         set = function(value) Set("GlowLines", value) end },
                     { type = "slider", label = "Thickness", min = 1, max = 4, step = 1, disabled = NotPixel,
-                        disabledTooltip = "Choose Pixel Glow to edit its parameters.",
+                        disabledTooltip = "Choose Pixel Glow first.", tooltip = "Thickness of the glowing lines.",
                         get = function() return rule.style[prefix .. "GlowThickness"] or 2 end,
                         set = function(value) Set("GlowThickness", value) end },
                     { type = "slider", label = "Speed", min = 1, max = 8, step = 1, disabled = NotPixel,
-                        disabledTooltip = "Choose Pixel Glow to edit its parameters.",
+                        disabledTooltip = "Choose Pixel Glow first.", tooltip = "How fast the glow moves. Higher values are faster.",
                         get = function() return 9 - (rule.style[prefix .. "GlowSpeed"] or 4) end,
                         set = function(value) Set("GlowSpeed", 9 - value) end },
                     { type = "toggle", label = "Background", disabled = NotPixel,
-                        disabledTooltip = "Choose Pixel Glow to edit its parameters.",
+                        disabledTooltip = "Choose Pixel Glow first.", tooltip = "Show a colored background behind the glow.",
                         get = function() return rule.style[prefix .. "GlowBackground"] == true end,
                         set = function(value) Set("GlowBackground", value) end },
                     { type = "colorpicker", label = "Background Color",
                         disabled = function() return NotPixel() or rule.style[prefix .. "GlowBackground"] ~= true end,
                         disabledTooltip = "Enable Pixel Glow Background first.",
+                        tooltip = "Choose the glow's background color.",
                         get = function()
                             local c = rule.style[prefix .. "GlowBackgroundColor"] or { r = 0, g = 0, b = 0 }
                             return c.r, c.g, c.b
@@ -393,7 +465,7 @@ local function BuildRulesPage(parent, yOffset)
     _, h = W:Toggle(parent, "Enable rule styling", y,
         function() return DB().enabled ~= false end,
         function(value) DB().enabled = value; Changed(); Rebuild() end,
-        "Enable or disable all rule styling in the active profile. Turning this off restores EUI appearance and locks the rule editor without deleting rules or changing their individual enabled settings.")
+        "Apply this profile's rules. Off restores EUI styling and locks editing without deleting your rules.")
     y = y - h
 
     -- Search stores exact section names on first indexing. Keep them stable;
@@ -413,13 +485,13 @@ local function BuildRulesPage(parent, yOffset)
             DB().selectedRule = tonumber(value) or 1
             Rebuild()
         end,
-        tooltip = "Rules are checked from top to bottom; the first enabled match wins. New rules start enabled for your current target.",
+        tooltip = "Choose a rule to edit. Rules are checked from top to bottom; the first enabled match wins.",
     }, {
         type = "input",
         text = "Rule name",
         inputWidth = 260,
         inputStyle = "popup",
-        tooltip = "Rename this rule. Press Enter or click outside the field to save. Blank names are ignored.",
+        tooltip = "Rename this rule. Press Enter or click outside to save.",
         getValue = function() return rule.name or ("Rule " .. selected) end,
         setValue = function(value)
             local name = value:gsub("|", ""):gsub("%c", " "):gsub("^%s+", ""):gsub("%s+$", "")
@@ -432,7 +504,7 @@ local function BuildRulesPage(parent, yOffset)
     local actions = {}
     local function Action(text, onClick)
         local locked = text == "Add Rule" and GlobalLocked or RuleLocked
-        actions[#actions + 1] = { text = text, locked = locked, onClick = function()
+        actions[#actions + 1] = { text = text, tooltip = ACTION_TIPS[text], locked = locked, onClick = function()
             if locked() then return end
             onClick()
         end }
@@ -543,11 +615,11 @@ local function BuildRulesPage(parent, yOffset)
                 EllesmereUI.MakeStyledButton(button, action.text, 13, EllesmereUI.RB_COLOURS, action.onClick)
                 local wi = EllesmereUI._widgetInternals
                 if wi and wi.IndexSlotForSearch then
-                    wi.IndexSlotForSearch(parent, action.text)
+                    wi.IndexSlotForSearch(parent, action.text, action.tooltip)
                 elseif EllesmereUI._RegisterSearchEntry then
                     local section = parent._currentSection and parent._currentSection._sectionName
                     local selector = EllesmereUI._buildingSelector
-                    EllesmereUI._RegisterSearchEntry(action.text, localizedNames[i], nil,
+                    EllesmereUI._RegisterSearchEntry(action.text, localizedNames[i], action.tooltip,
                         EllesmereUI._buildingModule, EllesmereUI._buildingPage, section,
                         selector and selector.setter, selector and selector.key)
                 end
@@ -555,6 +627,7 @@ local function BuildRulesPage(parent, yOffset)
             button:ClearAllPoints()
             PP.Size(button, buttonWidth, 32)
             PP.Point(button, "LEFT", row, "LEFT", (i - 1) * (buttonWidth + gap), 0)
+            AttachTooltip(button, action.tooltip)
             AttachLock(button, action.locked, LockTip)
         end
         row._labelText = table.concat(names, " ")
@@ -565,6 +638,7 @@ local function BuildRulesPage(parent, yOffset)
 
     _, h = W:SectionHeader(parent, "MATCH CONDITIONS", y); y = y - h
     _, h = LockedRow({ type = "toggle", text = "Rule enabled",
+        tooltip = "Use this rule when all its conditions match. Off keeps its settings but skips the rule.",
         getValue = function() return GetRule().enabled ~= false end,
         setValue = function(value) GetRule().enabled = value; Rebuild(); Changed() end,
     }, nil, "global")
@@ -575,7 +649,7 @@ local function BuildRulesPage(parent, yOffset)
         for _, value in ipairs(keys) do
             if value ~= "any" then
                 local item = { key = value, label = values[value] }
-                if key == "threat" then item.tooltip = THREAT_TIPS[value] end
+                item.tooltip = CONDITION_TIPS[key] and CONDITION_TIPS[key][value]
                 local requiresStyle = key == "castState" and CUSTOM_CAST_STATES[value]
                 local unavailableInstance = function() return key == "instanceType" and not addon.SupportsInstanceType(value) end
                 item.lockedFn = function() return RuleLocked() or (requiresStyle and not addon.SupportsCastColorStates()) or unavailableInstance() or false end
@@ -595,7 +669,7 @@ local function BuildRulesPage(parent, yOffset)
         end
         return {
             text = label,
-            tooltip = tooltip,
+            tooltip = tooltip .. " Any selected option can match. Leave empty for Any.",
             items = items,
             emptyLabel = values.any,
             getSelected = function(option) return GetSelection()[option] == true end,
@@ -649,20 +723,21 @@ local function BuildRulesPage(parent, yOffset)
     end
     local conditions = {
         ConditionMultiDropdown("Unit type", "unitType", UNIT_TYPES, UNIT_ORDER,
-            "Matches any selected unit type. Any creature includes NPCs and player-controlled pets."),
-        ConditionMultiDropdown("Reaction", "reaction", REACTIONS, REACTION_ORDER),
+            "Choose unit types. Any creature includes NPCs and player-controlled pets."),
+        ConditionMultiDropdown("Reaction", "reaction", REACTIONS, REACTION_ORDER,
+            "Choose whether units are friendly, enemy or neutral to you."),
         ConditionMultiDropdown("Classification", "classification", CLASSIFICATIONS, CLASSIFICATION_ORDER,
-            "Matches any selected game classification: normal, elite, rare, rare elite, boss, or minor."),
+            "Choose unit ranks, such as elite, rare or boss."),
         ConditionMultiDropdown("Target state", "target", TARGETS, TARGET_ORDER,
-            "Current target matches your selected unit. Not current target requires a selected target and matches all other units. No target selected matches units only while you have no target. Multiple selections combine with OR; leaving the list empty means Any."),
+            "Choose whether units are your target, other units, or shown while you have no target."),
         ConditionMultiDropdown("Cast state", "castState", CAST_STATES, CAST_ORDER,
-            "Casting matches all active casts. Interruptible cast, Interrupt on CD, and Uninterruptible cast implicitly enable Casting for size, health styling, texture, opacity and borders without checking Casting. Those effects use the first matching active-cast rule. Custom cast colors remain state-specific: the first matching rule per color state wins and native rendering selects the displayed state. Other filters still combine with AND; cast choices combine with OR."),
+            "Choose cast types or cast-color states. Color-state choices apply other styling to all active casts."),
         ConditionMultiDropdown("Spell school", "spellSchool", SCHOOLS, SCHOOL_ORDER,
-            "Learns spell schools from combat-log cast starts while a school rule is enabled. Unknown spells do not match a specific school."),
+            "Choose spell schools for active casts. Unknown schools cannot match until a cast start is observed."),
         ConditionMultiDropdown("Player combat state", "playerCombat", PLAYER_COMBAT, PLAYER_COMBAT_ORDER,
-            "Matches your character's combat state, not the nameplate unit's. Choices combine with OR; empty means Any (both states). Other condition groups still combine with AND."),
+            "Choose your character's combat state, not the unit's."),
         ConditionMultiDropdown("Instance Type", "instanceType", INSTANCES, INSTANCE_ORDER,
-            "Matches where your character is: open world, dungeon, raid, battleground, arena, scenario or Retail delve. This is not your party/raid group type. Choices combine with OR; empty means Any. Delves are distinct from scenarios, including after completion. Arena, scenario and delve choices are unavailable on Forever."),
+            "Choose where your character is, not your group type. Arena, scenario and delve are unavailable on Forever."),
     }
     for index = 1, #conditions, 2 do
         local left, right = conditions[index], conditions[index + 1]
@@ -681,7 +756,7 @@ local function BuildRulesPage(parent, yOffset)
         y = y - rowHeight
     end
     local threat = ConditionMultiDropdown("Threat", "threat", THREATS, THREAT_ORDER,
-        "Matches the actual aggro holder: a tank, a non-tank (Damage/Healer), or you. Uses detailed threat data, not temporary spell targets. Multiple selections combine with OR; other filter groups combine with AND. Secret or unavailable threat/role data does not match. Unassigned roles do not count as known tanks or non-tanks.")
+        "Choose who holds the unit's aggro. Unknown threat or roles cannot match the corresponding choice.")
     local threatRow
     threatRow, h = LockedRow(
         { type = "spacer", text = threat.text, tooltip = threat.tooltip }, {
@@ -691,7 +766,7 @@ local function BuildRulesPage(parent, yOffset)
             GetRule().conditions.questObjective = value and "yes" or "any"
             Changed()
         end,
-        tooltip = "When on, matches only units shown as incomplete objectives in your own quest log. Uses EUI's quest detector and follows its Show In Instances setting. When off, quest status does not restrict this rule.",
+        tooltip = "Match only incomplete objectives in your quest log. Follows EUI's Show In Instances setting. Off ignores quest status.",
     })
     if not EllesmereUI.IsSearchPrebuild() then BuildConditionMultiDropdown(threatRow._leftRegion, threat) end
     y = y - h
@@ -701,12 +776,12 @@ local function BuildRulesPage(parent, yOffset)
         type = "slider", text = "Nameplate size (%)", min = 50, max = 200, step = 5,
         getValue = function() return GetRule().style.scale or 100 end,
         setValue = function(value) GetRule().style.scale = value; Changed() end,
-        tooltip = "Multiplies EUI's normal size, including its animations. Use the cog to choose which elements scale. All elements scale by default; 100% uses EUI's normal size.",
+        tooltip = "Scale selected elements relative to EUI's size. 100% keeps EUI's size. Use the cog to choose elements.",
     }, {
         type = "slider", text = "Opacity (%)", min = 0, max = 100, step = 5,
         getValue = function() return GetRule().style.opacity or 100 end,
         setValue = function(value) GetRule().style.opacity = value; Changed() end,
-        tooltip = "Multiplies the nameplate's current EUI opacity by this value.",
+        tooltip = "Fade the whole nameplate. 100% keeps EUI's opacity; 0% hides it.",
     })
     if not EllesmereUI.IsSearchPrebuild() and EllesmereUI.BuildInlineCog then
         -- A popup can outlive its page/profile. Bind it to the rule that opened
@@ -714,6 +789,7 @@ local function BuildRulesPage(parent, yOffset)
         local function CogLocked() return RuleLocked() or DB() ~= db or GetRule() ~= rule end
         local cogRows = {
             { type = "toggle", label = "Scale all", disabled = CogLocked, disabledTooltip = LockTip,
+                tooltip = "Select all elements for scaling. Off clears every selection.",
                 get = function()
                     for _, option in ipairs(addon.ScaleElementOptions) do
                         if not addon.IsScaleElementEnabled(rule.style, option.key) then return false end
@@ -757,7 +833,7 @@ local function BuildRulesPage(parent, yOffset)
         EllesmereUI.BuildInlineCog(sizeRow._leftRegion, {
             title = "Nameplate scaling", rows = cogRows, captureRegion = sizeRow._leftRegion,
             disabled = CogLocked, disabledTooltip = LockTip,
-            tip = "Choose which elements the nameplate size rule scales. Unchecked elements retain EUI's normal size and animations.",
+            tip = "Choose which elements scale. Unchecked elements keep EUI's size.",
         })
     end
     y = y - h
@@ -765,21 +841,29 @@ local function BuildRulesPage(parent, yOffset)
     _, h = LockedRow({ type = "toggle", text = "Override health bar",
         getValue = function() return GetRule().style.healthEnabled ~= false end,
         setValue = function(value) GetRule().style.healthEnabled = value; Changed(); Rebuild() end,
-        tooltip = "Apply the health-bar settings below when this rule wins. Off restores EUI color, fill texture and native border, and stops the rule's health glow. Nameplate size, opacity and cast overrides remain independent.",
+        tooltip = "Apply this rule's health-bar appearance. Off restores EUI's health bar; nameplate size and opacity are unchanged.",
     })
     y = y - h
     local function HealthOff() return GetRule().style.healthEnabled == false end
+    local function BorderTip(toggle)
+        return function()
+            if not addon.SupportsBorderStyles() then return "Update EllesmereUI to use border overrides." end
+            return "Enable " .. toggle .. " first."
+        end
+    end
     local function HealthBorderOff()
         local style = GetRule().style
         return HealthOff() or style.borderEnabled == false or (style.borderSize or 0) <= 0 or not addon.SupportsBorderStyles()
     end
     _, h = LockedRow({
         type = "toggle", text = "Custom health color", disabled = HealthOff,
+        tooltip = "Use this rule's health-bar color. Tapped enemies keep EUI's tapped color.",
         disabledTooltip = "Enable Override health bar first.",
         getValue = function() return GetRule().style.healthColorEnabled ~= false end,
         setValue = function(value) GetRule().style.healthColorEnabled = value; Changed(); Rebuild() end,
     }, {
         type = "colorpicker", text = "Health-bar color", hasAlpha = false,
+        tooltip = "Choose the health bar's fill color.",
         disabled = function() return HealthOff() or GetRule().style.healthColorEnabled == false end,
         disabledTooltip = "Enable Custom health color first.",
         getValue = function()
@@ -791,14 +875,15 @@ local function BuildRulesPage(parent, yOffset)
     _, h = LockedRow({
         type = "dropdown", text = "Health-bar texture", values = barTextureValues, order = barTextureOrder,
         disabled = HealthOff, disabledTooltip = "Enable Override health bar first.",
-        tooltip = "Use EUI texture restores the current EUI texture. Choose Flat or Blizzard to override it.",
+        tooltip = "Choose the health bar's fill texture. Use EUI texture keeps EUI's current choice.",
         getValue = function() return GetRule().style.texture or "eui" end,
         setValue = function(value) GetRule().style.texture = value; Changed() end,
     }, nil)
     y = y - h
     _, h = LockedRow({
         type = "toggle", text = "Override health border", disabled = function() return HealthOff() or not addon.SupportsBorderStyles() end,
-        disabledTooltip = "Enable Override health bar first.",
+        tooltip = "Replace the health bar's border with this rule's border. Off restores EUI's border.",
+        disabledTooltip = BorderTip("Override health bar"),
         getValue = function()
             local style = GetRule().style
             return style.borderEnabled ~= false and (style.borderSize or 0) > 0
@@ -811,7 +896,8 @@ local function BuildRulesPage(parent, yOffset)
         end,
     }, {
         type = "colorpicker", text = "Health border color", hasAlpha = false,
-        disabled = HealthBorderOff, disabledTooltip = "Enable Override health border first.",
+        tooltip = "Choose the health bar's border color.",
+        disabled = HealthBorderOff, disabledTooltip = BorderTip("Override health border"),
         getValue = function()
             local color = GetRule().style.borderColor
             return color.r, color.g, color.b, 1
@@ -820,14 +906,14 @@ local function BuildRulesPage(parent, yOffset)
     }); y = y - h
     _, h = LockedRow({
         type = "dropdown", text = "Health border texture", values = borderTextureValues, order = borderTextureOrder,
-        disabled = HealthBorderOff, disabledTooltip = "Enable Override health border first.",
+        disabled = HealthBorderOff, disabledTooltip = BorderTip("Override health border"),
         getValue = function() return GetRule().style.borderTexture or "solid" end,
         setValue = function(value) GetRule().style.borderTexture = value; Changed(); Rebuild() end,
-        tooltip = "Replaces EUI's native health-bar outline using its shared media border renderer. Off restores EUI's current texture, color and size.",
+        tooltip = "Choose the health bar's border style.",
     }, {
         type = "slider", text = "Health border size", min = 1, max = (GetRule().style.borderTexture or "solid") == "solid" and 8 or 4, step = 1,
-        disabled = HealthBorderOff, disabledTooltip = "Enable Override health border first.",
-        tooltip = "Border thickness/size step, interpreted by EUI's shared border renderer for the selected media texture. Turning the override off preserves the saved settings.",
+        disabled = HealthBorderOff, disabledTooltip = BorderTip("Override health border"),
+        tooltip = "Set border thickness in pixels for Solid, or size step for textured borders.",
         getValue = function() return math.max(1, GetRule().style.borderSize or 2) end,
         setValue = function(value) GetRule().style.borderSize = value; Changed() end,
     }); y = y - h
@@ -837,14 +923,15 @@ local function BuildRulesPage(parent, yOffset)
     _, h = LockedRow({ type = "toggle", text = "Override cast bar",
         getValue = function() return GetRule().style.castEnabled == true end,
         setValue = function(value) GetRule().style.castEnabled = value; Changed(); Rebuild() end,
-        tooltip = "Apply the cast settings below when this rule wins. Off restores EUI styling. Only affects nameplates with an EUI cast bar; friendly plates currently have none.",
+        tooltip = "Apply this rule's cast-bar appearance. Off restores EUI's cast bar. Does not add cast bars to friendly plates.",
     })
     y = y - h
     local defaults = addon.CastStyleDefaults
     local function CastOff() return GetRule().style.castEnabled ~= true end
-    local function CastToggle(text, key)
+    local function CastToggle(text, key, tooltip)
         return {
             type = "toggle", text = text, disabled = CastOff,
+            tooltip = tooltip,
             disabledTooltip = "Enable Override cast bar first.",
             getValue = function() return GetRule().style[key] == true end,
             setValue = function(value) GetRule().style[key] = value; Changed(); Rebuild() end,
@@ -853,8 +940,10 @@ local function BuildRulesPage(parent, yOffset)
     local function CastColor(text, key, enabledKey)
         return {
             type = "colorpicker", text = text, hasAlpha = false,
+            tooltip = key == "castColor" and "Choose the cast bar's fill color." or "Choose the cast bar's border color.",
             disabled = function() return CastOff() or GetRule().style[enabledKey] ~= true end,
-            disabledTooltip = "Enable the matching cast override to edit this color.",
+            disabledTooltip = key == "castBorderColor" and BorderTip("Override cast border")
+                or "Enable Custom cast color first.",
             getValue = function()
                 local color = GetRule().style[key] or defaults[key]
                 return color.r, color.g, color.b, 1
@@ -862,42 +951,44 @@ local function BuildRulesPage(parent, yOffset)
             setValue = function(r, g, b) GetRule().style[key] = { r = r, g = g, b = b }; Changed() end,
         }
     end
-    local colorToggle = CastToggle("Custom cast color", "castColorEnabled")
-    colorToggle.tooltip = "Overrides the selected EUI cast-color states: Interruptible cast (interrupt available), Interrupt on CD, or Uninterruptible cast. Rules are prioritized separately per color state, so separate rules can supply different colors. Explicit Casting overrides all three. Interrupted flashes, shield visibility and kick-ready indicators are preserved."
+    local colorToggle = CastToggle("Custom cast color", "castColorEnabled",
+        "Use this rule's cast color. The first matching rule wins per color state. Interrupted flashes keep EUI's appearance.")
     _, h = LockedRow(colorToggle,
         CastColor("Cast fill color", "castColor", "castColorEnabled")); y = y - h
     _, h = LockedRow({
         type = "dropdown", text = "Cast-bar texture", values = barTextureValues, order = barTextureOrder,
         disabled = CastOff, disabledTooltip = "Enable Override cast bar first.",
-        tooltip = "Use EUI texture leaves the current texture unchanged. Flat and Blizzard apply to EUI and Classic styles; stock Blizzard-style cast artwork retains its atlas.",
+        tooltip = "Choose the cast bar's fill texture. Use EUI texture keeps EUI's choice. Stock Blizzard-style artwork is unchanged.",
         getValue = function() return GetRule().style.castTexture or "eui" end,
         setValue = function(value) GetRule().style.castTexture = value; Changed() end,
     }, nil)
     y = y - h
-    _, h = LockedRow(CastToggle("Custom cast opacity", "castOpacityEnabled"), {
+    _, h = LockedRow(CastToggle("Custom cast opacity", "castOpacityEnabled", "Use a separate opacity for the cast bar."), {
         type = "slider", text = "Cast opacity (%)", min = 0, max = 100, step = 5,
         disabled = function() return CastOff() or GetRule().style.castOpacityEnabled ~= true end,
         disabledTooltip = "Enable Custom cast opacity first.",
-        tooltip = "Fades the cast bar and its child elements. This also works when EUI lifts casts in front of nameplates.",
+        tooltip = "Fade the cast bar, icon and text in addition to nameplate opacity. 100% adds no extra fading.",
         getValue = function() return GetRule().style.castOpacity or defaults.castOpacity end,
         setValue = function(value) GetRule().style.castOpacity = value; Changed() end,
     }); y = y - h
-    local castBorderToggle = CastToggle("Override cast border", "castBorderEnabled")
+    local castBorderToggle = CastToggle("Override cast border", "castBorderEnabled",
+        "Replace the cast bar's border with this rule's border. Off restores EUI's border.")
     castBorderToggle.disabled = function() return CastOff() or not addon.SupportsBorderStyles() end
+    castBorderToggle.disabledTooltip = BorderTip("Override cast bar")
     _, h = LockedRow(castBorderToggle,
         CastColor("Cast border color", "castBorderColor", "castBorderEnabled")); y = y - h
     local function CastBorderOff() return CastOff() or GetRule().style.castBorderEnabled ~= true or not addon.SupportsBorderStyles() end
     _, h = LockedRow({
         type = "dropdown", text = "Cast border texture", values = borderTextureValues, order = borderTextureOrder,
-        disabled = CastBorderOff, disabledTooltip = "Enable Override cast border first.",
+        disabled = CastBorderOff, disabledTooltip = BorderTip("Override cast border"),
         getValue = function() return GetRule().style.castBorderTexture or "solid" end,
         setValue = function(value) GetRule().style.castBorderTexture = value; Changed(); Rebuild() end,
-        tooltip = "Replaces EUI's native cast-bar outline using the same media textures as the health border, including lifted casts.",
+        tooltip = "Choose the cast bar's border style.",
     }, {
         type = "slider", text = "Cast border size", min = 1, max = (GetRule().style.castBorderTexture or "solid") == "solid" and 8 or 4, step = 1,
         disabled = CastBorderOff,
-        disabledTooltip = "Enable Override cast border first.",
-        tooltip = "Border thickness/size step, interpreted by EUI's shared renderer. The cast icon separator is not replaced.",
+        disabledTooltip = BorderTip("Override cast border"),
+        tooltip = "Set border thickness in pixels for Solid, or size step for textured borders. The icon separator is unchanged.",
         getValue = function() return GetRule().style.castBorderSize or defaults.castBorderSize end,
         setValue = function(value) GetRule().style.castBorderSize = value; Changed() end,
     }); y = y - h
@@ -909,7 +1000,7 @@ local function BuildRulesPage(parent, yOffset)
         disabledTooltip = "Select this rule again to edit its text.",
         getValue = function() return GetRule().style.textEnabled == true end,
         setValue = function(value) GetRule().style.textEnabled = value; Changed(); Rebuild() end,
-        tooltip = "Per-rule content and colors in EUI's existing text slots. Independent of bar fill/border overrides. Off restores EUI's native text. Match conditions and first-rule priority still apply.",
+        tooltip = "Apply this rule's text content and colors. Off restores EUI's text. Bar overrides are not required.",
     }); y = y - h
     local function TextOff() return DB() ~= db or GetRule() ~= rule or GetRule().style.textEnabled ~= true end
     local function TextSlot(slot)
@@ -923,7 +1014,8 @@ local function BuildRulesPage(parent, yOffset)
                 if value == "eui" then style.textSlots[slot.key] = nil else style.textSlots[slot.key] = value end
                 Changed()
             end,
-            tooltip = "Uses EUI's existing position, font size and offsets. Use EUI setting preserves native content; None hides this slot. Missing restricted data is left blank rather than inspected.",
+            tooltip = "Choose what this slot shows. Use EUI setting keeps its content; None hides it. Position and font follow EUI."
+                .. (slot.cast and " Cast-target text is unavailable on Forever." or "") .. " Unavailable data stays blank.",
         }
     end
     for index = 1, #addon.RuleTextSlots, 2 do
@@ -935,6 +1027,8 @@ local function BuildRulesPage(parent, yOffset)
         local label = addon.RuleTextLabels[key]
         local function ColorOff() return TextOff() or not (GetRule().style.textColors and GetRule().style.textColors[key]) end
         _, h = LockedRow({ type = "toggle", text = "Override " .. label .. " color", disabled = TextOff,
+            tooltip = "Use a custom color for " .. label:lower() .. " text. Off keeps EUI's color."
+                .. ((key == "name" or key == "level") and " Combined name/level labels may keep EUI's colors." or ""),
             disabledTooltip = "Enable Override text first.",
             getValue = function() return GetRule().style.textColors and GetRule().style.textColors[key] ~= nil or false end,
             setValue = function(value)
@@ -943,7 +1037,8 @@ local function BuildRulesPage(parent, yOffset)
                 Changed(); Rebuild()
             end,
         }, { type = "colorpicker", text = label .. " text color", hasAlpha = false,
-            disabled = ColorOff, disabledTooltip = "Enable the matching text color override first.",
+            tooltip = "Choose the color of " .. label:lower() .. " text.",
+            disabled = ColorOff, disabledTooltip = "Enable Override " .. label .. " color first.",
             getValue = function()
                 local c = GetRule().style.textColors and GetRule().style.textColors[key] or { r = 1, g = 1, b = 1 }
                 return c.r, c.g, c.b, 1
@@ -958,12 +1053,16 @@ local function BuildRulesPage(parent, yOffset)
         disabled = ArrowsUnavailable, disabledTooltip = "Update EllesmereUI Nameplates to use its target-arrow styles.",
         getValue = function() return GetRule().style.targetArrowsEnabled == true end,
         setValue = function(value) GetRule().style.targetArrowsEnabled = value; Changed(); Rebuild() end,
-        tooltip = "The first matching rule can show a different arrow style on the current target, even when EUI's general arrows are off. Other plates do not gain target arrows. Turning this off restores EUI's normal arrows. Color and size follow EUI's target-arrow settings.",
+        tooltip = "Show this rule's arrows on your current target, even if EUI's arrows are off. Color and size follow EUI. Off restores EUI's arrows.",
     }); y = y - h
     local function ArrowsOff() return ArrowsUnavailable() or GetRule().style.targetArrowsEnabled ~= true end
     _, h = LockedRow({ type = "dropdown", text = "Target-arrow style",
+        tooltip = "Choose the target arrows' artwork. Use EUI arrow style keeps EUI's current choice.",
         values = arrowValues, order = arrowOrder, disabled = ArrowsOff,
-        disabledTooltip = "Enable Override target arrows first.",
+        disabledTooltip = function()
+            if ArrowsUnavailable() then return "Update EllesmereUI Nameplates to use its target-arrow styles." end
+            return "Enable Override target arrows first."
+        end,
         getValue = function() return GetRule().style.targetArrowStyle or "eui" end,
         setValue = function(value) GetRule().style.targetArrowStyle = value; Changed() end,
     }, nil)
@@ -1013,9 +1112,12 @@ local function BuildAboutPage(parent, yOffset)
         "Customize cast-bar appearance, including separate colors for interruptible casts, interrupts on cooldown and uninterruptible casts.")
     Section("PROFILES AND SHARING",
         "Save profiles for different characters and export or import your rules. Use Enable rule styling on the Rules page to pause all styling without deleting your setup.")
-    _, h = W:Button(parent, "Open Nameplate Style Rules", y, function()
+    local row
+    row, h = W:Button(parent, "Open Nameplate Style Rules", y, function()
         EllesmereUI.OpenPlugin(PLUGIN_ID, "NameplateStyle", "Rules")
-    end); y = y - h
+    end)
+    ButtonTooltips(row, "Open the rule editor.")
+    y = y - h
     return math.abs(y)
 end
 
