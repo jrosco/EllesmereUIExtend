@@ -1,3 +1,4 @@
+local _, addon = ...
 local api = _G.EllesmereUIExtendNameplates
 if not api then return end
 
@@ -9,14 +10,7 @@ local MAX_CODE_LENGTH = 64000
 local MAX_DATA_LENGTH = 128000
 local MAX_RULES = api.MaxRules or 12
 api.RuleSetMaxCodeLength = MAX_CODE_LENGTH
-local Copy
-
-Copy = function(value)
-    if type(value) ~= "table" then return value end
-    local result = {}
-    for key, child in pairs(value) do result[key] = Copy(child) end
-    return result
-end
+local Copy = addon.CopyTable
 
 local BOOLEAN_STYLE_KEYS = {
     "healthEnabled", "healthColorEnabled", "borderEnabled", "castEnabled",

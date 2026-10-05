@@ -52,7 +52,7 @@ end
 local states, hooked = setmetatable({}, { __mode = "k" }), setmetatable({}, { __mode = "k" })
 local overlayHooks = setmetatable({}, { __mode = "k" })
 local Apply
-local function Secret(value) return issecretvalue and issecretvalue(value) end
+local Secret = addon.IsSecret
 local function Setting(key, fallback)
     local np = EllesmereNameplates_NS or {}
     local p, d = np.db and np.db.profile or {}, np.defaults or {}

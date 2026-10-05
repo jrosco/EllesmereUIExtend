@@ -7,7 +7,9 @@ local checks = 0
 local function Check(value, label) checks = checks + 1; assert(value, label) end
 EllesmereUINameplateExtrasDB = { profiles = { Default = { rules = { { name = "Do not migrate", enabled = true, conditions = {}, style = {} } } } } }
 local legacy = EllesmereUINameplateExtrasDB
-assert(loadfile("EllesmereUIExtendNameplates/Nameplates.lua"))("EllesmereUIExtendNameplates", {})
+local namespace = {}
+assert(loadfile("Nameplates/Helpers.lua"))("EllesmereUIExtendNameplates", namespace)
+assert(loadfile("Nameplates/Nameplates.lua"))("EllesmereUIExtendNameplates", namespace)
 local api = assert(EllesmereUIExtendNameplates)
 Check(EllesmereUINameplateExtras == nil, "no legacy public API alias")
 Check(EllesmereUIExtendNameplatesDB == nil, "settings do not initialize before an accessor/addon load")

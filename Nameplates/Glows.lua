@@ -7,11 +7,8 @@ local states = setmetatable({}, { __mode = "k" })
 local hidden = setmetatable({}, { __mode = "k" })
 local hooked = setmetatable({}, { __mode = "k" })
 local Apply
-local function Secret(value) return issecretvalue and issecretvalue(value) end
-local function Number(value, fallback, min, max)
-    if Secret(value) or type(value) ~= "number" or value ~= value then return fallback end
-    return math.max(min, math.min(max, value))
-end
+local Secret = addon.IsSecret
+local Number = addon.ClampNumber
 function api.SupportsRuleGlows()
     local G = EllesmereUI and EllesmereUI.Glows
     return G and type(G.StartSpecGlow) == "function" and type(G.StopGlow) == "function"
@@ -46,12 +43,15 @@ local function Spec(style, prefix)
         shineScale = Number(style[prefix .. "GlowShineSize"], 100, 50, 200) / 100,
         bg = style[prefix .. "GlowBackground"] == true, bgR = bg.r, bgG = bg.g, bgB = bg.b }
 end
-local function Stop(host)
-    if not host then return end
+local function ClearGlow(host)
     local G = host._extrasGlowEngine
     if G and G.StopGlow then G.StopGlow(host) end
     host._extrasGlowEngine = nil
     host._extrasShineSignature = nil
+end
+local function Stop(host)
+    if not host then return end
+    ClearGlow(host)
     host:Hide()
 end
 function api.StopRuleGlowPreview(host) Stop(host) end
@@ -163,10 +163,7 @@ local function Host(plate, state, prefix, bar)
         host:EnableMouse(false)
         state[prefix] = host
         host:SetScript("OnHide", function()
-            local G = host._extrasGlowEngine
-            if G and G.StopGlow then G.StopGlow(host) end
-            host._extrasGlowEngine = nil
-            host._extrasShineSignature = nil
+            ClearGlow(host)
             if prefix == "cast" then ReleaseImportant(state); state.castRunning = false end
         end)
         host:SetScript("OnShow", function() if not state.busy then Apply(plate, state) end end)

@@ -51,13 +51,15 @@ end
 local db = { selectedRule = 1, rules = { Rule("First rule"), Rule("Second rule") } }
 EllesmereUIExtendNameplates = { GetSettings = function() return db end, Refresh = Noop,
     CastStyleDefaults = {}, SupportsInstanceType = function() return true end }
-assert(loadfile("EllesmereUIExtendNameplates/Scaling.lua"))("EllesmereUIExtendNameplates", {})
-assert(loadfile("EllesmereUIExtendNameplates/Borders.lua"))("EllesmereUIExtendNameplates", {})
-assert(loadfile("EllesmereUIExtendNameplates/Glows.lua"))("EllesmereUIExtendNameplates", {})
+local namespace = {}
+assert(loadfile("Nameplates/Helpers.lua"))("EllesmereUIExtendNameplates", namespace)
+assert(loadfile("Nameplates/Scaling.lua"))("EllesmereUIExtendNameplates", namespace)
+assert(loadfile("Nameplates/Borders.lua"))("EllesmereUIExtendNameplates", namespace)
+assert(loadfile("Nameplates/Glows.lua"))("EllesmereUIExtendNameplates", namespace)
 function hooksecurefunc() end
-assert(loadfile("EllesmereUIExtendNameplates/Text.lua"))("EllesmereUIExtendNameplates", {})
-assert(loadfile("EllesmereUIExtendNameplates/TargetArrows.lua"))("EllesmereUIExtendNameplates", {})
-assert(loadfile("EllesmereUIExtendNameplates/Preview.lua"))()
+assert(loadfile("Nameplates/Text.lua"))("EllesmereUIExtendNameplates", namespace)
+assert(loadfile("Nameplates/TargetArrows.lua"))("EllesmereUIExtendNameplates", namespace)
+assert(loadfile("Nameplates/Preview.lua"))("EllesmereUIExtendNameplates", namespace)
 local spec, currentSection, pageRows, index, fields = nil, nil, {}, {}, {}
 local searchEntries
 local parent = CreateFrame("Frame") -- GlobalSearch also passes a real wrapper, not an absorber parent.
@@ -149,7 +151,7 @@ EllesmereUI = {
     IsDevModeActive = function() return true end,
     Show = Noop,
 }
-for key, value in pairs(assert(loadfile("EllesmereUIExtendNameplates/tests/border-mocks.lua"))()) do EllesmereUI[key] = value end
+for key, value in pairs(assert(loadfile("Nameplates/tests/border-mocks.lua"))()) do EllesmereUI[key] = value end
 -- Inspect private closures without copying production implementation into the fixture.
 local function Upvalue(fn, wanted)
     for i = 1, math.huge do
@@ -159,7 +161,8 @@ local function Upvalue(fn, wanted)
     end
 end
 local searchNS = { modules = {}, pageCache = {} }
-assert(loadfile("EllesmereUI_GlobalSearch.lua"))("EllesmereUI", searchNS)
+local LoadUpstream = assert(loadfile("Nameplates/tests/upstream.lua"))()
+LoadUpstream("EllesmereUI_GlobalSearch.lua")("EllesmereUI", searchNS)
 searchEntries = Upvalue(EllesmereUI._RegisterSearchEntry, "_searchIndex")
 local ensureSearchUI = Upvalue(EllesmereUI.Show, "EnsureSearchUI")
 local runPrebuild = Upvalue(ensureSearchUI, "RunPrebuildPass")
@@ -192,7 +195,7 @@ EllesmereUI.MakeStyledButton = function(button, text, _, _, click)
     button.OnClick = click
     fields[text] = { click = click, row = button.parent, button = button }
 end
-assert(loadfile("EllesmereUIOptions/EllesmereUI_Widgets_Rows.lua"))()
+LoadUpstream("EllesmereUIOptions/EllesmereUI_Widgets_Rows.lua")()
 EllesmereUI._deferredInits[1]()
 for key, value in pairs(mockRows) do W[key] = value end
 local function Build()
@@ -203,7 +206,7 @@ local function Build()
     return h
 end
 EllesmereUI.RefreshPage = Build
-assert(loadfile("EllesmereUIExtendNameplates/Options.lua"))()
+assert(loadfile("Nameplates/Options.lua"))("EllesmereUIExtendNameplates", namespace)
 searchNS.modules["plugin:test:NameplateStyle"] = {
     pages = { "Rules", "About" }, buildPage = spec.modules[1].buildPage,
 }

@@ -1,5 +1,5 @@
 -- Run from the repository root with Lua or fengari.
-local fixture = assert(loadfile("EllesmereUIExtendNameplates/tests/runtime.lua"))("traits")
+local fixture = assert(loadfile("Nameplates/tests/runtime.lua"))("traits")
 local api, namespace, mocks, secret = fixture.api, fixture.namespace, fixture.mocks, fixture.secret
 local cases = 0
 local function Reset()

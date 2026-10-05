@@ -1,5 +1,5 @@
 -- Run from the repository root with Lua or fengari.
-local f = assert(loadfile("EllesmereUIExtendNameplates/tests/runtime.lua"))("traits")
+local f = assert(loadfile("Nameplates/tests/runtime.lua"))("traits")
 local api, addon, plate, mocks = f.api, f.namespace, f.plate, f.mocks
 local np, checks = EllesmereNameplates_NS, 0
 local function Check(value, label) checks = checks + 1; assert(value, label) end

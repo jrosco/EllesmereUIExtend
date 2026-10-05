@@ -1,4 +1,5 @@
 local _, addon = ...
+local ResolveTexturePath = addon.ResolveBarTexturePath
 local states = setmetatable({}, { __mode = "k" })
 local defaults = {
     castColor = { r = 1, g = 0.7, b = 0.15 },
@@ -7,16 +8,6 @@ local defaults = {
     castOpacity = 100,
 }
 EllesmereUIExtendNameplates.CastStyleDefaults = defaults
-
-local function ResolveTexturePath(key)
-    if key == "eui" or key == nil then return nil end
-    if key == "flat" then return "Interface\\Buttons\\WHITE8x8" end
-    local np = _G.EllesmereNameplates_NS
-    if EllesmereUI and EllesmereUI.ResolveTexturePath and np and np.healthBarTextures then
-        return EllesmereUI.ResolveTexturePath(np.healthBarTextures, key, "Interface\\Buttons\\WHITE8x8")
-    end
-    return "Interface\\Buttons\\WHITE8x8"
-end
 
 local function PaintColor(plate, state, texture, entry)
     local colors = state.castColors

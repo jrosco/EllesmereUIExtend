@@ -11,8 +11,11 @@ local function Copy(value)
     for key, child in pairs(value) do copy[key] = Copy(child) end
     return copy
 end
+local namespace
 local function LoadRuntime()
-    assert(loadfile("EllesmereUIExtendNameplates/Nameplates.lua"))("EllesmereUIExtendNameplates", {})
+    namespace = {}
+    assert(loadfile("Nameplates/Helpers.lua"))("EllesmereUIExtendNameplates", namespace)
+    assert(loadfile("Nameplates/Nameplates.lua"))("EllesmereUIExtendNameplates", namespace)
     return EllesmereUIExtendNameplates
 end
 EllesmereUIExtendNameplatesDB = { profiles = { Default = { rules = {
@@ -88,7 +91,7 @@ local codec = {
 }
 function LibStub(name) if name == "LibDeflate" then return codec end end
 local function LoadRuleIO()
-    assert(loadfile("EllesmereUIExtendNameplates/RuleIO.lua"))()
+    assert(loadfile("Nameplates/RuleIO.lua"))("EllesmereUIExtendNameplates", namespace)
 end
 LoadRuleIO()
 local cases = 0

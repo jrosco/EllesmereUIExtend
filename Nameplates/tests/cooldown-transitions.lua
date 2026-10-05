@@ -1,5 +1,5 @@
 -- Run from the repository root with Lua or fengari.
-local fixture = assert(loadfile("EllesmereUIExtendNameplates/tests/runtime.lua"))("traits")
+local fixture = assert(loadfile("Nameplates/tests/runtime.lua"))("traits")
 local api, addon = fixture.api, fixture.namespace
 -- Native methods exist before Extras installs its hooks, as on EUI frames.
 local plate = CreateFrame()
@@ -18,11 +18,12 @@ end
 EllesmereNameplates_NS.plates = { nameplate1 = plate }
 EllesmereNameplates_NS._castingPlates = { [plate] = true }
 local ready, hiddenReady, haveCooldown, knownKick = false, true, true, true
-EllesmereUI = assert(loadfile("EllesmereUIExtendNameplates/tests/border-mocks.lua"))()
+EllesmereUI = assert(loadfile("Nameplates/tests/border-mocks.lua"))()
 UnitGUID = function() return nil end
 UnitClassBase = function() return "MAGE" end
 IsSpellKnown = function() return knownKick end
-assert(loadfile("EllesmereUI_Kick.lua"))()
+local LoadUpstream = assert(loadfile("Nameplates/tests/upstream.lua"))()
+LoadUpstream("EllesmereUI_Kick.lua")()
 EllesmereUI.RefreshKickAbility()
 C_Spell = { GetSpellCooldownDuration = function(spell)
     assert(spell == EllesmereUI.GetActiveKickSpell(), "wrong interrupt cooldown")

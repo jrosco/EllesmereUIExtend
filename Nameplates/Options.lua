@@ -1,3 +1,4 @@
+local _, private = ...
 local addon = EllesmereUIExtendNameplates
 if not addon then return end
 
@@ -76,27 +77,7 @@ local function Changed()
     addon.Refresh()
 end
 
-local function CopyRule(rule)
-    local result = {}
-    for key, value in pairs(rule) do
-        if type(value) == "table" then
-            local copy = {}
-            for nestedKey, nestedValue in pairs(value) do
-                if type(nestedValue) == "table" then
-                    local color = {}
-                    for colorKey, colorValue in pairs(nestedValue) do color[colorKey] = colorValue end
-                    copy[nestedKey] = color
-                else
-                    copy[nestedKey] = nestedValue
-                end
-            end
-            result[key] = copy
-        else
-            result[key] = value
-        end
-    end
-    return result
-end
+local CopyRule = private.CopyTable
 
 local function Rebuild()
     local key = EllesmereUI.GetPluginModuleKey(PLUGIN_ID, "NameplateStyle")

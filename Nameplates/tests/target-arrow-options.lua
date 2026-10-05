@@ -1,5 +1,5 @@
 -- Run from the repository root with Lua or fengari.
-local f = assert(loadfile("EllesmereUIExtendNameplates/tests/runtime.lua"))("ui-locks")
+local f = assert(loadfile("Nameplates/tests/runtime.lua"))("ui-locks")
 local api, rows, np, checks = f.api, f.rows, EllesmereNameplates_NS, 0
 local function Check(value, label) checks = checks + 1; assert(value, label) end
 np.TARGET_ARROW_DIR = "Arrows/"

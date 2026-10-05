@@ -1,9 +1,9 @@
 -- Run from the repository root with Lua or fengari.
-local f = assert(loadfile("EllesmereUIExtendNameplates/tests/runtime.lua"))("ui-locks")
+local f = assert(loadfile("Nameplates/tests/runtime.lua"))("ui-locks")
 local api, rows, np, checks = f.api, f.rows, EllesmereNameplates_NS, 0
 local function Check(value, label) checks = checks + 1; assert(value, label) end
 local function Near(actual, expected, label) Check(math.abs(actual - expected) < 0.00001, label) end
-EllesmereUI.Glows = assert(loadfile("EllesmereUIExtendNameplates/tests/glow-mocks.lua"))()
+EllesmereUI.Glows = assert(loadfile("Nameplates/tests/glow-mocks.lua"))()
 np.TARGET_ARROW_DIR = "Arrows/"
 np.TARGET_ARROW_STYLES = {
     simple = { l = "simple-left", r = "simple-right", w = 11, label = "Simple" },

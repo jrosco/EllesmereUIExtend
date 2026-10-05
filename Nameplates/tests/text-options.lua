@@ -1,5 +1,5 @@
 -- Run from the repository root with Lua or fengari.
-local f = assert(loadfile("EllesmereUIExtendNameplates/tests/runtime.lua"))("ui-locks")
+local f = assert(loadfile("Nameplates/tests/runtime.lua"))("ui-locks")
 local api, rows, checks = f.api, f.rows, 0
 local function Check(value, label) checks = checks + 1; assert(value, label) end
 Check(not rows["Override text"].get() and rows["Top text content"].disabled(), "text overrides off by default")

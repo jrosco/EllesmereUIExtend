@@ -74,9 +74,11 @@ function NP.NT_Apply(plate)
         plate:SetAlpha(a)
     end
 end
-assert(loadfile("EllesmereUINameplates/EllesmereUINameplates_CastOverlay.lua"))("Nameplates", NP)
+local LoadUpstream = assert(loadfile("Nameplates/tests/upstream.lua"))()
+LoadUpstream("EllesmereUINameplates/EllesmereUINameplates_CastOverlay.lua")("Nameplates", NP)
 local namespace = {}
-assert(loadfile("EllesmereUIExtendNameplates/Nameplates.lua"))("EllesmereUIExtendNameplates", namespace)
+assert(loadfile("Nameplates/Helpers.lua"))("EllesmereUIExtendNameplates", namespace)
+assert(loadfile("Nameplates/Nameplates.lua"))("EllesmereUIExtendNameplates", namespace)
 local api = EllesmereUIExtendNameplates
 local function Near(actual, expected, label)
     assert(math.abs(actual - expected) < 0.00001,

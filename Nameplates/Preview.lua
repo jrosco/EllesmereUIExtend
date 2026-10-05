@@ -1,12 +1,11 @@
+local _, addon = ...
 local api = EllesmereUIExtendNameplates
-local function Number(value, fallback, min, max)
-    if issecretvalue and issecretvalue(value) or type(value) ~= "number" or value ~= value then return fallback end
-    return math.max(min, math.min(max, value))
-end
+local Number = addon.ClampNumber
+local Secret = addon.IsSecret
 local function Visible(frame)
     if not frame.IsVisible then return true end
     local ok, value = pcall(frame.IsVisible, frame)
-    return ok and not (issecretvalue and issecretvalue(value)) and value == true
+    return ok and not Secret(value) and value == true
 end
 function api.BuildRulePreview(parent, parentWidth, getRule, locked)
     if EllesmereUI.IsSearchPrebuild() then return 0 end

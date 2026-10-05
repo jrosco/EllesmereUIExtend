@@ -31,7 +31,7 @@ The **Profiles** tab assigns a named rules profile to each character. **Default*
 
 ## Included rules
 
-Three starter rules are enabled: current target, elite enemy, and enemy casting. Add up to 12 rules, copy the selected rule, edit their conditions and visual effects, and move them to change priority. A copy is inserted after its source and selected for editing. New rules start enabled for the current target. The first enabled matching rule wins.
+Four starter rules are enabled, in order: Elite Enemies, Enemy Casting, Current Target and Non Target. Add up to 100 rules, copy the selected rule, edit their conditions and visual effects, and move them to change priority. A copy is inserted after its source and selected for editing. New rules start enabled for the current target. The first enabled matching rule wins.
 
 Categorical conditions use multi-select checklists: player/NPC/pet/creature, friendly/enemy/neutral, normal/elite/rare/rare elite/boss/minor, current-target state, player combat state, instance type, cast/channel/empowered/interruptibility, and spell school. Multiple choices within a condition match with OR; separate condition groups combine with AND. Leaving a checklist empty means Any. Quest objective remains an optional toggle and uses EUI's cached tooltip-based detector for incomplete objectives in the player's own quest log, following EUI's Show In Instances setting. Combat-log school tracking is enabled only when at least one enabled rule selects a specific school. A spell school is learned when its cast-start event is seen; unknown spells do not match school-specific rules.
 
@@ -120,7 +120,7 @@ Turning the override off, leaving its match, disabling rules/styling, retargetin
 
 ## Install
 
-Copy the `EllesmereUIExtendNameplates` folder into `Interface/AddOns`. It requires both `EllesmereUI` and `EllesmereUINameplates` to be enabled. Open the EUI options panel and select **Extend Nameplates > Nameplate Style**. Do not run the previous Nameplate Extras addon alongside it, since both would style the same plates.
+Copy this repository's `Nameplates/` directory to `Interface/AddOns/EllesmereUIExtendNameplates/`, retaining `EllesmereUIExtendNameplates.toc`. It requires both `EllesmereUI` and `EllesmereUINameplates` to be enabled. Open the EUI options panel and select **Extend Nameplates > Nameplate Style**. Do not run the previous Nameplate Extras addon alongside it, since both would style the same plates.
 
 The addon starts with fresh `EllesmereUIExtendNameplatesDB` settings. There is no settings migration, old API alias or old slash-command alias. Rule-set prefixes and the serialized wire-format identifier remain stable, so sharing codes continue to use the existing codec.
 
@@ -132,6 +132,8 @@ The public runtime API is `EllesmereUIExtendNameplates`. Future features can be 
 EllesmereUIExtendNameplates.Refresh()
 EllesmereUIExtendNameplates.GetRules()
 ```
+
+`Helpers.lua` loads first and provides private utilities through WoW's per-addon namespace: secret-value checks, numeric clamping, recursive settings copies and health/cast texture resolution. Modules and test fixtures share that namespace; these helpers do not add public API or dependencies on other extension addons. Copies include deeply nested custom-condition tables.
 
 `RegisterCondition(key, predicate)` adds a custom matcher for a corresponding key stored in a rule's `conditions` table. Predicates receive `(unitToken, traits, expectedValue, rule)` and should return `true` for a match. `RegisterSpellSchool(spellID, school)` can seed school metadata (`physical`, `holy`, `fire`, `nature`, `frost`, `shadow`, `arcane`, or `mixed`). After changing a rule programmatically, call `Refresh()`.
 
@@ -149,11 +151,13 @@ Run `/enp` (or `/extendnameplates`) with a visible enemy target to report matchi
 
 Scale is a multiplier on EUI's base scale, including its target/cast animation. The plugin does not modify EUI's animation values.
 
-From the repository root, run `lua EllesmereUIExtendNameplates/tests/runtime.lua` (or `npx.cmd --yes --package fengari-node-cli fengari EllesmereUIExtendNameplates/tests/runtime.lua`). Other suites live in the same `tests/` folder and can be run with that command by replacing `runtime.lua` with the suite filename. The mocked tests do not replace in-game testing on Retail and Forever.
+From the repository root, run `lua Nameplates/tests/runtime.lua` (or `npx.cmd --yes --package fengari-node-cli fengari Nameplates/tests/runtime.lua`). Other suites live in `Nameplates/tests/` and can be run with that command by replacing `runtime.lua` with the suite filename. Inspect output for Lua errors as well as the PASS message: Fengari can return a successful exit code after an assertion fails. The mocked tests do not replace in-game testing on Retail and Forever.
 
-Run `tests/schema.lua` within the renamed addon for target reload/profile-switch regressions, shared condition validation/normalization, categorical values, v1/v2 imports, and custom-condition preservation.
+The scaling, rendering, cast-color, cooldown-transition and options-search suites also load real upstream EUI files read-only. Set `EUI_TEST_ROOT` to the checkout containing `EllesmereUI_Kick.lua`; it defaults to the sibling `../jrosco-EllesmereUI` directory. In PowerShell, for example: `$env:EUI_TEST_ROOT = 'C:\Users\joel_\GitRepos\jrosco-EllesmereUI'`. No upstream source is bundled or modified.
 
-Focused follow-up suites are `tests/style-capability.lua`, `tests/cooldown-transitions.lua`, and `tests/predicate-snapshot.lua` inside `EllesmereUIExtendNameplates`. They cover saved/imported style restrictions, targeted cooldown refreshes/restoration, and per-refresh predicate consistency; real reload/cooldown events and Retail restricted values still need in-game checks.
+Run `Nameplates/tests/schema.lua` from the repository root for target reload/profile-switch regressions, shared condition validation/normalization, categorical values, v1/v2 imports, and custom-condition preservation.
+
+Focused follow-up suites are `tests/style-capability.lua`, `tests/cooldown-transitions.lua`, and `tests/predicate-snapshot.lua` inside `Nameplates/`. They cover saved/imported style restrictions, targeted cooldown refreshes/restoration, and per-refresh predicate consistency; real reload/cooldown events and Retail restricted values still need in-game checks.
 
 `tests/cast-appearances.lua` verifies implicit Casting appearances without broadening color masks, including readable/secret/unavailable flags, channels/empowered casts, AND filters, priority and restoration.
 
@@ -180,3 +184,5 @@ Focused follow-up suites are `tests/style-capability.lua`, `tests/cooldown-trans
 `tests/combat-instance.lua` and `tests/context-options.lua` cover combat/instance matching, Any, OR/AND, palettes, API gating, events, restrictions, Forever, editing and sharing.
 
 `tests/reset-defaults.lua` covers active-profile reset, pristine templates, normalized conditions, Non Target selections and editor/header refresh. `tests/rename.lua` verifies the renamed identity and fresh settings without legacy aliases or migration.
+
+`tests/helpers.lua` covers shared utilities, secret-check availability, numeric fallbacks, deep-copy isolation and texture resolution on older clients. The runtime suite also verifies that Copy Rule isolates deeply nested custom conditions.

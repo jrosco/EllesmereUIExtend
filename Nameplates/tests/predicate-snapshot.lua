@@ -1,5 +1,5 @@
 -- Run from the repository root with Lua or fengari.
-local fixture = assert(loadfile("EllesmereUIExtendNameplates/tests/runtime.lua"))("traits")
+local fixture = assert(loadfile("Nameplates/tests/runtime.lua"))("traits")
 local api, namespace, mocks = fixture.api, fixture.namespace, fixture.mocks
 local plate = EllesmereNameplates_NS.plates.nameplate1
 local cases = 0

@@ -9,7 +9,7 @@ local hooked = setmetatable({}, { __mode = "k" })
 local namespaces = setmetatable({}, { __mode = "k" })
 local layoutStyle
 local Reapply
-local function Secret(value) return issecretvalue and issecretvalue(value) end
+local Secret = addon.IsSecret
 function api.ValidateTargetArrowStyle(key) return key == nil or type(key) == "string" and valid[key] == true end
 function api.SupportsTargetArrows()
     local np = _G.EllesmereNameplates_NS

@@ -54,7 +54,7 @@ function api.ValidateScaleElements(selection)
     end
     return true
 end
-local function Secret(value) return issecretvalue and issecretvalue(value) end
+local Secret = addon.IsSecret
 local function Set(entry, object, factor)
     local current = object:GetScale()
     if Secret(current) then return end

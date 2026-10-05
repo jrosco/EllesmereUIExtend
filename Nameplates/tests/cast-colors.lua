@@ -1,5 +1,5 @@
 -- Run from the repository root with Lua or fengari.
-local fixture = assert(loadfile("EllesmereUIExtendNameplates/tests/runtime.lua"))("traits")
+local fixture = assert(loadfile("Nameplates/tests/runtime.lua"))("traits")
 local namespace = fixture.namespace
 -- Verify the real rule renderer forwards conditions even when the API flag is secret.
 local probe = { name = "Scoped cast", enabled = true, conditions = { castState = { interruptible = true } },
@@ -139,7 +139,8 @@ EllesmereUI = {}
 UnitGUID = function() return nil end
 UnitClassBase = function() return "MAGE" end
 IsSpellKnown = function() return true end
-assert(loadfile("EllesmereUI_Kick.lua"))()
+local LoadUpstream = assert(loadfile("Nameplates/tests/upstream.lua"))()
+LoadUpstream("EllesmereUI_Kick.lua")()
 EllesmereUI.RefreshKickAbility()
 local offCooldown, haveCooldown = true, true
 C_CurveUtil = { EvaluateColorValueFromBoolean = nativeEvaluate }

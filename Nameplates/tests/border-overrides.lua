@@ -1,5 +1,5 @@
 -- Run from the repository root with Lua or fengari.
-local f = assert(loadfile("EllesmereUIExtendNameplates/tests/runtime.lua"))("traits")
+local f = assert(loadfile("Nameplates/tests/runtime.lua"))("traits")
 local api, addon, plate, checks = f.api, f.namespace, f.plate, 0
 local PP = EllesmereUI.PP
 local function Check(value, label) checks = checks + 1; assert(value, label) end

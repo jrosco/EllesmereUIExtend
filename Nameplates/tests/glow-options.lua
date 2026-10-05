@@ -1,7 +1,7 @@
 -- Run from the repository root with Lua or fengari.
-local f = assert(loadfile("EllesmereUIExtendNameplates/tests/runtime.lua"))("ui-locks")
+local f = assert(loadfile("Nameplates/tests/runtime.lua"))("ui-locks")
 local api, rows, checks = f.api, f.rows, 0
-local G = assert(loadfile("EllesmereUIExtendNameplates/tests/glow-mocks.lua"))()
+local G = assert(loadfile("Nameplates/tests/glow-mocks.lua"))()
 EllesmereUI.Glows = G
 C_Texture = { GetAtlasInfo = function() return {} end }
 local function Check(value, label) checks = checks + 1; assert(value, label) end

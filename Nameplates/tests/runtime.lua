@@ -234,13 +234,15 @@ local function Settings(name, scale, r)
     } }
 end
 local namespace = {}
-local borderAPI = assert(loadfile("EllesmereUIExtendNameplates/tests/border-mocks.lua"))()
+assert(loadfile("Nameplates/Helpers.lua"))("EllesmereUIExtendNameplates", namespace)
+local borderAPI = assert(loadfile("Nameplates/tests/border-mocks.lua"))()
 EllesmereUI = EllesmereUI or {}
 for key, value in pairs(borderAPI) do EllesmereUI[key] = value end
 if ... == "scaling" then
     UIParent = CreateFrame()
     EllesmereNameplates_NS.db = { profile = { castOverlayEnabled = false } }
-    assert(loadfile("EllesmereUINameplates/EllesmereUINameplates_CastOverlay.lua"))("EllesmereUINameplates", EllesmereNameplates_NS)
+    local LoadUpstream = assert(loadfile("Nameplates/tests/upstream.lua"))()
+    LoadUpstream("EllesmereUINameplates/EllesmereUINameplates_CastOverlay.lua")("EllesmereUINameplates", EllesmereNameplates_NS)
     local bundles = {}
     function EllesmereNameplates_NS.NPC_AttachPlate(p, bundle)
         bundles[p] = bundle
@@ -261,13 +263,13 @@ if ... == "scaling" then
         return scale, "renderer", power
     end
 end
-assert(loadfile("EllesmereUIExtendNameplates/Nameplates.lua"))("EllesmereUIExtendNameplates", namespace)
-assert(loadfile("EllesmereUIExtendNameplates/Borders.lua"))("EllesmereUIExtendNameplates", namespace)
-assert(loadfile("EllesmereUIExtendNameplates/Glows.lua"))("EllesmereUIExtendNameplates", namespace)
-assert(loadfile("EllesmereUIExtendNameplates/Text.lua"))("EllesmereUIExtendNameplates", namespace)
-assert(loadfile("EllesmereUIExtendNameplates/Scaling.lua"))("EllesmereUIExtendNameplates", namespace)
-assert(loadfile("EllesmereUIExtendNameplates/TargetArrows.lua"))("EllesmereUIExtendNameplates", namespace)
-assert(loadfile("EllesmereUIExtendNameplates/CastStyles.lua"))("EllesmereUIExtendNameplates", namespace)
+assert(loadfile("Nameplates/Nameplates.lua"))("EllesmereUIExtendNameplates", namespace)
+assert(loadfile("Nameplates/Borders.lua"))("EllesmereUIExtendNameplates", namespace)
+assert(loadfile("Nameplates/Glows.lua"))("EllesmereUIExtendNameplates", namespace)
+assert(loadfile("Nameplates/Text.lua"))("EllesmereUIExtendNameplates", namespace)
+assert(loadfile("Nameplates/Scaling.lua"))("EllesmereUIExtendNameplates", namespace)
+assert(loadfile("Nameplates/TargetArrows.lua"))("EllesmereUIExtendNameplates", namespace)
+assert(loadfile("Nameplates/CastStyles.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(EllesmereUIExtendNameplatesDB == nil, "new SavedVariables initialized before ADDON_LOADED")
 local api = EllesmereUIExtendNameplates
 assert(api, "public API missing")
@@ -565,9 +567,9 @@ EllesmereUI = {
         spec.modules[1].buildPage("Rules", parent, 0)
     end,
 }
-assert(loadfile("EllesmereUIExtendNameplates/RuleIO.lua"))()
-assert(loadfile("EllesmereUIExtendNameplates/Preview.lua"))()
-assert(loadfile("EllesmereUIExtendNameplates/Options.lua"))()
+assert(loadfile("Nameplates/RuleIO.lua"))("EllesmereUIExtendNameplates", namespace)
+assert(loadfile("Nameplates/Preview.lua"))("EllesmereUIExtendNameplates", namespace)
+assert(loadfile("Nameplates/Options.lua"))("EllesmereUIExtendNameplates", namespace)
 Fire("PLAYER_LOGIN")
 assert(registeredID == "EllesmereUIExtendNameplates")
 assert(spec.label == "Extend Nameplates")
@@ -901,6 +903,7 @@ assert(renamed.style == style and renamed.conditions == conditions, "rename chan
 rows["Rule name"].set(" \t\n ")
 assert(renamed.name == "My Target Rule", "blank name replaced existing name")
 local oldNameField = rows["Rule name"]
+renamed.conditions.copyFixture = { nested = { value = 7 } }
 rows["Copy Rule"].click(); Flush()
 local copy = api.GetRules()[2]
 assert(copy ~= renamed and copy.name == "My Target Rule Copy", "copy did not create a named rule")
@@ -909,6 +912,11 @@ assert(copy.conditions.target.yes == renamed.conditions.target.yes
     and copy.conditions.target ~= renamed.conditions.target
     and copy.style.scale == renamed.style.scale,
     "copy did not preserve rule settings")
+assert(copy.conditions.copyFixture.nested ~= renamed.conditions.copyFixture.nested,
+    "copy shares deeply nested custom conditions")
+copy.conditions.copyFixture.nested.value = 8
+assert(renamed.conditions.copyFixture.nested.value == 7, "copy edits changed source custom conditions")
+renamed.conditions.copyFixture, copy.conditions.copyFixture = nil, nil
 assert(api.GetSettings().selectedRule == 2 and rows["Rule name"].get() == copy.name,
     "copy was not selected for editing")
 rows["Edit rule"].set("3")

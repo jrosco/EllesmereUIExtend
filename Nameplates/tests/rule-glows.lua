@@ -1,7 +1,7 @@
 -- Run from the repository root with Lua or fengari.
-local f = assert(loadfile("EllesmereUIExtendNameplates/tests/runtime.lua"))("traits")
+local f = assert(loadfile("Nameplates/tests/runtime.lua"))("traits")
 local api, addon, plate, np = f.api, f.namespace, f.plate, EllesmereNameplates_NS
-local G = assert(loadfile("EllesmereUIExtendNameplates/tests/glow-mocks.lua"))()
+local G = assert(loadfile("Nameplates/tests/glow-mocks.lua"))()
 EllesmereUI.Glows = G
 C_Texture = { GetAtlasInfo = function(name) return { name = name } end }
 local checks = 0

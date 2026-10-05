@@ -1,4 +1,7 @@
 local addonName, addon = ...
+local Copy = addon.CopyTable
+local IsSecret = addon.IsSecret
+local ResolveBarTexturePath = addon.ResolveBarTexturePath
 
 local MULTI_CONDITION_VALUES = {
     unitType = { player = true, npc = true, pet = true, creature = true },
@@ -44,13 +47,6 @@ local DEFAULT_RULES = {
         style = { healthColorEnabled = true, healthColor = { r = 0.12, g = 0.92, b = 0.67 }, scale = 100, opacity = 50, borderSize = 1, borderColor = { r = 1.00, g = 1.00, b = 1.00 }, texture = "eui" },
     },
 }
-
-local function Copy(value)
-    if type(value) ~= "table" then return value end
-    local copy = {}
-    for k, v in pairs(value) do copy[k] = Copy(v) end
-    return copy
-end
 
 local function MergeMissing(dst, src)
     for k, v in pairs(src) do
@@ -319,10 +315,6 @@ local function TryUnregisterEvent(frame, event)
     pcall(frame.UnregisterEvent, frame, event)
 end
 
-local function IsSecret(value)
-    return issecretvalue and issecretvalue(value)
-end
-
 local function SafeBool(value)
     if IsSecret(value) or type(value) ~= "boolean" then return nil end
     return value
@@ -350,16 +342,6 @@ local function TextureOf(statusBar)
     local fill = statusBar:GetStatusBarTexture()
     if not fill or not fill.GetTexture then return nil end
     return fill:GetTexture()
-end
-
-local function ResolveBarTexturePath(key)
-    if key == "eui" then return nil end
-    if key == "flat" then return "Interface\\Buttons\\WHITE8x8" end
-    local nameplates = _G.EllesmereNameplates_NS
-    if EllesmereUI and EllesmereUI.ResolveTexturePath and nameplates and nameplates.healthBarTextures then
-        return EllesmereUI.ResolveTexturePath(nameplates.healthBarTextures, key, "Interface\\Buttons\\WHITE8x8")
-    end
-    return "Interface\\Buttons\\WHITE8x8"
 end
 
 local SCHOOL_MASKS = {

@@ -1,5 +1,5 @@
 -- Run from the repository root with Lua or fengari.
-local f = assert(loadfile("EllesmereUIExtendNameplates/tests/runtime.lua"))("scaling")
+local f = assert(loadfile("Nameplates/tests/runtime.lua"))("scaling")
 local api, plate, np = f.api, f.plate, EllesmereNameplates_NS
 local checks = 0
 local function Near(actual, expected, label)

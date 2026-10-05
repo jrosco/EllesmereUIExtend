@@ -1,5 +1,5 @@
 -- Run from the repository root with Lua or fengari. Loads production runtime/rendering.
-local fixture = assert(loadfile("EllesmereUIExtendNameplates/tests/runtime.lua"))("traits")
+local fixture = assert(loadfile("Nameplates/tests/runtime.lua"))("traits")
 local api, runtime, mocks = fixture.api, fixture.namespace, fixture.mocks
 local np = EllesmereNameplates_NS
 local plate = np.plates.nameplate1
@@ -155,7 +155,7 @@ for _, key in ipairs({ "CompressDeflate", "EncodeForPrint", "DecodeForPrint", "D
     codec[key] = function(_, value) return value end
 end
 function LibStub(name) if name == "LibDeflate" then return codec end end
-assert(loadfile("EllesmereUIExtendNameplates/RuleIO.lua"))()
+assert(loadfile("Nameplates/RuleIO.lua"))("EllesmereUIExtendNameplates", runtime)
 for version = 1, 2 do
     for _, key in ipairs(keys) do
         payload = { format = "EllesmereUINameplateExtrasRules", version = version,
@@ -247,7 +247,7 @@ EllesmereUI.BuildVisOptsCBDropdown = function(parent, _, _, items, get, set, _, 
 end
 EllesmereUI.IsPluginRegistered = function() return false end
 EllesmereUI.RegisterPlugin = function(_, value) spec = value; return true end
-assert(loadfile("EllesmereUIExtendNameplates/Options.lua"))()
+assert(loadfile("Nameplates/Options.lua"))("EllesmereUIExtendNameplates", runtime)
 assert(spec, "production Options registration failed")
 spec.modules[1].buildPage("Rules", CreateFrame("Frame"), 0)
 local items = {}

@@ -1,5 +1,5 @@
 -- Run from the repository root with Lua or fengari.
-local f = assert(loadfile("EllesmereUIExtendNameplates/tests/runtime.lua"))("traits")
+local f = assert(loadfile("Nameplates/tests/runtime.lua"))("traits")
 local api, addon, mocks, secret = f.api, f.namespace, f.mocks, f.secret
 local checks, detailCalls, roleCalls, rosterCalls = 0, {}, 0, 0
 local held, roles, live, aliases, raid, members, current, fail = {}, {}, {}, {}, false, 0, false, false
