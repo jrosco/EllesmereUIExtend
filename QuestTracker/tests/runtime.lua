@@ -191,7 +191,9 @@ QuestObjectiveTracker.usedBlocks.Template = { [10] = block }
 local spec, pluginCalls = nil, 0
 local activeLayoutSection, layoutRows = nil, {}
 local aboutTexts = {}
+local widgetRefreshCalls = 0
 EllesmereUI = {
+    _widgetRefreshList = { function() widgetRefreshCalls = widgetRefreshCalls + 1 end },
     RegisterPlugin = function(id, value)
         Check(id == "EllesmereUIExtendQuestTracker", "plugin installed identity")
         pluginCalls = pluginCalls + 1; spec = value; return true
@@ -233,7 +235,7 @@ Check(_G.EllesmereUIExtendQuestTrackerDB == nil, "saved settings not initialized
 Event("ADDON_LOADED", "EllesmereUIExtendQuestTracker")
 Event("PLAYER_LOGIN")
 local cfg = addon.Settings()
-Check(cfg.enabled and cfg.objectiveColors and cfg.messages, "cosmetic/message defaults")
+Check(cfg.objectiveColors and cfg.messages, "cosmetic/message defaults")
 Check(not cfg.questItem and not cfg.sounds, "secure item and sounds opt in")
 Check(#messages == 0 and #sounds == 0, "silent login baseline")
 Check(Near(fs.color[1], cfg.progressColor.r), "progress color applied")
@@ -645,13 +647,13 @@ Check(cfg.itemX == 0 and cfg.itemY == -180, "mover reset uses addon defaults")
 CloseEdit("exit")
 Check(cfg.itemX == 321 and cfg.itemY == -88, "Exit Without Saving restores pre-reset position")
 OpenEdit()
-cfg.enabled = false; addon.Refresh(); Pump()
-Check(mover.isHidden() and mover.getFrame() == nil and not itemPreview.shown, "disabling extension hides an already-open mover/preview")
+cfg.questItem = false; addon.Refresh(); Pump()
+Check(mover.isHidden() and mover.getFrame() == nil, "disabling tracked quest item hides its mover")
 mover.savePosition(moverKey, "CENTER", "CENTER", 777, 888)
 mover.clearPosition()
 Check(cfg.itemX == 321 and cfg.itemY == -88, "already-open mover callbacks respect feature locks")
-cfg.enabled = true; addon.Refresh(); Pump()
-Check(not mover.isHidden() and itemPreview.shown, "reenabling restores edit preview without a duplicate listener")
+cfg.questItem = true; addon.Refresh(); Pump()
+Check(not mover.isHidden(), "reenabling tracked quest item restores its mover without a duplicate listener")
 itemPreview:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 120, -70)
 pendingPoint = itemPreview.point
 combat = true; Event("PLAYER_REGEN_DISABLED")
@@ -901,12 +903,12 @@ navQuest = 0; playerDead = true; cfg.itemVisibility.visibility = "never"
 ns.RefreshQuestItem()
 Check(hero:IsVisible() and hero.sample:IsVisible() and not itemButton.shown,
     "hero remains available without quest and while dead with Never gameplay visibility")
-cfg.enabled = false; ns.RefreshQuestItem()
-Check(hero:IsVisible() and hero.sample:IsVisible(), "disabled addon still has an appearance sample")
+cfg.questItem = false; ns.RefreshQuestItem()
+Check(hero:IsVisible() and hero.sample:IsVisible(), "disabled quest-item feature keeps the appearance sample available")
 local sampleSize = hero.sample.width
 widgets["Button size"].setValue(24)
 Check(hero.sample.width == sampleSize, "header does not bypass disabled appearance controls")
-cfg.enabled = true
+cfg.questItem = true
 combat = true
 local liveSize = itemButton.width
 widgets["Button size"].setValue(80)
@@ -918,10 +920,15 @@ widgets["Retail style background"].setValue(true)
 local cachedHero = hero
 layoutRows = {}
 module.buildPage("General", parent, 0)
+Check(widgets["Enable extension"] == nil, "global Enable extension toggle is removed")
 Check(HasLayout("WOWHEAD", "Wowhead URL menus", "Wowhead database"),
     "Wowhead controls share a row under their own heading")
 Check(HasLayout("OBJECTIVE COLORS", "In-progress color", "Completed color"),
     "objective color pickers align under Objective Colors")
+widgets["Wowhead URL menus"].setValue(false)
+Check(not cfg.wowhead and widgets["Wowhead database"].disabled() and widgetRefreshCalls > 0,
+    "disabling Wowhead URL menus locks its database selector")
+widgets["Wowhead URL menus"].setValue(true)
 layoutRows = {}
 aboutTexts = {}
 module.buildPage("About", parent, 0)
@@ -962,27 +969,38 @@ EllesmereUI.UpdateContentHeaderHeight = heightAPI
 module.buildPage("Quest Item", parent, 0)
 Check(widgets["Only in quest zone"] == nil, "removed zone control is absent from options")
 for label, widget in pairs(widgets) do Check(type(widget.tooltip) == "string" and #widget.tooltip > 10, "tooltip: " .. label) end
-cfg.enabled = false
+cfg.questItem = false
 widgets["Quest proximity (yards)"].setValue(250)
 Check(cfg.itemProximityYards == 100, "stale proximity callback respects feature lock")
 local beforeSize, beforeArt = cfg.itemSize, cfg.itemRetailArt
 widgets["Button size"].setValue(95)
 widgets["Retail style background"].setValue(not beforeArt)
-Check(cfg.itemSize == beforeSize and cfg.itemRetailArt == beforeArt, "stale appearance controls respect the master lock")
+Check(cfg.itemSize == beforeSize and cfg.itemRetailArt == beforeArt, "stale appearance controls respect the quest-item switch")
 local visibilityControl = widgets.Visibility.control
 local lockedVisibility = visibilityControl.getStore()
 lockedVisibility.visibility = "never"
 visibilityControl.setOption("visHideMounted", true)
 visibilityControl.onChanged()
 Check(cfg.itemVisibility.visibility == "always" and not cfg.itemVisibility.visHideMounted, "already-open native checklist writes only a detached store when locked")
+cfg.questItem = true
+widgets["Show tracked quest item"].setValue(false)
+Check(widgets["Quest proximity (yards)"].disabled() and widgets["Button size"].disabled()
+    and widgets["Button position"].disabled(),
+    "quest-item dependent controls lock immediately when the feature is disabled")
+widgets["Show tracked quest item"].setValue(true)
 local originalColor, originalItem = cfg.progressColor.r, cfg.questItem
 widgets["In-progress color"].setValue(0.1, 0.2, 0.3)
 widgets["Show tracked quest item"].setValue(not originalItem)
-Check(cfg.progressColor.r == originalColor and cfg.questItem == originalItem, "already-open color/item controls honor master lock")
+Check(cfg.progressColor.r ~= originalColor and cfg.questItem ~= originalItem,
+    "objective colors stay independent and the item toggle remains available")
+cfg.questItem = originalItem
 local originalStatusSound = cfg.statusSounds.accepted
+cfg.sounds = false
 widgets["Quest accepted sound"].setValue("tell")
-Check(cfg.statusSounds.accepted == originalStatusSound, "already-open status selector honors master lock")
-cfg.enabled = true
+Check(cfg.statusSounds.accepted == originalStatusSound and widgets["Quest accepted sound"].disabled(),
+    "disabled notification sounds lock their status selector")
+cfg.sounds = true
+cfg.questItem = true; ns.RefreshQuestItem()
 navDistance = 150
 widgets["Quest proximity (yards)"].setValue(150)
 Check(itemButton.shown and cfg.itemProximityYards == 150, "proximity slider immediately overrides default on live button")
@@ -1030,8 +1048,9 @@ PlaySound = nil
 Check(widgets["Notification sounds"].disabled(), "missing playback API gates sound control")
 PlaySound = soundAPI
 cfg.objectiveColors = false
+local progressColorBeforeLockedEdit = cfg.progressColor.r
 widgets["In-progress color"].setValue(0.1, 0.2, 0.3)
-Check(cfg.progressColor.r == originalColor, "already-open picker honors color toggle lock")
+Check(cfg.progressColor.r == progressColorBeforeLockedEdit, "already-open picker honors color toggle lock")
 combat = true
 cfg.itemX = 321
 widgets["Button position"].onClick()
@@ -1043,10 +1062,11 @@ Check(messages[#messages]:find("omitted", 1, true), "diagnostics explain unsuppo
 
 -- Malformed SavedVariables normalize cleanly; reset restores fresh defaults.
 ns.settings = nil
-EllesmereUIExtendQuestTrackerDB = { enabled = "yes", wowheadDatabase = "bad", sound = "bad", itemX = secret,
+EllesmereUIExtendQuestTrackerDB = { enabled = false, wowheadDatabase = "bad", sound = "bad", itemX = secret,
     itemProximityYards = secret, progressColor = { r = -4, g = 10, b = 0/0 }, statuses = { ready = false } }
 cfg = addon.Settings()
-Check(cfg.enabled and cfg.wowheadDatabase == "auto" and cfg.sound == "ready", "malformed settings normalized")
+Check(cfg.enabled == nil and cfg.wowheadDatabase == "auto" and cfg.sound == "ready",
+    "removed global enable setting is ignored and remaining settings normalize")
 Check(cfg.progressColor.r == 0 and cfg.progressColor.g == 1 and cfg.progressColor.b == ns.Defaults.progressColor.b, "saved color bounds and NaN normalization")
 Check(cfg.itemX == 0 and cfg.statuses == nil and cfg.statusSounds.ready == "none"
     and cfg.statusSounds.accepted == "global", "old status opt-outs become None sound selections")

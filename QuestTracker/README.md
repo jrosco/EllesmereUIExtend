@@ -154,7 +154,8 @@ Common `reason` values:
 
 | Reason | Meaning |
 | --- | --- |
-| `extension-disabled` / `item-feature-disabled` | Enable the extension and **Show tracked quest item**. |
+| `addon-not-initialized` | Quest Tracker has not finished loading. |
+| `item-feature-disabled` | Turn on **Show tracked quest item**. |
 | `missing-navigation-api` / `missing-item-api` / `secure-template-unavailable` | Required client support is unavailable. |
 | `navigation-not-a-quest` / `no-navigation-quest` | Navigation is not confirmed to be tracking a valid quest. |
 | `quest-not-in-log` / `quest-not-watched-or-unreadable` | The navigation quest cannot be confirmed in the watched Quest Log. |

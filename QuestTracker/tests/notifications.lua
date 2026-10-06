@@ -254,6 +254,15 @@ Check(HasLayout("SOUND OUTPUT", "Global notification sound", "Play"),
 Check(HasLayout("STATUS CHANGES", "Quest accepted sound", "Play")
     and HasLayout("STATUS CHANGES", "Quest turned in sound", "Play"),
     "status selectors and previews remain paired under Status Changes")
+widgets["Notification messages"].setValue(false)
+Check(widgets["Message destinations"].disabled() and widgets["Toast opacity"].disabled(),
+    "message dependent controls lock immediately when messages are disabled")
+widgets["Notification messages"].setValue(true)
+widgets["Notification sounds"].setValue(false)
+Check(widgets["Global notification sound"].disabled() and widgets["Sound output channel"].disabled()
+    and widgets["Quest accepted sound"].disabled(),
+    "sound dependent controls lock immediately when sounds are disabled")
+widgets["Notification sounds"].setValue(true)
 checklist.set("toast", false)
 local opacityBefore = cfg.toastOpacity
 widgets["Toast opacity"].setValue(0.4)
@@ -269,12 +278,12 @@ Check(cfg.toastX == 0 and cfg.toastY == 210, "Toast position Reset restores defa
 cfg.toastX, cfg.toastY = toastPosition[1], toastPosition[2]
 Check(checklist.get("toast") and checklist.get("localChat") and checklist.get("guild"), "multiple destinations remain independently selected")
 checklist.set(secret, true)
-cfg.enabled = false
+cfg.messages = false; cfg.sounds = false
 checklist.set("localChat", false)
 widgets["Quest accepted sound"].setValue("tell")
 Check(cfg.notificationDestinations.localChat and cfg.statusSounds.accepted == "global",
-    "stale checklist and sound controls respect master lock")
-cfg.enabled = true; cfg.sounds = true
+    "disabled message and sound outputs make their related settings inactive")
+cfg.messages = true; cfg.sounds = true
 widgets["Quest accepted sound"].setValue("none")
 Check(cfg.statusSounds.accepted == "none", "per-status selector saves explicit silence")
 widgets["Global notification sound"].setValue("raidWarning")

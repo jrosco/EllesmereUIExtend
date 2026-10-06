@@ -193,7 +193,7 @@ function ns.QuestItemDebugInfo()
     d.alpha = button and ns.Number(ns.Call(button.GetAlpha, button))
     d.iconAlpha = ns.Number(addon.Settings().itemIconAlpha)
     d.driver = button and ns.String(button.questItemDriver)
-    if not ns.Active() then d.reason = "extension-disabled"
+    if not ns.Active() then d.reason = "addon-not-initialized"
     elseif not addon.Settings().questItem then d.reason = "item-feature-disabled"
     elseif ns.itemTemplateUnavailable then d.reason = "secure-template-unavailable"
     elseif d.dead then d.reason = "player-dead-or-ghost"

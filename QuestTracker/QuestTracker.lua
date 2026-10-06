@@ -5,7 +5,6 @@ local addon = {}
 ns.Addon = addon
 _G.EllesmereUIExtendQuestTracker = addon
 ns.Defaults = {
-    enabled = true,
     wowhead = true,
     wowheadDatabase = "auto",
     objectiveColors = true,
@@ -112,7 +111,7 @@ function addon.Settings()
 end
 
 function ns.Active()
-    return ns.initialized and addon.Settings().enabled
+    return ns.initialized
 end
 
 -- Own-frame scheduling also works on clients without C_Timer. Native post-hooks
