@@ -220,7 +220,9 @@ function ns.ScanNotifications(silent)
     if not ns.HasQuestLog() then return end
     local cfg = addon.Settings()
     if not ns.Active() then initialized = false; return end
+    local present = {}
     local scanned = ns.EachQuest(function(id, _, info)
+        present[id] = true
         local title = ns.String(info.title) or ns.String(ns.Call(C_QuestLog.GetTitleForQuestID, id))
         if title then titles[id] = title end
         local current, old = ReadSnapshot(id), snapshots[id]
@@ -243,7 +245,23 @@ function ns.ScanNotifications(silent)
         end
         snapshots[id] = current
     end)
-    if scanned then initialized = true end
+    if scanned then
+        -- Forget log state for quests that disappeared. Turn-in titles have a
+        -- separate short-lived cache populated by the removal/turn-in events.
+        for id in pairs(snapshots) do
+            if not present[id] then snapshots[id] = nil end
+        end
+        for id in pairs(titles) do
+            if not present[id] then titles[id] = nil end
+        end
+        local now = ns.Number(ns.Call(GetTime))
+        if now then
+            for id, entry in pairs(recent) do
+                if not entry.time or now - entry.time > 5 then recent[id] = nil end
+            end
+        end
+        initialized = true
+    end
 end
 
 function ns.RefreshNotifications()

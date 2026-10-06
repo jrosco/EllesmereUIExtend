@@ -319,8 +319,10 @@ function ns.DeliverQuestNotification(kind, id, title, detail, now)
         local key = entry.key
         if chatTypes[key] and destinations[key] and CanSend(key) and now - (lastSent[key] or -math.huge) >= 1 then
             -- No backlog: skipped/restricted messages must not burst out later.
-            local ok = pcall(SendAPI(), message.plain, chatTypes[key])
-            if ok then lastSent[key] = now end
+            local ok, result = pcall(SendAPI(), message.plain, chatTypes[key])
+            -- SendChatMessage normally returns nil on success. Honor an
+            -- explicit false failure without treating nil as a failed send.
+            if ok and ns.Boolean(result) ~= false and not ns.IsSecret(result) then lastSent[key] = now end
         end
     end
 end

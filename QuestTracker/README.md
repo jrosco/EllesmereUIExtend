@@ -60,7 +60,7 @@ Duplicate same-quest/status/detail events within one second are suppressed. Shar
 ## Using the quest-item button
 
 1. Open `/eqtx` out of combat, then **Extend Quest Tracker > Quest Tracker > Quest Item**.
-2. Enable **Show tracked quest item**. This feature is **off by default**; the extension must also be enabled under **General**.
+2. Enable **Show tracked quest item**. This feature is **off by default**.
 3. Set **Quest proximity (yards)** to the desired distance. The default is **100 yards**.
 4. Make the quest with the usable item the active Blizzard navigation target, and keep its item in your bags.
 5. Approach the destination outside combat. With the default **Always** visibility, the button appears when the quest and distance checks pass. Allow up to one second for movement polling.
@@ -77,7 +77,7 @@ Only the navigation quest's item qualifies. If that quest has no eligible item, 
 
 Outside combat and Edit Mode, all of these must be true:
 
-- The extension and **Show tracked quest item** are enabled, and the required client APIs/template are available.
+- **Show tracked quest item** is enabled, and the required client APIs/template are available.
 - The navigation target is a valid quest that is present in the Quest Log and watched.
 - Blizzard reports a usable quest-item link, and the item is in your bags.
 - The quest is incomplete, or Blizzard explicitly allows its item to remain available after completion.

@@ -126,7 +126,7 @@ local function BuildPage(page, parent, yOffset)
         Row(Color("In-progress color", "progressColor", "Color for incomplete objectives."),
             Color("Completed color", "completedColor", "Color for completed objectives that Blizzard still displays."))
     elseif page == "Notifications" then
-        Section("QUEST NOTIFICATIONS")
+        Section("QUEST MESSAGE NOTIFICATIONS")
         local function NotificationLocked() return not ns.HasQuestLog() end
         Toggle("Notification messages", "messages", "Send formatted quest status updates to your selected local and shared destinations.",
             function() return not ns.HasQuestLog() end, "This client must provide quest-log APIs.")
@@ -249,7 +249,7 @@ local function BuildPage(page, parent, yOffset)
                 end,
             })
         end
-        Section("SOUND OUTPUT")
+        Section("QUEST SOUND NOTIFICATIONS")
         Row(ToggleConfig("Notification sounds", "sounds", "Play a sound for selected changes, at most once per second.",
             function() return NotificationLocked() or not ns.HasNotificationSounds() end,
             "This client must provide a supported sound."),
@@ -268,7 +268,7 @@ local function BuildPage(page, parent, yOffset)
             function(value) addon.Settings().sound = value end, SoundLocked,
             "Fallback for statuses set to Use global sound or with an unavailable individual sound. None silences the fallback.")
         Note("Volume follows WoW audio settings", "The playback API has no independent per-notification volume control. Adjust the selected channel's volume in WoW's audio settings.")
-        Section("STATUS CHANGES")
+        Section("QUEST STATUS SOUNDS")
         local statuses = { { "accepted", "Quest accepted" }, { "progress", "Objective progress" },
             { "objective", "Objective completed" }, { "ready", "Ready for turn-in" },
             { "failed", "Quest failed" }, { "turnedIn", "Quest turned in" } }

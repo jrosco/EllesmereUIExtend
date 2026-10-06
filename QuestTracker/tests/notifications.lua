@@ -2,6 +2,7 @@
 local ns, frames, messages, sounds, sends, widgets = {}, {}, {}, {}, {}, {}
 local now, combat, prebuild, checks = 100, false, false, 0
 local playedFiles, peonFilesAvailable = {}, true
+local sendFailure = false
 local secret = setmetatable({}, { __tostring = function() error("secret formatting") end,
     __index = function() error("secret indexing") end, __lt = function() error("secret comparison") end })
 function issecretvalue(value) return rawequal(value, secret) end
@@ -51,11 +52,14 @@ local party, raid, instance, guild, restricted = false, false, false, false, fal
 function IsInGroup(category) if category == 2 then return instance end; return party end
 function IsInRaid(category) assert(category == 1); return raid end
 function IsInGuild() return guild end
-local function Send(text, channel) sends[#sends + 1] = { text = text, channel = channel } end
+local function Send(text, channel)
+    sends[#sends + 1] = { text = text, channel = channel }
+    if sendFailure then return false end
+end
 C_ChatInfo = { SendChatMessage = Send, InChatMessagingLockdown = function() return restricted end }
-local title, objectiveText, count, finished, ready, failed = "A Test Quest", "Collect samples: 0/3", 0, false, false, false
+local title, objectiveText, count, finished, ready, failed, questCount = "A Test Quest", "Collect samples: 0/3", 0, false, false, false, 1
 C_QuestLog = {
-    GetNumQuestLogEntries = function() return 1 end,
+    GetNumQuestLogEntries = function() return questCount end,
     GetInfo = function() return { questID = 100, isHeader = false, title = title } end,
     GetTitleForQuestID = function() return title end,
     GetQuestObjectives = function() return { { text = objectiveText, numFulfilled = count, finished = finished } } end,
@@ -159,6 +163,12 @@ Check(#sends == start + 3 and sends[start + 1].channel == "RAID" and sends[start
 party, raid, guild = false, false, false
 start = #sends; Accept()
 Check(#sends == start + 1 and sends[#sends].channel == "INSTANCE_CHAT", "instance-only group never sends to regular party")
+now = now + 2; sendFailure = true
+start = #sends; Accept()
+Check(#sends == start + 1, "explicitly failed chat send is attempted")
+sendFailure = false; now = now + 2
+start = #sends; Accept()
+Check(#sends == start + 1, "explicitly failed chat send does not consume destination throttle")
 restricted = true
 start = #sends; local beforeMessages = #messages
 Accept()
@@ -203,6 +213,10 @@ ns.ScanNotifications(false)
 Check(messages[#messages]:find("Collect samples: 2/3", 1, true), "objective progress carries readable objective detail")
 beforeMessages = #messages; ns.ScanNotifications(false)
 Check(#messages == beforeMessages, "unchanged objectives do not repeat")
+questCount = 0; ns.ScanNotifications(false)
+questCount = 1; count = 3; objectiveText = "Collect samples: 3/3"
+beforeMessages = #messages; ns.ScanNotifications(false)
+Check(#messages == beforeMessages, "re-added quest seeds a fresh baseline without stale progress notification")
 
 -- Toast lifecycle: three reusable, non-clickable local frames with timed fade.
 for key in pairs(cfg.notificationDestinations) do cfg.notificationDestinations[key] = key == "toast" end
