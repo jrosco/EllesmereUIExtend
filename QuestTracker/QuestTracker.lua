@@ -12,14 +12,13 @@ ns.Defaults = {
     completedColor = { r = 0.25, g = 1, b = 0.35 },
     messages = true,
     sounds = false,
-    sound = "ready",
     soundChannel = "Master",
-    statusSounds = { accepted = "global", progress = "none", objective = "global",
-        ready = "global", failed = "global", turnedIn = "global" },
+    statusSounds = { progress = "none", ready = "ready" },
     notificationDestinations = { localChat = true, toast = false, party = false,
         raid = false, instance = false, guild = false },
     toastOpacity = 0.92,
     toastAccentColor = { r = 0.9, g = 0.62, b = 0.16 },
+    toastTextAlign = "left",
     toastX = 0,
     toastY = 210,
     questItem = false,
@@ -81,17 +80,18 @@ function addon.Settings()
         ns.settings = Normalize(saved, ns.Defaults)
         -- Preserve existing opt-outs when old status toggles become None choices.
         for kind, enabled in pairs(oldStatuses or {}) do
-            if ns.Boolean(enabled) == false then ns.settings.statusSounds[kind] = "none" end
+            if (kind == "progress" or kind == "ready") and ns.Boolean(enabled) == false then
+                ns.settings.statusSounds[kind] = "none"
+            end
         end
         if not ({ auto = true, retail = true, classic = true })[ns.settings.wowheadDatabase] then
             ns.settings.wowheadDatabase = "auto"
         end
-        if ns.settings.sound ~= "none" and not (ns.SoundNames and ns.SoundNames[ns.settings.sound]) then
-            ns.settings.sound = "ready"
-        end
+        if ns.settings.toastTextAlign ~= "left" and ns.settings.toastTextAlign ~= "center"
+            and ns.settings.toastTextAlign ~= "right" then ns.settings.toastTextAlign = "left" end
         for kind, key in pairs(ns.settings.statusSounds) do
-            if key ~= "global" and key ~= "none" and not (ns.SoundNames and ns.SoundNames[key]) then
-                ns.settings.statusSounds[kind] = "global"
+            if key ~= "none" and not (ns.SoundNames and ns.SoundNames[key]) then
+                ns.settings.statusSounds[kind] = ns.Defaults.statusSounds[kind]
             end
         end
         if not ({ Master = true, SFX = true, Music = true, Ambience = true, Dialog = true })[ns.settings.soundChannel] then

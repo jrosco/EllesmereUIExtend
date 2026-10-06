@@ -128,7 +128,8 @@ local function BuildPage(page, parent, yOffset)
     elseif page == "Notifications" then
         Section("QUEST MESSAGE NOTIFICATIONS")
         local function NotificationLocked() return not ns.HasQuestLog() end
-        Toggle("Notification messages", "messages", "Send formatted quest status updates to your selected local and shared destinations.",
+        local messageToggle = ToggleConfig("Notification messages", "messages",
+            "Send formatted quest status updates to your selected local and shared destinations.",
             function() return not ns.HasQuestLog() end, "This client must provide quest-log APIs.")
         local function DestinationsLocked() return NotificationLocked() or not addon.Settings().messages end
         local function GetDestination(key) return addon.Settings().notificationDestinations[key] == true end
@@ -142,14 +143,15 @@ local function BuildPage(page, parent, yOffset)
             RefreshWidgetStates()
         end
         if type(EllesmereUI.BuildVisOptsCBDropdown) == "function" then
-            local row, height = W:DualRow(parent, y, { type = "dropdown", text = "Message destinations",
+            local destinationDropdown = { type = "dropdown", text = "Message destinations",
                 tooltip = "Choose any combination of Local chat, Local toast, Party, Raid, Instance/Battleground and Guild. Shared destinations send real chat messages; unavailable groups are skipped. Empty means no messages.",
                 values = { selection = "Choose destinations" }, order = { "selection" },
                 disabled = DestinationsLocked, disabledTooltip = "Enable notification messages first.",
-                getValue = function() return "selection" end, setValue = function() end })
+                getValue = function() return "selection" end, setValue = function() end }
+            local row, height = W:DualRow(parent, y, messageToggle, destinationDropdown)
             y = y - height
             if not prebuild then
-                local region = row._leftRegion
+                local region = row._rightRegion
                 local items = {}
                 for _, entry in ipairs(ns.NotificationDestinations) do
                     local key = entry.key
@@ -167,6 +169,7 @@ local function BuildPage(page, parent, yOffset)
                 if type(EllesmereUI.RegisterWidgetRefresh) == "function" then EllesmereUI.RegisterWidgetRefresh(refresh) end
             end
         else
+            Row(messageToggle)
             -- Older EUI builds retain every destination as independent toggles.
             local function DestinationToggle(entry)
                 local key = entry.key
@@ -188,17 +191,17 @@ local function BuildPage(page, parent, yOffset)
             return NotificationLocked() or not addon.Settings().messages
                 or not addon.Settings().notificationDestinations.toast
         end
-        Row({ type = "slider", text = "Toast opacity", min = 0.2, max = 1, step = 0.05,
-            tooltip = "Adjust opacity of the local toast panel, text, accent and outline.",
+        Row({ type = "slider", text = "Toast opacity", min = 0, max = 100, step = 1,
+            tooltip = "Adjust the opacity of the local toast background only (0–100%).",
             disabled = ToastLocked, disabledTooltip = "Enable Notification messages and select Local toast first.",
-            getValue = function() return addon.Settings().toastOpacity end,
+            getValue = function() return addon.Settings().toastOpacity * 100 end,
             setValue = function(value)
                 if ToastLocked() or not ns.Number(value) then return end
-                addon.Settings().toastOpacity = ns.Clamp(value, 0.2, 1, 0.92)
+                addon.Settings().toastOpacity = ns.Clamp(value, 0, 100, 92) / 100
                 ns.RefreshToastAppearance()
             end,
-        }, { type = "colorpicker", text = "Toast accent color", hasAlpha = false,
-            tooltip = "Color of the toast's accent stripe and outline. Status headings keep their own status colors.",
+        }, { type = "colorpicker", text = "Toast heading color", hasAlpha = false,
+            tooltip = "Color of the toast status heading.",
             disabled = ToastLocked, disabledTooltip = "Enable Notification messages and select Local toast first.",
             getValue = function()
                 local c = addon.Settings().toastAccentColor
@@ -211,31 +214,41 @@ local function BuildPage(page, parent, yOffset)
                 ns.RefreshToastAppearance()
             end,
         })
+        Row({ type = "dropdown", text = "Toast text alignment",
+            values = { left = "Left", center = "Center", right = "Right" }, order = { "left", "center", "right" },
+            tooltip = "Align both the status heading and message body.",
+            disabled = ToastLocked, disabledTooltip = "Enable Notification messages and select Local toast first.",
+            getValue = function() return addon.Settings().toastTextAlign end,
+            setValue = function(value)
+                if ToastLocked() or not ns.String(value)
+                    or (value ~= "left" and value ~= "center" and value ~= "right") then return end
+                addon.Settings().toastTextAlign = value
+                ns.RefreshToastAppearance()
+            end,
+        })
         Row({ type = "labeledButton", text = "Toast position", buttonText = "Reset",
             tooltip = "Reset the local toast anchor. Move it in EUI Edit/Unlock Mode using Quest Notification Toast.",
             disabled = function() return ToastLocked() or ns.InCombat() end,
             disabledTooltip = "Enable Local toast and leave combat first.",
             onClick = function() if not ToastLocked() and not ns.InCombat() then ns.ResetToastPosition() end end,
         })
-        Note("Move toast with EUI Edit Mode", "Select Local toast above, then move Quest Notification Toast in EUI Edit/Unlock Mode. The preview is non-clickable and independent of the quest-item mover.")
         local function SoundLocked()
             return not ns.HasQuestLog() or not addon.Settings().sounds
                 or (type(PlaySound) ~= "function" and type(PlaySoundFile) ~= "function")
         end
-        local function SoundSelector(label, kind, getSound, setSound, disabled, tip, previewDisabled)
+        local function SoundSelector(label, getSound, setSound, disabled, tip)
             local selected = getSound()
-            local values, order = ns.SoundKitOptions(true, kind ~= nil, selected)
+            local values, order = ns.SoundKitOptions(true, selected)
             local function PreviewDisabled()
-                if disabled() or (previewDisabled and previewDisabled()) then return true end
-                if kind then return not ns.NotificationSoundAvailable(kind) end
-                return getSound() == "none" or not ns.SoundAvailable(getSound())
+                return disabled() or (type(PlaySound) ~= "function" and type(PlaySoundFile) ~= "function")
+                    or getSound() == "none" or not ns.SoundAvailable(getSound())
             end
             Row({ type = "dropdown", text = label, tooltip = tip, values = values, order = order,
                 disabled = disabled, disabledTooltip = "Enable notification sounds first.",
                 getValue = getSound,
                 setValue = function(value)
                     if disabled() or not ns.String(value) or not values[value] then return end
-                    if value ~= "global" and value ~= "none" and not ns.SoundAvailable(value) then return end
+                    if value ~= "none" and not ns.SoundAvailable(value) then return end
                     setSound(value)
                 end,
             }, { type = "labeledButton", text = "", buttonText = "Play",
@@ -244,8 +257,7 @@ local function BuildPage(page, parent, yOffset)
                 disabledTooltip = "Choose an available sound and enable notification sounds.",
                 onClick = function()
                     if PreviewDisabled() then return end
-                    if kind then ns.PreviewEffectiveNotificationSound(kind)
-                    else ns.PreviewNotificationSound(getSound()) end
+                    ns.PreviewNotificationSound(getSound())
                 end,
             })
         end
@@ -263,26 +275,17 @@ local function BuildPage(page, parent, yOffset)
                 addon.Settings().soundChannel = value
             end,
         })
-        SoundSelector("Global notification sound", nil,
-            function() return addon.Settings().sound end,
-            function(value) addon.Settings().sound = value end, SoundLocked,
-            "Fallback for statuses set to Use global sound or with an unavailable individual sound. None silences the fallback.")
-        Note("Volume follows WoW audio settings", "The playback API has no independent per-notification volume control. Adjust the selected channel's volume in WoW's audio settings.")
         Section("QUEST STATUS SOUNDS")
-        local statuses = { { "accepted", "Quest accepted" }, { "progress", "Objective progress" },
-            { "objective", "Objective completed" }, { "ready", "Ready for turn-in" },
-            { "failed", "Quest failed" }, { "turnedIn", "Quest turned in" } }
+        local statuses = { { "progress", "Objective progress" }, { "ready", "Ready for turn-in" } }
         for _, option in ipairs(statuses) do
             local key, label = option[1], option[2]
             local function StatusLocked()
                 return NotificationLocked() or not addon.Settings().sounds or not ns.StatusSupported(key)
             end
-            SoundSelector(label .. " sound", key,
+            SoundSelector(label .. " sound",
                 function() return addon.Settings().statusSounds[key] end,
                 function(value) addon.Settings().statusSounds[key] = value end, StatusLocked,
-                "Use global sound inherits the fallback. None disables this status's messages and sound. An unavailable individual sound uses the global fallback.",
-                function() return not addon.Settings().sounds
-                    or (type(PlaySound) ~= "function" and type(PlaySoundFile) ~= "function") end)
+                "Choose this status's sound. None disables this status's messages and sound; an unavailable sound stays silent.")
         end
     elseif page == "Quest Item" then
         Section("NAVIGATION-TRACKED QUEST ITEM")
@@ -380,9 +383,9 @@ local function BuildPage(page, parent, yOffset)
             disabled = function() return ItemLocked() or ns.InCombat() end, disabledTooltip = "Enable the tracked quest item and leave combat first.",
             onClick = function() if not ItemLocked() and not ns.InCombat() then addon.ResetItemPosition() end end,
         })
-        Note("Move with EUI Edit Mode", "Enable the quest-item button, enter EUI Edit/Unlock Mode, and move Tracked Quest Item. A non-clickable preview appears even without an available item. Save & Exit commits; Exit Without Saving or Discard restores the previous position.")
-        Note("Combat keeps the last configured item", "Secure item, size, border and proximity changes wait until combat ends. Native visibility conditions such as combat and group state remain live through a secure driver.")
-        Note("Blizzard's Extra Action Button is preserved", "This extension has its own button. EUI's quest-item hotkey also remains unchanged.")
+        -- Note("Move with EUI Edit Mode", "Enable the quest-item button, enter EUI Edit/Unlock Mode, and move Tracked Quest Item. A non-clickable preview appears even without an available item. Save & Exit commits; Exit Without Saving or Discard restores the previous position.")
+        -- Note("Combat keeps the last configured item", "Secure item, size, border and proximity changes wait until combat ends. Native visibility conditions such as combat and group state remain live through a secure driver.")
+        -- Note("Blizzard's Extra Action Button is preserved", "This extension has its own button. EUI's quest-item hotkey also remains unchanged.")
     elseif page == "About" then
         return BuildAboutPage(parent, yOffset)
     else
