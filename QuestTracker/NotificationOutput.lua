@@ -2,8 +2,7 @@ local addonName, ns = ...
 local addon = ns.Addon
 if not addon then return end
 
-ns.NotificationLabels = { accepted = "Accepted", progress = "Objective progress", objective = "Objective completed",
-    ready = "Ready for turn-in", failed = "Failed", turnedIn = "Turned in" }
+ns.NotificationLabels = { progress = "Objective progress", ready = "Ready for turn-in" }
 ns.NotificationDestinations = {
     { key = "localChat", label = "Local chat", tooltip = "Print in your own chat window." },
     { key = "toast", label = "Local toast", tooltip = "Show a short notification on your screen, visible only to you." },
@@ -12,16 +11,11 @@ ns.NotificationDestinations = {
     { key = "instance", label = "Instance/Battleground", tooltip = "Send to your instance group, including battlegrounds and queued dungeon/raid groups." },
     { key = "guild", label = "Guild", tooltip = "Send to your guild when you are a member." },
 }
-local colors = { accepted = "66ccff", progress = "ffcc66", objective = "66ff99",
-    ready = "ffd100", failed = "ff6666", turnedIn = "b399ff" }
+local colors = { progress = "ffcc66", ready = "ffd100" }
 local chatTypes = { party = "PARTY", raid = "RAID", instance = "INSTANCE_CHAT", guild = "GUILD" }
 local lastSent, toasts, nextToast = {}, {}, 0
 local toastPreview, toastEditing, toastSnapshot, toastMoverElement, toastMoverRegistered, toastMoverHidden
 local TOAST_KEY, TOAST_WIDTH, TOAST_HEIGHT = "EQTX_NotificationToast", 400, 96
-local toastColors = {
-    accepted = "66ccff", progress = "ffcc66", objective = "66ff99",
-    ready = "ffd100", failed = "ff6666", turnedIn = "b399ff",
-}
 
 -- Strip control/markup supplied by quest text before composing our own colors.
 -- Truncation is byte-bounded for chat, but never cuts a UTF-8 codepoint in half.
@@ -95,27 +89,6 @@ local function ToastFrame(parent, isPreview)
     local bg = frame:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints(frame)
     bg:SetColorTexture(0.025, 0.035, 0.05, 1)
-    local accent = frame:CreateTexture(nil, "ARTWORK")
-    accent:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-    accent:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
-    accent:SetWidth(5)
-    local border = {}
-    border.top = frame:CreateTexture(nil, "OVERLAY")
-    border.top:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-    border.top:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
-    border.top:SetHeight(2)
-    border.bottom = frame:CreateTexture(nil, "OVERLAY")
-    border.bottom:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
-    border.bottom:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
-    border.bottom:SetHeight(2)
-    border.left = frame:CreateTexture(nil, "OVERLAY")
-    border.left:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-    border.left:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0)
-    border.left:SetWidth(1)
-    border.right = frame:CreateTexture(nil, "OVERLAY")
-    border.right:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
-    border.right:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
-    border.right:SetWidth(1)
     local heading = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     heading:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -11)
     heading:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -14, -11)
@@ -125,7 +98,7 @@ local function ToastFrame(parent, isPreview)
     body:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -14, 11)
     body:SetJustifyH("LEFT"); body:SetJustifyV("TOP")
     body:SetWordWrap(true)
-    frame.bg, frame.accent, frame.border = bg, accent, border
+    frame.bg = bg
     frame.heading, frame.body, frame.isPreview = heading, body, isPreview == true
     frame:SetScript("OnHide", function(self)
         if not self.isPreview then self:SetScript("OnUpdate", nil) end
@@ -133,9 +106,11 @@ local function ToastFrame(parent, isPreview)
     return frame
 end
 
-local function AccentColor()
+local function HeadingColor()
     local color = ns.Table(addon.Settings().toastAccentColor) or {}
-    return ns.Clamp(color.r, 0, 1, 0.9), ns.Clamp(color.g, 0, 1, 0.62), ns.Clamp(color.b, 0, 1, 0.16)
+    return string.format("%02x%02x%02x", math.floor(ns.Clamp(color.r, 0, 1, 0.9) * 255 + 0.5),
+        math.floor(ns.Clamp(color.g, 0, 1, 0.62) * 255 + 0.5),
+        math.floor(ns.Clamp(color.b, 0, 1, 0.16) * 255 + 0.5))
 end
 
 local function PositionToast(frame, index)
@@ -146,12 +121,14 @@ end
 
 local function StyleToast(frame, message, fade)
     if not frame or not message then return end
-    local r, g, b = AccentColor()
-    frame.accent:SetColorTexture(r, g, b, 1)
-    for _, edge in pairs(frame.border) do edge:SetColorTexture(r, g, b, 0.95) end
-    frame.heading:SetText("|cff" .. message.color .. message.heading .. "|r")
+    local cfg = addon.Settings()
+    local alignment = cfg.toastTextAlign == "center" and "CENTER" or cfg.toastTextAlign == "right" and "RIGHT" or "LEFT"
+    frame.heading:SetJustifyH(alignment)
+    frame.body:SetJustifyH(alignment)
+    frame.heading:SetText("|cff" .. HeadingColor() .. message.heading .. "|r")
     frame.body:SetText(message.toast)
-    frame:SetAlpha(addon.Settings().toastOpacity * (fade or 1))
+    frame.bg:SetColorTexture(0.025, 0.035, 0.05, cfg.toastOpacity)
+    frame:SetAlpha(fade or 1)
 end
 
 local function ToastPreviewEnabled()
@@ -162,9 +139,14 @@ end
 local function CreateToastPreview()
     if toastPreview or ns.InCombat() then return toastPreview end
     toastPreview = ToastFrame(UIParent, true)
-    toastPreview.message = { heading = "Ready for turn-in", color = toastColors.ready,
+    toastPreview.message = { heading = "Ready for turn-in",
         toast = "[Sample Quest] (#12345)\nAn objective was completed." }
     StyleToast(toastPreview, toastPreview.message)
+    -- The mover may reuse this frame across editor sessions. Reapply settings
+    -- when EUI shows it so the displayed sample cannot retain stale text layout.
+    toastPreview:SetScript("OnShow", function(self)
+        if self.message then StyleToast(self, self.message) end
+    end)
     PositionToast(toastPreview, 1)
     toastPreview:Hide()
     return toastPreview
@@ -234,6 +216,7 @@ local function ToastEditChanged(active, closeAction)
         for _, frame in ipairs(toasts) do frame:Hide() end
         local sample = CreateToastPreview()
         if sample then
+            StyleToast(sample, sample.message)
             PositionToast(sample, 1)
             if ToastMoverEnabled() then sample:Show() else sample:Hide() end
         end
@@ -257,7 +240,11 @@ function ns.RegisterToastMover()
         noResize = true, noAnchorTo = true, noAnchorTarget = true, noSizeMatchTarget = true,
         isHidden = function() return not ToastMoverEnabled() end,
         getFrame = function()
-            if ToastMoverEnabled() and not ns.InCombat() then return CreateToastPreview() end
+            if ToastMoverEnabled() and not ns.InCombat() then
+                local sample = CreateToastPreview()
+                if sample then StyleToast(sample, sample.message) end
+                return sample
+            end
         end,
         getSize = function() return TOAST_WIDTH, TOAST_HEIGHT end,
         loadPos = ToastPosition,

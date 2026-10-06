@@ -16,8 +16,9 @@ function CreateFrame(kind, name, parent)
     frames[#frames + 1] = frame
     function frame:SetScript(event, callback) self.scripts[event] = callback end
     function frame:Hide() self.shown = false; if self.scripts.OnHide then self.scripts.OnHide(self) end end
-    function frame:Show() self.shown = true end
+    function frame:Show() self.shown = true; if self.scripts.OnShow then self.scripts.OnShow(self) end end
     function frame:SetText(text) self.text = text end
+    function frame:SetJustifyH(alignment) self.justifyH = alignment end
     function frame:SetAlpha(alpha) self.alpha = alpha end
     function frame:SetColorTexture(...) self.colorTexture = { ... } end
     function frame:CreateFontString() return CreateFrame("FontString", nil, self) end
@@ -26,7 +27,7 @@ function CreateFrame(kind, name, parent)
     function frame:ClearAllPoints() self.point = nil end
     function frame:GetWidth() return self.width or 600 end
     for _, method in ipairs({ "RegisterEvent", "SetPoint", "SetSize", "SetWidth", "SetHeight", "SetAllPoints",
-        "SetFrameStrata", "EnableMouse", "SetJustifyH", "SetJustifyV", "SetWordWrap" }) do frame[method] = Noop end
+        "SetFrameStrata", "EnableMouse", "SetJustifyV", "SetWordWrap" }) do frame[method] = Noop end
     return frame
 end
 UIParent = CreateFrame("Frame")
@@ -57,14 +58,13 @@ local function Send(text, channel)
     if sendFailure then return false end
 end
 C_ChatInfo = { SendChatMessage = Send, InChatMessagingLockdown = function() return restricted end }
-local title, objectiveText, count, finished, ready, failed, questCount = "A Test Quest", "Collect samples: 0/3", 0, false, false, false, 1
+local title, objectiveText, count, finished, ready, questCount = "A Test Quest", "Collect samples: 0/3", 0, false, false, 1
 C_QuestLog = {
     GetNumQuestLogEntries = function() return questCount end,
     GetInfo = function() return { questID = 100, isHeader = false, title = title } end,
     GetTitleForQuestID = function() return title end,
     GetQuestObjectives = function() return { { text = objectiveText, numFulfilled = count, finished = finished } } end,
     ReadyForTurnIn = function() return ready end,
-    IsFailed = function() return failed end,
 }
 local module, checklist, previewButtons = nil, nil, {}
 local currentSection, layoutRows = nil, {}
@@ -82,9 +82,9 @@ EllesmereUI = {
                 if right.type == "labeledButton" then previewButtons[#previewButtons + 1] = right end
             end
             if prebuild then return {}, 50 end
-            local region = CreateFrame("Frame")
-            region._control = CreateFrame("Button")
-            return { _leftRegion = region }, 50
+            local leftRegion, rightRegion = CreateFrame("Frame"), CreateFrame("Frame")
+            leftRegion._control, rightRegion._control = CreateFrame("Button"), CreateFrame("Button")
+            return { _leftRegion = leftRegion, _rightRegion = rightRegion }, 50
         end,
     },
     BuildVisOptsCBDropdown = function(parent, width, level, items, get, set, _, _, _, _, _, opts)
@@ -101,101 +101,113 @@ local addon = ns.Addon
 ns.initialized = true
 local cfg = addon.Settings()
 ns.RefreshNotifications()
+cfg.statusSounds.progress = "ready"
+Check(ns.StatusSupported("progress") and ns.StatusSupported("ready")
+    and not ns.StatusSupported("accepted") and not ns.StatusSupported("objective")
+    and not ns.StatusSupported("failed") and not ns.StatusSupported("turnedIn"),
+    "only objective progress and ready-for-turn-in statuses are supported")
 Check(#messages == 0 and #sounds == 0 and #sends == 0, "silent baseline")
 Check(cfg.notificationDestinations.localChat and not cfg.notificationDestinations.toast and not cfg.notificationDestinations.guild,
     "local-chat-only defaults")
 Check(cfg.toastOpacity == 0.92 and cfg.toastX == 0 and cfg.toastY == 210,
     "toast opacity and anchor defaults")
-local function Accept() now = now + 2; ns.NotificationEvent("QUEST_ACCEPTED", 100) end
-Accept()
-Check(#messages == 1 and #sends == 0 and messages[1]:find("|cff66ccffAccepted|r", 1, true)
+local function Progress()
+    now, count = now + 2, count + 1
+    objectiveText = "Collect samples: " .. count .. "/3"
+    ns.ScanNotifications(false)
+end
+local function Ready(advance)
+    ready = false; ns.ScanNotifications(true)
+    ready = true
+    if advance ~= false then now = now + 2 end
+    ns.ScanNotifications(false)
+    ready = false; ns.ScanNotifications(true)
+end
+Progress()
+Check(#messages == 1 and #sends == 0 and messages[1]:find("|cffffcc66Objective progress|r", 1, true)
     and messages[1]:find("(#100)", 1, true), "colored local status includes title and quest ID")
-cfg.sounds = true; cfg.sound = "complete"; cfg.soundChannel = "SFX"
-Accept()
-Check(sounds[#sounds].id == 2 and sounds[#sounds].channel == "SFX", "global fallback and output channel honored")
+cfg.sounds = true; cfg.statusSounds.progress = "complete"; cfg.soundChannel = "SFX"
+Progress()
+Check(sounds[#sounds].id == 2 and sounds[#sounds].channel == "SFX", "status sound and output channel honored")
 for kind in pairs(cfg.statusSounds) do
     cfg.statusSounds[kind] = "tell"
     Check(ns.NotificationSoundID(kind) == 3, "independent sound for " .. kind)
     cfg.statusSounds[kind] = "none"
-    Check(ns.NotificationSoundID(kind) == nil, "None suppresses fallback for " .. kind)
-    cfg.statusSounds[kind] = "global"
+    Check(ns.NotificationSoundID(kind) == nil, "None silences " .. kind)
+    cfg.statusSounds[kind] = kind == "ready" and "ready" or "none"
 end
-cfg.statusSounds.accepted = "tell"; Accept()
-Check(sounds[#sounds].id == 3, "individual sound overrides global at event delivery")
-SOUNDKIT.TELL_MESSAGE = nil; Accept()
-Check(sounds[#sounds].id == 2, "missing individual sound falls back to global")
+cfg.statusSounds.progress = "tell"; Progress()
+Check(sounds[#sounds].id == 3, "selected status sound plays at event delivery")
+local beforeUnavailable = #sounds
+SOUNDKIT.TELL_MESSAGE = nil; Progress()
+Check(#sounds == beforeUnavailable, "unavailable status sound stays silent without a global fallback")
 SOUNDKIT.TELL_MESSAGE = 3
-cfg.statusSounds.accepted = "none"
+cfg.statusSounds.progress = "none"
 local beforeSounds, beforeText, beforeSend = #sounds, #messages, #sends
-Accept()
+Progress()
 Check(#sounds == beforeSounds and #messages == beforeText and #sends == beforeSend,
     "per-status None disables local and shared messages as well as sound")
-cfg.statusSounds.accepted = "global"; cfg.sound = "none"
-Accept()
-Check(#sounds == beforeSounds and #messages == beforeText + 1, "global None mutes inherited sound without disabling status messages")
-cfg.sound = "ready"; cfg.statusSounds.accepted = "complete"; cfg.statusSounds.turnedIn = "tell"
-Accept()
-ns.NotificationEvent("QUEST_TURNED_IN", 100)
+cfg.statusSounds.progress = "complete"; cfg.statusSounds.ready = "tell"
+Progress(); Ready(false)
 Check(sounds[#sounds].id == 2 and #sounds == beforeSounds + 1, "one-second sound burst throttle preserves first status sound")
-now = now + 2; ns.NotificationEvent("QUEST_TURNED_IN", 100)
-Check(sounds[#sounds].id == 3, "later turned-in status uses its own sound")
-cfg.soundChannel = "Dialog"; Accept()
+Ready(); Check(sounds[#sounds].id == 3, "ready status uses its own sound")
+cfg.soundChannel = "Dialog"; Progress()
 Check(sounds[#sounds].channel == "Dialog", "selected audio channel reaches playback API")
-PlaySound = function() return false end; Accept()
+PlaySound = function() return false end; Progress()
 PlaySound = Sound
-ns.NotificationEvent("QUEST_TURNED_IN", 100)
+Ready(false)
 Check(sounds[#sounds].id == 3, "failed playback does not consume sound throttle")
 
 cfg.sounds = false
 for key in pairs(cfg.notificationDestinations) do cfg.notificationDestinations[key] = key ~= "toast" end
 party, guild = true, true
 local start = #sends
-Accept()
+Progress()
 Check(#sends == start + 2 and sends[start + 1].channel == "PARTY" and sends[start + 2].channel == "GUILD",
     "multi-select sends to eligible party and guild only")
 local last = #sends
-ns.NotificationEvent("QUEST_TURNED_IN", 100)
+Ready(false)
 Check(#sends == last, "per-destination burst throttle suppresses immediate second status")
 raid, instance = true, true
-start = #sends; Accept()
+start = #sends; Progress()
 Check(#sends == start + 3 and sends[start + 1].channel == "RAID" and sends[start + 2].channel == "INSTANCE_CHAT",
     "raid excludes party, instance group routes to INSTANCE_CHAT")
 party, raid, guild = false, false, false
-start = #sends; Accept()
+start = #sends; Progress()
 Check(#sends == start + 1 and sends[#sends].channel == "INSTANCE_CHAT", "instance-only group never sends to regular party")
 now = now + 2; sendFailure = true
-start = #sends; Accept()
+start = #sends; Progress()
 Check(#sends == start + 1, "explicitly failed chat send is attempted")
 sendFailure = false; now = now + 2
-start = #sends; Accept()
+start = #sends; Progress()
 Check(#sends == start + 1, "explicitly failed chat send does not consume destination throttle")
 restricted = true
 start = #sends; local beforeMessages = #messages
-Accept()
+Progress()
 Check(#sends == start and #messages == beforeMessages + 1, "chat lockdown preserves local notification and skips broadcast")
-restricted = secret; Accept()
+restricted = secret; Progress()
 Check(#sends == start, "unreadable chat lockdown fails closed")
 restricted = false; instance = secret; guild = secret; party = secret
-Accept(); Check(#sends == start, "unreadable group membership fails closed")
+Progress(); Check(#sends == start, "unreadable group membership fails closed")
 instance, guild, party = true, false, false
 C_ChatInfo = nil; SendChatMessage = Send; EUI_CLIENT_FOREVER = true
-Accept(); Check(#sends == start + 1, "Forever legacy chat sender fallback")
+Progress(); Check(#sends == start + 1, "Forever legacy chat sender fallback")
 SendChatMessage = nil
-Accept(); Check(#sends == start + 1, "missing send API does not affect local output")
-C_ChatInfo = { SendChatMessage = function() error("restricted send") end }; Accept()
+Progress(); Check(#sends == start + 1, "missing send API does not affect local output")
+C_ChatInfo = { SendChatMessage = function() error("restricted send") end }; Progress()
 Check(#sends == start + 1, "throwing send does not escape notification handler")
 C_ChatInfo = { SendChatMessage = Send, InChatMessagingLockdown = function() return false end }
 EUI_CLIENT_FOREVER = nil
 cfg.messages = false; cfg.sounds = true
 local noText, noSend, withSound = #messages, #sends, #sounds
-Accept()
+Progress()
 Check(#messages == noText and #sends == noSend and #sounds == withSound + 1, "message master does not silence enabled audio")
-cfg.statusSounds.accepted = "none"
-withSound = #sounds; Accept()
+cfg.statusSounds.progress = "none"
+withSound = #sounds; Progress()
 Check(#sounds == withSound and #messages == noText and #sends == noSend, "disabled status suppresses every output")
-cfg.statusSounds.accepted = "global"; cfg.messages = true
+cfg.statusSounds.progress = "ready"; cfg.messages = true
 for key in pairs(cfg.notificationDestinations) do cfg.notificationDestinations[key] = false end
-Accept()
+Progress()
 Check(#messages == noText and #sends == noSend and #sounds == withSound + 1, "empty destinations suppress messages but keep independent audio")
 cfg.sounds = false
 
@@ -205,14 +217,17 @@ Check(formatted.plain:find("Title", 1, true) and not formatted.plain:find("|", 1
 formatted = ns.FormatQuestNotification("progress", 100, string.rep("é", 100), string.rep("界", 150))
 Check(#formatted.plain <= 255 and utf8.len(formatted.plain) ~= nil, "long localized messages are byte bounded without broken UTF-8")
 Check(ns.FormatQuestNotification("accepted", secret, "Title") == nil
-    and ns.FormatQuestNotification("accepted", 100, secret) == nil, "secret IDs/titles never formatted")
+    and ns.FormatQuestNotification("progress", 100, secret) == nil, "unknown statuses and secret titles never formatted")
 cfg.notificationDestinations.localChat = true
-cfg.statusSounds.progress = "global"
-ns.RefreshNotifications(); count = 2; objectiveText = "Collect samples: 2/3"
+cfg.statusSounds.progress = "ready"
+ns.RefreshNotifications(); count = count + 1; objectiveText = "Collect samples: " .. count .. "/3"
 ns.ScanNotifications(false)
-Check(messages[#messages]:find("Collect samples: 2/3", 1, true), "objective progress carries readable objective detail")
+Check(messages[#messages]:find(objectiveText, 1, true), "objective progress carries readable objective detail")
 beforeMessages = #messages; ns.ScanNotifications(false)
 Check(#messages == beforeMessages, "unchanged objectives do not repeat")
+finished = true; ns.ScanNotifications(false)
+Check(#messages == beforeMessages, "finishing an objective without progress does not create a removed status")
+finished = false
 questCount = 0; ns.ScanNotifications(false)
 questCount = 1; count = 3; objectiveText = "Collect samples: 3/3"
 beforeMessages = #messages; ns.ScanNotifications(false)
@@ -221,25 +236,27 @@ Check(#messages == beforeMessages, "re-added quest seeds a fresh baseline withou
 -- Toast lifecycle: three reusable, non-clickable local frames with timed fade.
 for key in pairs(cfg.notificationDestinations) do cfg.notificationDestinations[key] = key == "toast" end
 start = #sends; beforeMessages = #messages
-for _ = 1, 4 do Accept() end
+for _ = 1, 4 do Progress() end
 local toastFrames = {}
 for _, frame in ipairs(frames) do if frame.heading and frame.body then toastFrames[#toastFrames + 1] = frame end end
 Check(#toastFrames == 3 and #sends == start and #messages == beforeMessages, "toast-only output uses bounded local frame pool")
 local newest = toastFrames[1]
 Check(newest.body.text:find("A Test Quest", 1, true), "toast has readable quest details")
-Check(Near(newest.alpha, 0.92) and newest.accent.colorTexture[1] == cfg.toastAccentColor.r,
-    "toast applies default opacity and accent color")
+Check(Near(newest.alpha, 1) and Near(newest.bg.colorTexture[4], 0.92)
+    and newest.heading.text:find("|cffe69e29", 1, true) and newest.accent == nil and newest.border == nil,
+    "toast applies default opacity to background and heading color without accent frames")
 cfg.toastOpacity = 0.5; cfg.toastAccentColor = { r = 0.2, g = 0.4, b = 0.8 }
 ns.RefreshToastAppearance()
-Check(Near(newest.alpha, 0.5) and newest.accent.colorTexture[3] == 0.8,
-    "toast opacity and accent color update live")
+Check(Near(newest.alpha, 1) and Near(newest.bg.colorTexture[4], 0.5)
+    and newest.heading.text:find("|cff3366cc", 1, true),
+    "toast background opacity and configurable heading color update live")
 now = now + 4.5; newest.scripts.OnUpdate(newest)
-Check(Near(newest.alpha, 0.25), "toast fades from configured opacity")
+Check(Near(newest.alpha, 0.5) and Near(newest.bg.colorTexture[4], 0.5), "toast exit animation still fades all surfaces")
 now = now + 1; newest.scripts.OnUpdate(newest)
 Check(not newest.shown and newest.scripts.OnUpdate == nil, "expired toast releases update handler")
-Accept(); ns.RefreshNotificationOutput()
+Progress(); ns.RefreshNotificationOutput()
 for _, frame in ipairs(toastFrames) do Check(not frame.shown and frame.scripts.OnUpdate == nil, "refresh hides toast and stops updates") end
-Accept(); cfg.messages = false
+Progress(); cfg.messages = false
 for _, frame in ipairs(toastFrames) do if frame.scripts.OnUpdate then frame.scripts.OnUpdate(frame) end end
 Check(not toastFrames[3].shown, "message disable stops active toast")
 cfg.messages = true
@@ -257,35 +274,50 @@ local function HasLayout(section, left, right)
     end
     return false
 end
-Check(HasLayout("QUEST NOTIFICATIONS", "Notification messages", nil),
-    "message output has its own control under Quest Notifications")
-Check(HasLayout("LOCAL TOAST APPEARANCE & POSITION", "Toast opacity", "Toast accent color"),
+Check(HasLayout("QUEST MESSAGE NOTIFICATIONS", "Notification messages", "Message destinations"),
+    "message toggle and destinations share a row under Quest Message Notifications")
+Check(HasLayout("LOCAL TOAST APPEARANCE & POSITION", "Toast opacity", "Toast heading color"),
     "toast appearance pair is under its matching heading")
-Check(HasLayout("SOUND OUTPUT", "Notification sounds", "Sound output channel"),
+Check(HasLayout("QUEST SOUND NOTIFICATIONS", "Notification sounds", "Sound output channel"),
     "sound enable and channel share a row under Sound Output")
-Check(HasLayout("SOUND OUTPUT", "Global notification sound", "Play"),
-    "global sound selector and preview align under Sound Output")
-Check(HasLayout("STATUS CHANGES", "Quest accepted sound", "Play")
-    and HasLayout("STATUS CHANGES", "Quest turned in sound", "Play"),
-    "status selectors and previews remain paired under Status Changes")
+Check(HasLayout("QUEST STATUS SOUNDS", "Objective progress sound", "Play")
+    and HasLayout("QUEST STATUS SOUNDS", "Ready for turn-in sound", "Play"),
+    "only the two supported statuses have sound selectors")
+Check(widgets["Quest accepted sound"] == nil and widgets["Quest failed sound"] == nil
+    and widgets["Quest turned in sound"] == nil and widgets["Objective completed sound"] == nil,
+    "removed statuses are absent from notification settings")
+Check(widgets["Global notification sound"] == nil, "global sound selector is removed")
 widgets["Notification messages"].setValue(false)
 Check(widgets["Message destinations"].disabled() and widgets["Toast opacity"].disabled(),
     "message dependent controls lock immediately when messages are disabled")
 widgets["Notification messages"].setValue(true)
 widgets["Notification sounds"].setValue(false)
-Check(widgets["Global notification sound"].disabled() and widgets["Sound output channel"].disabled()
-    and widgets["Quest accepted sound"].disabled(),
+Check(widgets["Sound output channel"].disabled()
+    and widgets["Objective progress sound"].disabled() and widgets["Ready for turn-in sound"].disabled(),
     "sound dependent controls lock immediately when sounds are disabled")
 widgets["Notification sounds"].setValue(true)
+Check(widgets["Toast opacity"].min == 0 and widgets["Toast opacity"].max == 100
+    and widgets["Toast opacity"].getValue() == 92, "toast opacity control uses a 0–100 percent scale")
 checklist.set("toast", false)
 local opacityBefore = cfg.toastOpacity
-widgets["Toast opacity"].setValue(0.4)
+widgets["Toast opacity"].setValue(40)
 Check(cfg.toastOpacity == opacityBefore and widgets["Toast opacity"].disabled(), "toast style controls lock until Local toast is selected")
 checklist.set("localChat", true); checklist.set("guild", true)
 checklist.set("toast", true)
-widgets["Toast opacity"].setValue(0.6)
-widgets["Toast accent color"].setValue(0.1, 0.3, 0.7)
+widgets["Toast opacity"].setValue(60)
+widgets["Toast heading color"].setValue(0.1, 0.3, 0.7)
 Check(Near(cfg.toastOpacity, 0.6) and Near(cfg.toastAccentColor.b, 0.7), "toast style controls update saved appearance")
+widgets["Toast text alignment"].setValue("center")
+Check(cfg.toastTextAlign == "center" and newest.heading.justifyH == "CENTER" and newest.body.justifyH == "CENTER",
+    "toast alignment applies to heading and body")
+widgets["Toast text alignment"].setValue("right")
+Check(newest.heading.justifyH == "RIGHT" and newest.body.justifyH == "RIGHT", "right toast alignment updates both text regions")
+widgets["Toast text alignment"].setValue("left")
+widgets["Toast opacity"].setValue(0)
+Check(cfg.toastOpacity == 0, "zero-percent toast background opacity is supported")
+widgets["Toast opacity"].setValue(100)
+Check(cfg.toastOpacity == 1 and widgets["Toast opacity"].getValue() == 100, "100-percent toast background opacity is supported")
+widgets["Toast opacity"].setValue(60)
 local toastPosition = { cfg.toastX, cfg.toastY }
 widgets["Toast position"].onClick()
 Check(cfg.toastX == 0 and cfg.toastY == 210, "Toast position Reset restores default anchor")
@@ -294,38 +326,53 @@ Check(checklist.get("toast") and checklist.get("localChat") and checklist.get("g
 checklist.set(secret, true)
 cfg.messages = false; cfg.sounds = false
 checklist.set("localChat", false)
-widgets["Quest accepted sound"].setValue("tell")
-Check(cfg.notificationDestinations.localChat and cfg.statusSounds.accepted == "global",
+widgets["Objective progress sound"].setValue("tell")
+Check(cfg.notificationDestinations.localChat and cfg.statusSounds.progress == "ready",
     "disabled message and sound outputs make their related settings inactive")
 cfg.messages = true; cfg.sounds = true
-widgets["Quest accepted sound"].setValue("none")
-Check(cfg.statusSounds.accepted == "none", "per-status selector saves explicit silence")
-widgets["Global notification sound"].setValue("raidWarning")
-widgets["Quest accepted sound"].setValue("global")
+local toastMover, toastEditListener
+EllesmereUI.MakeUnlockElement = function(opts) toastMover = opts; return opts end
+EllesmereUI.RegisterUnlockElements = Noop
+EllesmereUI.RegisterUnlockModeListener = function(_, _, callback) toastEditListener = callback end
+EllesmereUI.IsUnlockModeActive = function() return false end
+Check(ns.RegisterToastMover(), "toast mover registers for preview alignment coverage")
+local editorSample = toastMover.getFrame()
+cfg.toastTextAlign = "center" -- Simulate a saved setting changed before the editor opens.
+editorSample.heading.justifyH, editorSample.body.justifyH = "LEFT", "LEFT"
+editorSample:Show()
+Check(editorSample.heading.justifyH == "CENTER" and editorSample.body.justifyH == "CENTER",
+    "showing a cached toast editor sample refreshes text alignment")
+editorSample:Hide()
+toastEditListener(true)
+Check(editorSample.shown and editorSample.heading.justifyH == "CENTER" and editorSample.body.justifyH == "CENTER",
+    "opening the toast editor refreshes both text alignments from current settings")
+toastEditListener(false, "exit")
+widgets["Objective progress sound"].setValue("none")
+Check(cfg.statusSounds.progress == "none", "per-status selector saves explicit silence")
+widgets["Objective progress sound"].setValue("raidWarning")
 widgets["Sound output channel"].setValue("Music")
-Check(ns.NotificationSoundID("accepted") == 4 and cfg.soundChannel == "Music", "expanded sound catalog, fallback and audio selector callbacks")
+Check(ns.NotificationSoundID("progress") == 4 and cfg.soundChannel == "Music", "per-status sound and audio selector callbacks")
 local beforePreview = #sounds
 previewButtons[1].onClick()
 Check(#sounds == beforePreview + 1 and sounds[#sounds].id == 4 and sounds[#sounds].channel == "Music",
-    "adjacent global preview button plays chosen built-in sound")
+    "per-status preview button plays chosen built-in sound")
 beforePreview = #sounds; now = now + 0.4
 previewButtons[2].onClick()
-Check(#sounds == beforePreview + 1 and sounds[#sounds].id == 4, "adjacent per-status button previews effective fallback")
-widgets["Quest accepted sound"].setValue("raidWarning")
+Check(#sounds == beforePreview + 1 and sounds[#sounds].id == 3, "ready status preview plays its own selected sound")
+widgets["Objective progress sound"].setValue("raidWarning")
 now = now + 0.4; beforePreview = #sounds
-previewButtons[2].onClick()
+previewButtons[1].onClick()
 Check(#sounds == beforePreview + 1 and sounds[#sounds].id == 4, "per-status preview plays selected individual kit")
-widgets["Quest accepted sound"].setValue("peonBuildingComplete1")
+widgets["Objective progress sound"].setValue("peonBuildingComplete1")
 now = now + 0.4; beforePreview = #playedFiles
-previewButtons[2].onClick()
+previewButtons[1].onClick()
 Check(#playedFiles == beforePreview + 1 and playedFiles[#playedFiles].file == ns.SoundFileIDs.peonBuildingComplete1,
     "per-status dropdown preview plays the requested Peon audio file")
-cfg.statusSounds.accepted = "none"
-Check(previewButtons[2].disabled(), "None status preview is disabled")
-cfg.statusSounds.accepted = "global"
-cfg.statusSounds.accepted = "none"
-widgets["Quest accepted sound"].setValue("ready")
-Check(cfg.statusSounds.accepted == "ready", "choosing an individual sound re-enables a None-disabled status")
+cfg.statusSounds.progress = "none"
+Check(previewButtons[1].disabled(), "None status preview is disabled")
+cfg.statusSounds.progress = "none"
+widgets["Objective progress sound"].setValue("ready")
+Check(cfg.statusSounds.progress == "ready", "choosing an individual sound re-enables a None-disabled status")
 local destination = checklist.items[6]
 C_ChatInfo.SendChatMessage = nil
 checklist.set("guild", false); checklist.set("guild", true)
@@ -333,37 +380,40 @@ Check(not cfg.notificationDestinations.guild and destination.lockedFn(), "unsupp
 EllesmereUI.BuildVisOptsCBDropdown = nil
 layoutRows = {}
 module.buildPage("Notifications", UIParent, 0)
-Check(HasLayout("QUEST NOTIFICATIONS", "Local chat", "Local toast")
-    and HasLayout("QUEST NOTIFICATIONS", "Party", "Raid")
-    and HasLayout("QUEST NOTIFICATIONS", "Instance/Battleground", "Guild"),
+Check(HasLayout("QUEST MESSAGE NOTIFICATIONS", "Local chat", "Local toast")
+    and HasLayout("QUEST MESSAGE NOTIFICATIONS", "Party", "Raid")
+    and HasLayout("QUEST MESSAGE NOTIFICATIONS", "Instance/Battleground", "Guild"),
     "older EUI destination toggles remain paired under Quest Notifications")
 widgets["Local chat"].setValue(false)
 Check(not cfg.notificationDestinations.localChat, "older EUI supports destinations through independent toggles")
 ns.settings = nil
-EllesmereUIExtendQuestTrackerDB = { soundChannel = "bad", statusSounds = { accepted = "bad", failed = "none" }, statuses = { progress = false },
+EllesmereUIExtendQuestTrackerDB = { soundChannel = "bad", statusSounds = { accepted = "bad", failed = "none", progress = "bad", ready = "none" }, statuses = { progress = false },
     notificationDestinations = { localChat = false, guild = secret } }
 cfg = addon.Settings()
-Check(cfg.soundChannel == "Master" and cfg.statusSounds.accepted == "global" and cfg.statusSounds.failed == "none",
+Check(cfg.soundChannel == "Master" and cfg.statusSounds.progress == "none" and cfg.statusSounds.ready == "none"
+    and cfg.statusSounds.accepted == nil and cfg.statusSounds.failed == nil,
     "malformed sound selections normalize without losing explicit None")
 Check(not cfg.notificationDestinations.localChat and not cfg.notificationDestinations.guild, "explicit false and secret destination normalization")
 Check(cfg.statusSounds.progress == "none", "old disabled status is preserved as None")
-local catalog, catalogOrder = ns.SoundKitOptions(true, true)
-Check(#catalogOrder == 15 and catalog.raidWarning == "Raid warning" and catalog.achievement == "Achievement",
+local catalog, catalogOrder = ns.SoundKitOptions(true)
+Check(#catalogOrder == 14 and catalog.raidWarning == "Raid warning" and catalog.achievement == "Achievement"
+    and catalog.global == nil,
     "curated built-in sound catalog is exposed")
-Check(catalog.peonYes3 == "Peon: Yes 3" and catalog.peonBuildingComplete1 == "Peon: Building complete"
+Check(catalog.peonYes3 == "Peon: Work, Work" and catalog.peonBuildingComplete1 == "Peon: Work complete"
     and ns.SoundFileIDs.peonYes3 == 558147
     and ns.SoundFileIDs.peonBuildingComplete1 == 558132,
     "both requested Peon sounds map to their FileDataIDs")
 SOUNDKIT.RAID_WARNING = nil
-catalog, catalogOrder = ns.SoundKitOptions(true, true, "raidWarning")
+catalog, catalogOrder = ns.SoundKitOptions(true, "raidWarning")
 Check(catalog.raidWarning == "Raid warning (unavailable)", "selected sound stays explainable when unsupported by client")
 SOUNDKIT.RAID_WARNING = 4
-cfg.sound = "complete"; cfg.soundChannel = "Dialog"; now = now + 1
-Check(ns.PreviewNotificationSound("complete"), "global sound preview plays")
+cfg.soundChannel = "Dialog"; now = now + 1
+Check(ns.PreviewNotificationSound("complete"), "selected sound preview plays")
 Check(sounds[#sounds].id == 2 and sounds[#sounds].channel == "Dialog" and sounds[#sounds].forceNoDuplicates == true,
     "preview uses selected audio channel and duplicate protection")
 now = now + 0.4
-Check(ns.PreviewEffectiveNotificationSound("accepted"), "individual/effective status sound preview plays")
+cfg.statusSounds.progress = "complete"
+Check(ns.PreviewNotificationSound(cfg.statusSounds.progress), "status preview plays its selected sound directly")
 local previewCount = #sounds
 Check(not ns.PreviewNotificationSound("none") and #sounds == previewCount, "None has no preview audio")
 now = now + 1
@@ -375,16 +425,15 @@ Check(ns.SoundAvailable("peonYes3") and ns.SoundAvailable("peonBuildingComplete1
 Check(ns.PreviewNotificationSound("peonYes3") and playedFiles[#playedFiles].file == ns.SoundFileIDs.peonYes3
     and playedFiles[#playedFiles].channel == cfg.soundChannel, "Peon file preview uses selected channel")
 peonFilesAvailable = false; local oldSoundCount = #sounds
-cfg.statusSounds.accepted = "peonYes3"; cfg.sound = "complete"
-Check(ns.PlayStatusNotificationSound("accepted") and #sounds == oldSoundCount + 1
-    and sounds[#sounds].id == SOUNDKIT.IG_QUEST_LIST_COMPLETE,
-    "unavailable Peon audio file falls back to global SoundKit playback")
+cfg.statusSounds.progress = "peonYes3"
+Check(not ns.PlayStatusNotificationSound("progress") and #sounds == oldSoundCount,
+    "unavailable selected sound stays silent without a global fallback")
 peonFilesAvailable = true
-cfg.statusSounds.accepted = "peonBuildingComplete1"
-Check(ns.PlayStatusNotificationSound("accepted") and playedFiles[#playedFiles].file == ns.SoundFileIDs.peonBuildingComplete1,
+cfg.statusSounds.progress = "peonBuildingComplete1"
+Check(ns.PlayStatusNotificationSound("progress") and playedFiles[#playedFiles].file == ns.SoundFileIDs.peonBuildingComplete1,
     "status plays requested building-complete file")
-peonFilesAvailable = false; cfg.sound = "complete"
-Check(ns.PlayStatusNotificationSound("accepted") and sounds[#sounds].id == SOUNDKIT.IG_QUEST_LIST_COMPLETE,
-    "failed built-in file playback falls back to global SoundKit sound")
-peonFilesAvailable = true; cfg.statusSounds.accepted = "global"
+peonFilesAvailable = false; oldSoundCount = #sounds
+Check(not ns.PlayStatusNotificationSound("progress") and #sounds == oldSoundCount,
+    "failed selected sound does not fall back to another sound")
+peonFilesAvailable = true; cfg.statusSounds.progress = "ready"
 print("PASS: " .. checks .. " notification sound, destination, formatting, toast and UI regression checks")

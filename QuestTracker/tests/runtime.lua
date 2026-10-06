@@ -126,7 +126,7 @@ local quests = {
     { questID = 20, title = "Twenty", isHeader = false },
     { questID = 30, title = "Untracked", isHeader = false },
 }
-local complete, failed, objective, distances, watches, counts = {}, {}, {}, { [10] = 100, [20] = 25, [30] = 1 }, { [10] = 0, [20] = 1 }, { [110] = 1, [120] = 1, [130] = 1 }
+local complete, objective, distances, watches, counts = {}, {}, { [10] = 100, [20] = 25, [30] = 1 }, { [10] = 0, [20] = 1 }, { [110] = 1, [120] = 1, [130] = 1 }
 local continent, specialLinks = {}, {}
 local navQuest, navDistance, trackingQuest = 20, 25, true
 C_SuperTrack = {
@@ -144,7 +144,6 @@ C_QuestLog = {
     GetDistanceSqToQuest = function(id) return distances[id], continent[id] == nil and true or continent[id] end,
     IsComplete = function(id) if complete[id] == nil then return false end; return complete[id] end,
     ReadyForTurnIn = function(id) if complete[id] == nil then return false end; return complete[id] end,
-    IsFailed = function(id) if failed[id] == nil then return false end; return failed[id] end,
     GetQuestObjectives = function(id) return objective[id] or { { finished = false, numFulfilled = 0, text = "0/3 things" } } end,
     GetTitleForQuestID = function(id) for _, q in ipairs(quests) do if q.questID == id then return q.title end end end,
     GetLogIndexForQuestID = function(id) for index, q in ipairs(quests) do if q.questID == id then return index end end end,
@@ -304,7 +303,7 @@ Check(not EllesmereUIExtendQuestTrackerURL.shown, "already-open menu action resp
 cfg.wowhead = true
 
 -- Notification transitions, silent refreshes, secrets, throttling and no abandonment guess.
-cfg.sounds, cfg.statusSounds.progress = true, "global"
+cfg.sounds, cfg.statusSounds.progress = true, "ready"
 addon.Refresh(); Pump()
 objective[10] = { { finished = false, numFulfilled = 1, text = "1/3 things" } }
 Event("QUEST_LOG_UPDATE")
@@ -314,23 +313,19 @@ Event("QUEST_LOG_UPDATE")
 Check(#messages == 1, "unchanged quest updates do not notify")
 objective[10] = { { finished = true, numFulfilled = 3, text = "3/3 things" } }
 Event("QUEST_LOG_UPDATE")
-Check(#messages == 2 and messages[2]:find("Objective completed", 1, true), "objective completion notification")
+Check(#messages == 2 and messages[2]:find("Objective progress", 1, true), "final objective count remains objective progress")
 Check(#sounds == 1, "sound bursts throttled")
 now = now + 2; complete[10] = true
 Event("QUEST_LOG_UPDATE")
 Check(#messages == 3 and messages[3]:find("Ready for turn-in", 1, true), "ready transition notification")
-Event("QUEST_TURNED_IN", 10)
 local before = #messages
 Event("QUEST_TURNED_IN", 10)
-Check(#messages == before, "duplicate turned-in event suppressed")
+Event("QUEST_TURNED_IN", 10)
+Check(#messages == before, "removed turned-in status is not emitted")
 Event("QUEST_REMOVED", 20)
 Check(#messages == before, "removal does not invent abandonment")
-now = now + 2; Event("QUEST_ACCEPTED", 20)
-Check(messages[#messages]:find("Accepted", 1, true), "accepted notification")
-failed[20] = true; Event("QUEST_LOG_UPDATE")
-Check(messages[#messages]:find("Failed", 1, true), "failed transition notification")
 before = #messages
-complete[30], failed[30] = secret, secret
+complete[30] = secret
 objective[30] = { { finished = secret, numFulfilled = secret, text = secret } }
 Event("QUEST_LOG_UPDATE")
 Check(#messages == before, "secret status/objective data skipped")
@@ -338,42 +333,31 @@ Event("PLAYER_ENTERING_WORLD")
 Check(#messages == before, "zone/login baseline is silent")
 cfg.messages = false; cfg.sounds = true; addon.Refresh(); Pump()
 local beforeIndependentSound = #sounds
-now = now + 2; Event("QUEST_ACCEPTED", 30)
+objective[10] = { { finished = false, numFulfilled = 4, text = "4/3 things" } }
+now = now + 2; Event("QUEST_LOG_UPDATE")
 Check(#messages == before and #sounds == beforeIndependentSound + 1,
     "disabling messages leaves notification sounds active")
 cfg.messages = true; cfg.sounds = false; addon.Refresh(); Pump()
 local beforeIndependentMessage, beforeMutedSound = #messages, #sounds
-now = now + 2; Event("QUEST_ACCEPTED", 10)
+objective[10] = { { finished = false, numFulfilled = 5, text = "5/3 things" } }
+now = now + 2; Event("QUEST_LOG_UPDATE")
 Check(#messages == beforeIndependentMessage + 1 and #sounds == beforeMutedSound,
     "disabling sounds leaves notification messages active")
 local play = PlaySound; SOUNDKIT.UI_AUTO_QUEST_COMPLETE = nil
-now = now + 2; Event("QUEST_ACCEPTED", 20)
+now = now + 2
 Check(ns.SoundID("ready") == nil, "missing sound does not guess a numeric ID")
 SOUNDKIT.UI_AUTO_QUEST_COMPLETE = 23404; PlaySound = play
 
--- Removal can precede turn-in, after the title API no longer knows the quest.
-now = now + 2
-local removedQuest = table.remove(quests, 2)
-Event("QUEST_REMOVED", 20)
-before = #messages
-Event("QUEST_TURNED_IN", 20)
-Check(#messages == before + 1 and messages[#messages]:find("Twenty", 1, true), "turn-in after log removal retains a short-lived title")
-Event("QUEST_TURNED_IN", 20)
-Check(#messages == before + 1, "turn-in tombstone still deduplicates")
-now = now + 6
-Event("QUEST_TURNED_IN", 20)
-Check(#messages == before + 1, "expired removal title is not guessed")
-table.insert(quests, 2, removedQuest)
-
--- Last-objective and quest-ready statuses are independently selectable.
-complete[20], failed[20], objective[20] = false, false, { { finished = false, numFulfilled = 0, text = "One task" } }
+-- Progress and readiness are the only retained status types.
+complete[20], objective[20] = false, { { finished = false, numFulfilled = 0, text = "One task" } }
 addon.Refresh(); Pump(); before = #messages
 complete[20], objective[20] = true, { { finished = true, numFulfilled = 1, text = "One task" } }
 Event("QUEST_LOG_UPDATE")
-Check(#messages == before + 2, "final objective and ready notifications both respect their toggles")
+Check(#messages == before + 2 and messages[before + 1]:find("Ready for turn-in", 1, true)
+    and messages[before + 2]:find("Objective progress", 1, true), "progress and ready are the retained notification statuses")
 
 -- Navigation identity and distance must belong to the same quest.
-complete[10], complete[20], complete[30], failed[20] = false, false, false, false
+complete[10], complete[20], complete[30] = false, false, false
 Check(cfg.itemProximityYards == 100, "default proximity is 100 yards")
 C_QuestLog.GetSelectedQuest = function() return 0 end
 Check(addon.NearestQuestItem().questID == 20, "super-tracked quest works with Quest Log selection zero")
@@ -994,10 +978,10 @@ widgets["Show tracked quest item"].setValue(not originalItem)
 Check(cfg.progressColor.r ~= originalColor and cfg.questItem ~= originalItem,
     "objective colors stay independent and the item toggle remains available")
 cfg.questItem = originalItem
-local originalStatusSound = cfg.statusSounds.accepted
+local originalStatusSound = cfg.statusSounds.progress
 cfg.sounds = false
-widgets["Quest accepted sound"].setValue("tell")
-Check(cfg.statusSounds.accepted == originalStatusSound and widgets["Quest accepted sound"].disabled(),
+widgets["Objective progress sound"].setValue("tell")
+Check(cfg.statusSounds.progress == originalStatusSound and widgets["Objective progress sound"].disabled(),
     "disabled notification sounds lock their status selector")
 cfg.sounds = true
 cfg.questItem = true; ns.RefreshQuestItem()
@@ -1034,15 +1018,11 @@ widgets["Button border color"].setValue(0.1, 0.1, 0.1)
 Check(cfg.itemBorderColor.g == savedBorderColor, "open picker cannot recolor a disabled None border")
 local objectiveAPI = C_QuestLog.GetQuestObjectives
 C_QuestLog.GetQuestObjectives = nil
-local originalObjectiveSound = cfg.statusSounds.objective
-widgets["Objective completed sound"].setValue("tell")
-Check(widgets["Objective completed sound"].disabled() and cfg.statusSounds.objective == originalObjectiveSound,
-    "missing objective API gates status sound selector")
+local originalProgressSound = cfg.statusSounds.progress
+widgets["Objective progress sound"].setValue("tell")
+Check(widgets["Objective progress sound"].disabled() and cfg.statusSounds.progress == originalProgressSound,
+    "missing objective API gates progress status sound selector")
 C_QuestLog.GetQuestObjectives = objectiveAPI
-local failedAPI = C_QuestLog.IsFailed
-C_QuestLog.IsFailed = nil
-Check(widgets["Quest failed sound"].disabled(), "missing failure API clearly gates its sound selector")
-C_QuestLog.IsFailed = failedAPI
 local soundAPI = PlaySound
 PlaySound = nil
 Check(widgets["Notification sounds"].disabled(), "missing playback API gates sound control")
@@ -1062,17 +1042,17 @@ Check(messages[#messages]:find("omitted", 1, true), "diagnostics explain unsuppo
 
 -- Malformed SavedVariables normalize cleanly; reset restores fresh defaults.
 ns.settings = nil
-EllesmereUIExtendQuestTrackerDB = { enabled = false, wowheadDatabase = "bad", sound = "bad", itemX = secret,
+EllesmereUIExtendQuestTrackerDB = { enabled = false, wowheadDatabase = "bad", itemX = secret,
     itemProximityYards = secret, progressColor = { r = -4, g = 10, b = 0/0 }, statuses = { ready = false } }
 cfg = addon.Settings()
-Check(cfg.enabled == nil and cfg.wowheadDatabase == "auto" and cfg.sound == "ready",
+Check(cfg.enabled == nil and cfg.wowheadDatabase == "auto" and cfg.sound == nil,
     "removed global enable setting is ignored and remaining settings normalize")
 Check(cfg.progressColor.r == 0 and cfg.progressColor.g == 1 and cfg.progressColor.b == ns.Defaults.progressColor.b, "saved color bounds and NaN normalization")
 Check(cfg.itemX == 0 and cfg.statuses == nil and cfg.statusSounds.ready == "none"
-    and cfg.statusSounds.accepted == "global", "old status opt-outs become None sound selections")
+    and cfg.statusSounds.progress == "none", "old ready opt-out is preserved and remaining status defaults normalize")
 Check(cfg.itemProximityYards == 100, "unreadable saved proximity uses default")
 addon.Reset(); Pump()
-Check(addon.Settings().statusSounds.ready == "global" and addon.Settings().statusSounds.progress == "none"
+Check(addon.Settings().statusSounds.ready == "ready" and addon.Settings().statusSounds.progress == "none"
     and not addon.Settings().questItem, "reset uses status sound choices as enable states")
 Check(hero.sample.width == 56 and hero.sample.art.shown and Near(hero.sample.icon.alpha, 1),
     "reset restores header appearance even with gameplay feature off")
