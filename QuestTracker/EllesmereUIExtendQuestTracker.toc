@@ -13,7 +13,9 @@ Compatibility.lua
 QuestTracker.lua
 Wowhead.lua
 Objectives.lua
+NotificationOutput.lua
 Notifications.lua
 ItemVisibility.lua
 QuestItem.lua
+Preview.lua
 Options.lua

@@ -38,7 +38,12 @@ function CreateFrame(kind, name, parent, template)
     function frame:GetTextColor() return unpack(self.color) end
     function frame:SetTextColor(...) self.color = { ... } end
     function frame:SetAttribute(key, value) Protected(self); self.attrs[key] = value end
-    function frame:Show() Protected(self); self.shown = true end
+    function frame:Show()
+        Protected(self)
+        local wasShown = self.shown
+        self.shown = true
+        if not wasShown and self.scripts.OnShow then self.scripts.OnShow(self) end
+    end
     function frame:Hide()
         Protected(self); self.shown = false
         if self.scripts.OnHide then self.scripts.OnHide(self) end
@@ -51,9 +56,12 @@ function CreateFrame(kind, name, parent, template)
         return not (missingExtraArt and value == "Interface\\ExtraButton\\Default")
     end
     function frame:SetSize(width, height) self.width, self.height = width, height end
+    function frame:SetHeight(height) self.height = height end
+    function frame:SetScale(scale) self.scale = scale end
     function frame:SetAlpha(value) self.alpha = value end
     function frame:GetAlpha() return self.alpha or 1 end
     function frame:IsShown() return self.shown end
+    function frame:IsVisible() return self.shown and (not self.parent or self.parent:IsVisible()) end
     function frame:SetColorTexture(...) self.colorTexture = { ... } end
     function frame:SetText(value) self.text = value end
     function frame:EnableMouse(value) self.mouseEnabled = value end
@@ -63,8 +71,9 @@ function CreateFrame(kind, name, parent, template)
     function frame:StopMovingOrSizing() Protected(self); self.moving = false end
     function frame:RegisterForClicks(...) self.clicks = { ... } end
     function frame:RegisterForDrag(...) self.drag = { ... } end
-    function frame:GetWidth() return 700 end
-    for _, method in ipairs({ "SetFrameStrata", "SetAllPoints", "SetFontObject",
+    function frame:GetWidth() return self.width or 700 end
+    for _, method in ipairs({ "SetFrameStrata", "SetAllPoints", "SetFontObject", "SetWidth", "SetHeight",
+        "SetJustifyH", "SetJustifyV", "SetWordWrap",
         "SetAutoFocus", "SetNormalFontObject", "ClearFocus", "SetFocus", "HighlightText", "SetClampedToScreen",
         "SetMovable", "SetHighlightTexture" }) do frame[method] = Noop end
     return frame
@@ -73,7 +82,7 @@ UIParent = CreateFrame("Frame")
 SlashCmdList, UISpecialFrames = {}, {}
 DEFAULT_CHAT_FRAME = { AddMessage = function(_, message) messages[#messages + 1] = message end }
 SOUNDKIT = { UI_AUTO_QUEST_COMPLETE = 23404, IG_QUEST_LIST_COMPLETE = 878, TELL_MESSAGE = 3081 }
-function PlaySound(id, channel) sounds[#sounds + 1] = { id, channel } end
+function PlaySound(id, channel) sounds[#sounds + 1] = { id, channel }; return true end
 C_Timer = { NewTicker = function(interval, callback)
     local ticker = { callback = callback, interval = interval, Cancel = function(self) self.cancelled = true end }
     tickers[#tickers + 1] = ticker
@@ -180,6 +189,8 @@ block.HeaderButton = CreateFrame("Button", nil, block)
 QuestObjectiveTracker.usedBlocks.Template = { [10] = block }
 
 local spec, pluginCalls = nil, 0
+local activeLayoutSection, layoutRows = nil, {}
+local aboutTexts = {}
 EllesmereUI = {
     RegisterPlugin = function(id, value)
         Check(id == "EllesmereUIExtendQuestTracker", "plugin installed identity")
@@ -187,19 +198,34 @@ EllesmereUI = {
     end,
     OpenPlugin = function(id) Check(id == "EllesmereUIExtendQuestTracker", "slash opens own section") end,
     IsSearchPrebuild = function() return prebuild end,
+    CONTENT_PAD = 20,
+    L = function(text) return text end,
+    PanelPP = { Point = Noop, Size = function(frame, width, height) frame.width, frame.height = width, height end },
+    MakeFont = function()
+        local label = {}
+        function label:SetWidth(width) self.width = width end
+        function label:SetJustifyH(value) self.justifyH = value end
+        function label:SetWordWrap(value) self.wordWrap = value end
+        function label:SetText(text) self.text = text; aboutTexts[#aboutTexts + 1] = text end
+        function label:GetStringHeight() return 32 end
+        return label
+    end,
     Widgets = {
-        SectionHeader = function() return {}, 30 end,
+        SectionHeader = function(_, _, text) activeLayoutSection = text; return {}, 30 end,
         Toggle = function(_, _, label, _, getter, setter, tip)
             widgets[label] = { getValue = getter, setValue = setter, tooltip = tip }; return {}, 50
         end,
         DualRow = function(_, _, _, left, right)
+            layoutRows[#layoutRows + 1] = { section = activeLayoutSection, left = left and left.text,
+                right = right and (right.text ~= "" and right.text or right.buttonText) or nil }
             if left then widgets[left.text] = left end
             if right then widgets[right.text] = right end
             return {}, 50
         end,
+        Spacer = function(_, _, _, height) return {}, height or 20 end,
     },
 }
-local files = { "Compatibility", "QuestTracker", "Wowhead", "Objectives", "Notifications", "ItemVisibility", "QuestItem", "Options" }
+local files = { "Compatibility", "QuestTracker", "Wowhead", "Objectives", "NotificationOutput", "Notifications", "ItemVisibility", "QuestItem", "Preview", "Options" }
 for _, file in ipairs(files) do assert(loadfile("QuestTracker/" .. file .. ".lua"))("EllesmereUIExtendQuestTracker", ns) end
 local addon = EllesmereUIExtendQuestTracker
 Check(pluginCalls == 1, "plugin registered once at load")
@@ -207,7 +233,7 @@ Check(_G.EllesmereUIExtendQuestTrackerDB == nil, "saved settings not initialized
 Event("ADDON_LOADED", "EllesmereUIExtendQuestTracker")
 Event("PLAYER_LOGIN")
 local cfg = addon.Settings()
-Check(cfg.enabled and cfg.objectiveColors and cfg.notifications, "cosmetic/message defaults")
+Check(cfg.enabled and cfg.objectiveColors and cfg.messages, "cosmetic/message defaults")
 Check(not cfg.questItem and not cfg.sounds, "secure item and sounds opt in")
 Check(#messages == 0 and #sounds == 0, "silent login baseline")
 Check(Near(fs.color[1], cfg.progressColor.r), "progress color applied")
@@ -276,7 +302,7 @@ Check(not EllesmereUIExtendQuestTrackerURL.shown, "already-open menu action resp
 cfg.wowhead = true
 
 -- Notification transitions, silent refreshes, secrets, throttling and no abandonment guess.
-cfg.sounds, cfg.statuses.progress = true, true
+cfg.sounds, cfg.statusSounds.progress = true, "global"
 addon.Refresh(); Pump()
 objective[10] = { { finished = false, numFulfilled = 1, text = "1/3 things" } }
 Event("QUEST_LOG_UPDATE")
@@ -308,10 +334,16 @@ Event("QUEST_LOG_UPDATE")
 Check(#messages == before, "secret status/objective data skipped")
 Event("PLAYER_ENTERING_WORLD")
 Check(#messages == before, "zone/login baseline is silent")
-cfg.notifications = false; addon.Refresh(); Pump()
-Event("QUEST_ACCEPTED", 30)
-Check(#messages == before, "disabled notifications do not emit")
-cfg.notifications = true; addon.Refresh(); Pump()
+cfg.messages = false; cfg.sounds = true; addon.Refresh(); Pump()
+local beforeIndependentSound = #sounds
+now = now + 2; Event("QUEST_ACCEPTED", 30)
+Check(#messages == before and #sounds == beforeIndependentSound + 1,
+    "disabling messages leaves notification sounds active")
+cfg.messages = true; cfg.sounds = false; addon.Refresh(); Pump()
+local beforeIndependentMessage, beforeMutedSound = #messages, #sounds
+now = now + 2; Event("QUEST_ACCEPTED", 10)
+Check(#messages == beforeIndependentMessage + 1 and #sounds == beforeMutedSound,
+    "disabling sounds leaves notification messages active")
 local play = PlaySound; SOUNDKIT.UI_AUTO_QUEST_COMPLETE = nil
 now = now + 2; Event("QUEST_ACCEPTED", 20)
 Check(ns.SoundID("ready") == nil, "missing sound does not guess a numeric ID")
@@ -516,11 +548,17 @@ Event("ADDON_LOADED", "EllesmereUIOptions")
 local moverKey = "EQTX_QuestItem"
 local mover = assert(unlockElements[moverKey])
 local listener = assert(unlockListeners[moverKey])
+local toastMoverKey = "EQTX_NotificationToast"
+local toastMover = assert(unlockElements[toastMoverKey])
+local toastListener = assert(unlockListeners[toastMoverKey])
+Check(toastMover.label == "Quest Notification Toast" and toastMover.group == "Extend Quest Tracker"
+    and toastMover.noResize and toastMover.noAnchorTarget, "local toast has isolated fixed-size EUI mover")
+Check(toastMover.isHidden() and toastMover.getFrame() == nil, "toast mover is hidden until local toast destination enabled")
 Check(mover.label == "Tracked Quest Item" and mover.group == "Extend Quest Tracker", "named EUI quest-item mover")
 Check(mover.noResize and mover.noAnchorTo and mover.noAnchorTarget and mover.noSizeMatchTarget, "fixed mover cannot create secure anchor/size dependencies")
 Check(addon.Capabilities().itemMover, "public mover API capability")
 addon.Refresh(); addon.Refresh(); Pump()
-Check(moverRegistrations == 1 and listenerRegistrations == 1, "stable element/listener registration is idempotent")
+Check(moverRegistrations == 2 and listenerRegistrations == 2, "quest and toast movers register once each")
 local itemPreview = mover.getFrame()
 Check(itemPreview ~= itemButton and not itemPreview.secure and itemPreview.kind == "Frame", "mover owns a separate non-secure preview")
 Check(not itemPreview.shown and itemPreview.mouseEnabled == false and itemPreview.scripts.OnClick == nil, "preview is hidden outside edit mode and cannot use items")
@@ -534,13 +572,42 @@ Check(not itemButton.moving, "right-drag reserved for missing mover API fallback
 local function OpenEdit()
     unlockActive = true
     listener(true)
+    toastListener(true)
     Pump()
 end
 local function CloseEdit(action)
     unlockActive = false
     listener(false, action)
+    toastListener(false, action)
     Pump()
 end
+cfg.notificationDestinations.toast = true; cfg.messages = true
+ns.RefreshNotificationOutput()
+local toastSample = toastMover.getFrame()
+local toastWidth, toastHeight = toastMover.getSize()
+Check(toastSample and toastSample.isPreview and toastWidth == 400 and toastHeight == 96,
+    "enabled local toast exposes non-clickable EUI preview and fixed mover size")
+toastListener(true)
+Check(toastSample.shown and toastSample.mouseEnabled == false, "toast preview appears only as a non-clickable sample")
+local originalToastX, originalToastY = cfg.toastX, cfg.toastY
+toastMover.savePosition(toastMoverKey, "CENTER", "CENTER", 123, 456)
+Check(cfg.toastX == 123 and cfg.toastY == 456, "toast mover saves its independent anchor")
+toastListener(false, "discard")
+Check(cfg.toastX == originalToastX and cfg.toastY == originalToastY and not toastSample.shown,
+    "toast edit close hides sample and preserves saved position")
+toastListener(true)
+toastMover.savePosition(toastMoverKey, "CENTER", "CENTER", 9, 18)
+toastListener(false, "exit")
+Check(cfg.toastX == originalToastX and cfg.toastY == originalToastY, "toast Exit Without Saving restores entry position")
+toastListener(true)
+toastMover.savePosition(toastMoverKey, "CENTER", "CENTER", 321, 654)
+toastListener(false, "save")
+Check(cfg.toastX == 321 and cfg.toastY == 654, "toast Save & Exit commits new position")
+ns.ResetToastPosition()
+Check(cfg.toastX == 0 and cfg.toastY == 210, "toast reset restores default top-center position")
+cfg.notificationDestinations.toast = false; ns.RefreshNotificationOutput()
+Check(toastMover.isHidden() and toastMover.getFrame() == nil, "disabling local toast hides its mover")
+cfg.notificationDestinations.toast = true; ns.RefreshNotificationOutput()
 local securePoint = itemButton.point
 counts[110], counts[120] = 0, 0
 local timerCount = #tickers
@@ -662,7 +729,8 @@ Check(C_Map == nil and C_QuestLog.GetQuestsOnMap == nil and addon.NearestQuestIt
 -- compiler itself is exercised separately by tests/visibility.lua.
 EllesmereUI.GetBorderTextureDropdown = function() return { solid = "Solid", blizzard = "Blizzard" }, { "solid", "blizzard" } end
 EllesmereUI.ApplyBorderStyle = function(host, size, r, g, b, a, texture, _, _, _, _, surface)
-    Check(not combat, "border rendering is out-of-combat only")
+    Check(not combat or (host.parent and type(host.parent.RefreshAppearance) == "function"),
+        "combat border rendering is confined to the isolated settings sample")
     host.testBorder = { size = size, r = r, g = g, b = b, a = a, texture = texture, surface = surface }
     if size > 0 then host:Show() else host:Hide() end
 end
@@ -766,11 +834,131 @@ Check(itemButton.shown and itemButton.width == 56, "restored eligibility resumes
 
 -- EUI pages: searchable without real-frame work, tooltip coverage and stale locks.
 local module, parent = spec.modules[1], CreateFrame("Frame")
+local headerParent, hero, headerCalls, headerHeight = CreateFrame("Frame"), nil, 0, 0
+headerParent.width = 700
+EllesmereUI.SetContentHeader = function(_, builder)
+    Check(not prebuild, "native header is never invoked in search prebuild")
+    if hero then hero:Hide() end
+    headerCalls = headerCalls + 1
+    headerHeight = builder(headerParent, headerParent.width)
+    for i = #frames, 1, -1 do
+        if frames[i].parent == headerParent then hero = frames[i]; break end
+    end
+end
+EllesmereUI.ClearContentHeader = function()
+    Check(not prebuild, "native header clear is never invoked in search prebuild")
+    if hero then hero:Hide() end
+    headerHeight = 0
+end
+EllesmereUI.UpdateContentHeaderHeight = function(_, height) headerHeight = height end
 local frameCount = #frames
 prebuild = true
 for _, page in ipairs(module.pages) do Check(module.buildPage(page, parent, 0) > 0, "search prebuild " .. page) end
 Check(#frames == frameCount, "page prebuild has no frame/runtime side effects")
+Check(headerCalls == 0, "search indexing does not build a hero")
 prebuild = false
+layoutRows = {}
+module.buildPage("Quest Item", parent, 0)
+local function HasLayout(section, left, right)
+    for _, row in ipairs(layoutRows) do
+        if row.section == section and row.left == left and row.right == right then return true end
+    end
+    return false
+end
+Check(HasLayout("APPEARANCE", "Retail style background", "Button size"),
+    "appearance controls occupy aligned columns under Appearance")
+Check(HasLayout("APPEARANCE", "Quest icon opacity", "Border thickness / size"),
+    "opacity and border thickness align under Appearance")
+Check(HasLayout("APPEARANCE", "Button border style", "Button border color"),
+    "border style and color align under Appearance")
+Check(HasLayout("PROXIMITY", "Quest proximity (yards)", nil),
+    "quest distance control is under its own Proximity heading")
+Check(hero and hero.parent == headerParent and hero.parent ~= parent, "sample is in pinned header outside scroll content")
+Check(hero.sample.kind == "Frame" and not hero.sample.secure and hero.sample.mouseEnabled == false
+    and next(hero.sample.attrs) == nil, "header sample cannot dispatch an item action")
+Check(hero.sample ~= itemPreview and hero.sample ~= itemButton, "hero is independent of mover and gameplay button")
+Check(hero.sample.icon.texture == "Interface\\Icons\\INV_Misc_QuestionMark", "hero always uses the fixed sample icon")
+Check(module.getHeaderBuilder("Quest Item") == ns.BuildQuestItemHeader and module.getHeaderBuilder("General") == nil,
+    "native cache knows which page owns the header")
+widgets["Button size"].setValue(112)
+Check(hero.sample.width == 112 and hero.sample.art.width == 512 and headerHeight == 336, "hero reserves maximum artwork height")
+hero.width = 240; hero.scripts.OnSizeChanged(hero)
+Check(hero.sample.scale < 1 and hero.sample.art.width * hero.sample.scale <= 192, "narrow header fits scaled artwork with margins")
+hero.width = 700; hero.scripts.OnSizeChanged(hero)
+widgets["Button border style"].setValue("solid")
+widgets["Button border color"].setValue(0.2, 0.3, 0.4)
+widgets["Border thickness / size"].setValue(3)
+widgets["Quest icon opacity"].setValue(0.45)
+Check(hero.sample.questItemBorder.testBorder.size == 3 and Near(hero.sample.questItemBorder.testBorder.g, 0.3),
+    "hero shares live border renderer and settings")
+Check(Near(hero.sample.icon.alpha, 0.45) and Near(hero.sample.art.alpha, 0.45)
+    and Near(hero.sample.questItemBorder.alpha, 0.45), "hero shares icon artwork and border opacity")
+widgets["Retail style background"].setValue(false)
+Check(not hero.sample.art.shown and hero.sample.questItemBorder.shown, "hero artwork toggle is independent of border")
+widgets["Button border style"].setValue("none")
+Check(not hero.sample.questItemBorder.shown, "hero clears previous border when None selected")
+navQuest = 0; playerDead = true; cfg.itemVisibility.visibility = "never"
+ns.RefreshQuestItem()
+Check(hero:IsVisible() and hero.sample:IsVisible() and not itemButton.shown,
+    "hero remains available without quest and while dead with Never gameplay visibility")
+cfg.enabled = false; ns.RefreshQuestItem()
+Check(hero:IsVisible() and hero.sample:IsVisible(), "disabled addon still has an appearance sample")
+local sampleSize = hero.sample.width
+widgets["Button size"].setValue(24)
+Check(hero.sample.width == sampleSize, "header does not bypass disabled appearance controls")
+cfg.enabled = true
+combat = true
+local liveSize = itemButton.width
+widgets["Button size"].setValue(80)
+Check(hero.sample.width == 80 and itemButton.width == liveSize, "combat changes isolated header appearance without writing live geometry")
+combat = false; playerDead = false; navQuest = 20; cfg.itemVisibility.visibility = "always"
+widgets["Button size"].setValue(56)
+widgets["Quest icon opacity"].setValue(1)
+widgets["Retail style background"].setValue(true)
+local cachedHero = hero
+layoutRows = {}
+module.buildPage("General", parent, 0)
+Check(HasLayout("WOWHEAD", "Wowhead URL menus", "Wowhead database"),
+    "Wowhead controls share a row under their own heading")
+Check(HasLayout("OBJECTIVE COLORS", "In-progress color", "Completed color"),
+    "objective color pickers align under Objective Colors")
+layoutRows = {}
+aboutTexts = {}
+module.buildPage("About", parent, 0)
+Check(#aboutTexts == 2 and aboutTexts[1]:find("Wowhead links", 1, true)
+    and aboutTexts[2]:find("/eqtx status", 1, true),
+    "About page renders visible wrapped feature and help paragraphs")
+Check(not cachedHero:IsVisible() and headerHeight == 0, "leaving Quest Item removes the pinned preview")
+cfg.itemSize = 100; ns.RefreshQuestItem()
+Check(cachedHero.sample.width == 56 and headerHeight == 0, "hidden header cannot resize another page")
+cachedHero:Show()
+headerHeight = 208 -- EUI restores cached height after showing header children.
+module.onPageCacheRestore("Quest Item")
+Check(cachedHero.sample.width == 100 and headerHeight > 208, "cached header restores latest appearance and height")
+headerParent:Hide(); cfg.itemSize = 90
+ns.RefreshQuestItem()
+Check(cachedHero.sample.width == 100, "closed options do not update hidden header")
+headerParent:Show(); cachedHero.scripts.OnShow(cachedHero)
+Check(cachedHero.sample.width == 90, "reopening settings refreshes the cached sample")
+cfg.itemSize = 56; ns.RefreshQuestItem()
+local savedHeaderAPI = EllesmereUI.SetContentHeader
+EllesmereUI.SetContentHeader = nil
+local calls = headerCalls
+module.buildPage("Quest Item", parent, 0)
+Check(headerCalls == calls and module.getHeaderBuilder("Quest Item") == nil, "missing native header API safely omits preview")
+EllesmereUI.SetContentHeader = savedHeaderAPI
+missingExtraArt = true
+module.buildPage("Quest Item", parent, 0)
+Check(not hero.sample.art.shown and hero.sample.icon.texture == "Interface\\Icons\\INV_Misc_QuestionMark",
+    "header media fallback keeps sample icon")
+missingExtraArt = false
+module.buildPage("Quest Item", parent, 0)
+Check(hero.sample.art.shown, "new header uses available Retail art")
+local heightAPI = EllesmereUI.UpdateContentHeaderHeight
+EllesmereUI.UpdateContentHeaderHeight = nil
+module.buildPage("Quest Item", parent, 0)
+Check(headerHeight == 336, "older EUI without resize API reserves full artwork height")
+EllesmereUI.UpdateContentHeaderHeight = heightAPI
 module.buildPage("Quest Item", parent, 0)
 Check(widgets["Only in quest zone"] == nil, "removed zone control is absent from options")
 for label, widget in pairs(widgets) do Check(type(widget.tooltip) == "string" and #widget.tooltip > 10, "tooltip: " .. label) end
@@ -791,9 +979,9 @@ local originalColor, originalItem = cfg.progressColor.r, cfg.questItem
 widgets["In-progress color"].setValue(0.1, 0.2, 0.3)
 widgets["Show tracked quest item"].setValue(not originalItem)
 Check(cfg.progressColor.r == originalColor and cfg.questItem == originalItem, "already-open color/item controls honor master lock")
-local originalStatus = cfg.statuses.accepted
-widgets["Quest accepted"].setValue(not originalStatus)
-Check(cfg.statuses.accepted == originalStatus, "already-open status toggle honors lock")
+local originalStatusSound = cfg.statusSounds.accepted
+widgets["Quest accepted sound"].setValue("tell")
+Check(cfg.statusSounds.accepted == originalStatusSound, "already-open status selector honors master lock")
 cfg.enabled = true
 navDistance = 150
 widgets["Quest proximity (yards)"].setValue(150)
@@ -828,13 +1016,14 @@ widgets["Button border color"].setValue(0.1, 0.1, 0.1)
 Check(cfg.itemBorderColor.g == savedBorderColor, "open picker cannot recolor a disabled None border")
 local objectiveAPI = C_QuestLog.GetQuestObjectives
 C_QuestLog.GetQuestObjectives = nil
-local originalObjectiveStatus = cfg.statuses.objective
-widgets["Objective completed"].setValue(not originalObjectiveStatus)
-Check(widgets["Objective completed"].disabled() and cfg.statuses.objective == originalObjectiveStatus, "missing objective API gates stale notification control")
+local originalObjectiveSound = cfg.statusSounds.objective
+widgets["Objective completed sound"].setValue("tell")
+Check(widgets["Objective completed sound"].disabled() and cfg.statusSounds.objective == originalObjectiveSound,
+    "missing objective API gates status sound selector")
 C_QuestLog.GetQuestObjectives = objectiveAPI
 local failedAPI = C_QuestLog.IsFailed
 C_QuestLog.IsFailed = nil
-Check(widgets["Quest failed"].disabled(), "missing failure API clearly gates its control")
+Check(widgets["Quest failed sound"].disabled(), "missing failure API clearly gates its sound selector")
 C_QuestLog.IsFailed = failedAPI
 local soundAPI = PlaySound
 PlaySound = nil
@@ -859,10 +1048,14 @@ EllesmereUIExtendQuestTrackerDB = { enabled = "yes", wowheadDatabase = "bad", so
 cfg = addon.Settings()
 Check(cfg.enabled and cfg.wowheadDatabase == "auto" and cfg.sound == "ready", "malformed settings normalized")
 Check(cfg.progressColor.r == 0 and cfg.progressColor.g == 1 and cfg.progressColor.b == ns.Defaults.progressColor.b, "saved color bounds and NaN normalization")
-Check(cfg.itemX == 0 and not cfg.statuses.ready and cfg.statuses.accepted, "secret setting fallback and explicit false preserved")
+Check(cfg.itemX == 0 and cfg.statuses == nil and cfg.statusSounds.ready == "none"
+    and cfg.statusSounds.accepted == "global", "old status opt-outs become None sound selections")
 Check(cfg.itemProximityYards == 100, "unreadable saved proximity uses default")
 addon.Reset(); Pump()
-Check(addon.Settings().statuses.ready and not addon.Settings().questItem, "reset fresh defaults")
+Check(addon.Settings().statusSounds.ready == "global" and addon.Settings().statusSounds.progress == "none"
+    and not addon.Settings().questItem, "reset uses status sound choices as enable states")
+Check(hero.sample.width == 56 and hero.sample.art.shown and Near(hero.sample.icon.alpha, 1),
+    "reset restores header appearance even with gameplay feature off")
 Check(nativeUpdates == 0 and trackingWrites == 0, "addon never invokes native layout or changes tracking")
 
 -- Supported Forever behavior without a secret API; missing menu API is harmless.

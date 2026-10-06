@@ -5,10 +5,26 @@ if not addon then return end
 local snapshots, titles, recent, removedTitles = {}, {}, {}, {}
 local initialized = false
 local lastSound = -math.huge
-ns.SoundNames = { ready = "Quest ready", complete = "Quest completed", tell = "Whisper" }
-local soundKeys = { ready = "UI_AUTO_QUEST_COMPLETE", complete = "IG_QUEST_LIST_COMPLETE", tell = "TELL_MESSAGE" }
-local labels = { accepted = "Accepted", progress = "Objective progress", objective = "Objective completed",
-    ready = "Ready for turn-in", failed = "Failed", turnedIn = "Turned in" }
+ns.SoundNames = {
+    ready = "Quest ready", complete = "Quest completed", tell = "Whisper",
+    raidWarning = "Raid warning", readyCheck = "Ready check", levelUp = "Level up",
+    epicLoot = "Epic loot", lootOpen = "Loot window", battlegroundFinished = "Battleground finished",
+    achievement = "Achievement", missionComplete = "Mission complete",
+    peonYes3 = "Peon: Yes 3", peonBuildingComplete1 = "Peon: Building complete",
+}
+local soundKeys = {
+    ready = "UI_AUTO_QUEST_COMPLETE", complete = "IG_QUEST_LIST_COMPLETE", tell = "TELL_MESSAGE",
+    raidWarning = "RAID_WARNING", readyCheck = "READY_CHECK", levelUp = "LEVEL_UP",
+    epicLoot = "UI_EPICLOOT_TOAST", lootOpen = "LOOT_WINDOW_OPEN",
+    battlegroundFinished = "UI_BATTLEGROUND_COUNTDOWN_FINISHED", achievement = "ACHIEVEMENT_MENU_OPEN",
+    missionComplete = "UI_GARRISON_MISSION_COMPLETE",
+}
+-- Game-data paths are not accepted by current PlaySoundFile; use FileDataIDs.
+ns.SoundFileIDs = {
+    peonYes3 = 558147,
+    peonBuildingComplete1 = 558132,
+}
+ns.SoundChannels = { Master = "Master", SFX = "Sound effects", Music = "Music", Ambience = "Ambience", Dialog = "Dialog" }
 
 function ns.StatusSupported(kind)
     if not ns.HasQuestLog() then return false end
@@ -23,14 +39,139 @@ function ns.StatusSupported(kind)
 end
 
 function ns.SoundID(key)
+    key = ns.String(key)
+    if not key then return nil end
     local kits = ns.Table(_G.SOUNDKIT)
     local name = soundKeys[key]
     return kits and name and ns.ID(kits[name])
 end
 
+function ns.SoundAvailable(key)
+    return ns.SoundID(key) ~= nil or ns.ID(ns.SoundFileIDs[key]) ~= nil
+end
+
+local function PlaybackAccepted(ok, result)
+    if not ok then return false end
+    local readable = ns.Boolean(result)
+    if readable ~= nil then return readable end
+    return not ns.IsSecret(result) and result == nil
+end
+
+function ns.PlayNotificationSoundKey(key, channel)
+    key = ns.String(key)
+    if not key then return false end
+    local kit = ns.SoundID(key)
+    if kit and type(PlaySound) == "function" then
+        local ok, played = pcall(PlaySound, kit, channel, true)
+        if PlaybackAccepted(ok, played) then return true end
+    end
+    local fileDataID = ns.ID(ns.SoundFileIDs[key])
+    if fileDataID and type(PlaySoundFile) == "function" then
+        local ok, played = pcall(PlaySoundFile, fileDataID, channel)
+        if PlaybackAccepted(ok, played) then return true end
+    end
+    return false
+end
+
+function ns.HasNotificationSounds()
+    if type(PlaySound) ~= "function" and type(PlaySoundFile) ~= "function" then return false end
+    for key in pairs(ns.SoundNames) do
+        if ns.SoundAvailable(key) then return true end
+    end
+    return false
+end
+
+function ns.SoundKitOptions(includeNone, includeGlobal, selectedKey)
+    local values, order = {}, {}
+    if includeGlobal then values.global = "Use global sound"; order[#order + 1] = "global" end
+    if includeNone then values.none = "None"; order[#order + 1] = "none" end
+    for key, label in pairs(ns.SoundNames) do
+        if ns.SoundAvailable(key) then
+            values[key] = label
+            order[#order + 1] = key
+        end
+    end
+    table.sort(order, function(a, b)
+        if a == b then return false end
+        if a == "global" then return true end
+        if b == "global" then return false end
+        if a == "none" then return true end
+        if b == "none" then return false end
+        return ns.SoundNames[a] < ns.SoundNames[b]
+    end)
+    if selectedKey and selectedKey ~= "global" and selectedKey ~= "none" and not values[selectedKey]
+        and ns.SoundNames[selectedKey] then
+        values[selectedKey] = ns.SoundNames[selectedKey] .. " (unavailable)"
+        local insertAt = 1
+        while order[insertAt] == "global" or order[insertAt] == "none" do insertAt = insertAt + 1 end
+        table.insert(order, insertAt, selectedKey)
+    end
+    return values, order
+end
+
+local lastSoundPreview = -math.huge
+function ns.PreviewNotificationSound(key)
+    if not ns.SoundAvailable(key) then return false end
+    local now = ns.Number(ns.Call(GetTime))
+    if not now or now - lastSoundPreview < 0.35 then return false end
+    if ns.PlayNotificationSoundKey(key, addon.Settings().soundChannel) then
+        lastSoundPreview = now
+        return true
+    end
+    return false
+end
+
+function ns.PreviewEffectiveNotificationSound(kind)
+    local key = ns.NotificationSoundKey(kind)
+    local cfg = addon.Settings()
+    if not key then return false end
+    local now = ns.Number(ns.Call(GetTime))
+    if not now or now - lastSoundPreview < 0.35 then return false end
+    local played = ns.PlayNotificationSoundKey(key, cfg.soundChannel)
+    if not played and key ~= cfg.sound and cfg.sound ~= "none" then
+        played = ns.PlayNotificationSoundKey(cfg.sound, cfg.soundChannel)
+    end
+    if played then
+        lastSoundPreview = now
+        return true
+    end
+    return false
+end
+
+function ns.NotificationSoundKey(kind)
+    local cfg = addon.Settings()
+    local key = cfg.statusSounds[kind]
+    if key == "none" then return nil end
+    if key and key ~= "global" then
+        if ns.SoundAvailable(key) then return key end
+    end
+    if cfg.sound ~= "none" and ns.SoundAvailable(cfg.sound) then return cfg.sound end
+end
+
+function ns.NotificationSoundID(kind)
+    return ns.SoundID(ns.NotificationSoundKey(kind))
+end
+
+function ns.NotificationSoundAvailable(kind)
+    return ns.NotificationSoundKey(kind) ~= nil
+end
+
+function ns.PlayStatusNotificationSound(kind)
+    local cfg = addon.Settings()
+    local individual = cfg.statusSounds[kind]
+    if individual == "none" then return false end
+    if individual and individual ~= "global" then
+        if ns.PlayNotificationSoundKey(individual, cfg.soundChannel) then return true end
+        if cfg.sound == "none" then return false end
+        return ns.PlayNotificationSoundKey(cfg.sound, cfg.soundChannel)
+    end
+    if cfg.sound == "none" then return false end
+    return ns.PlayNotificationSoundKey(cfg.sound, cfg.soundChannel)
+end
+
 local function Notify(kind, id, title, detail)
     local cfg = addon.Settings()
-    if not ns.Active() or not cfg.notifications or not cfg.statuses[kind] or not ns.StatusSupported(kind) then return end
+    if not ns.Active() or cfg.statusSounds[kind] == "none" or not ns.StatusSupported(kind) then return end
     title = ns.String(title)
     if not title or title == "" then return end
     local now = ns.Number(ns.Call(GetTime))
@@ -47,14 +188,10 @@ local function Notify(kind, id, title, detail)
     recent[id].time = now
     recent[id][kind] = { time = now, detail = detail }
     if cfg.messages then
-        ns.Print(labels[kind] .. ": " .. title .. (detail and detail ~= "" and " — " .. detail or ""))
+        ns.DeliverQuestNotification(kind, id, title, detail, now)
     end
     if cfg.sounds and now - lastSound >= 1 then
-        local sound = ns.SoundID(cfg.sound)
-        if sound and type(PlaySound) == "function" then
-            pcall(PlaySound, sound, "Master")
-            lastSound = now
-        end
+        if ns.PlayStatusNotificationSound(kind) then lastSound = now end
     end
 end
 
@@ -82,7 +219,7 @@ end
 function ns.ScanNotifications(silent)
     if not ns.HasQuestLog() then return end
     local cfg = addon.Settings()
-    if not ns.Active() or not cfg.notifications then initialized = false; return end
+    if not ns.Active() then initialized = false; return end
     local scanned = ns.EachQuest(function(id, _, info)
         local title = ns.String(info.title) or ns.String(ns.Call(C_QuestLog.GetTitleForQuestID, id))
         if title then titles[id] = title end
@@ -110,6 +247,7 @@ function ns.ScanNotifications(silent)
 end
 
 function ns.RefreshNotifications()
+    if ns.RefreshNotificationOutput then ns.RefreshNotificationOutput() end
     snapshots, titles, recent, removedTitles = {}, {}, {}, {}
     initialized = false
     lastSound = -math.huge

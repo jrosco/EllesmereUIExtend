@@ -12,7 +12,7 @@ Check ($toc -match '## Dependencies: EllesmereUI, EllesmereUIQuestTracker\r?\n')
 Check ($toc -match '## SavedVariables: EllesmereUIExtendQuestTrackerDB\r?\n') 'Independent SavedVariables identity'
 Check ($toc -match '## Interface: .*16001') 'Forever interface included'
 $files = @([regex]::Matches($toc, '(?m)^([A-Za-z]+\.lua)\r?$') | ForEach-Object { $_.Groups[1].Value })
-Check ($files.Count -eq 8) 'All eight runtime modules are in the TOC'
+Check ($files.Count -eq 10) 'All ten runtime modules are in the TOC'
 foreach ($file in $files) {
     $path = Join-Path $addonRoot $file
     Check (Test-Path -LiteralPath $path) "Packaged runtime file: $file"

@@ -49,9 +49,11 @@ local function Place(frame)
     frame:SetPoint(pos.point, UIParent, pos.relPoint, pos.x, pos.y)
 end
 
-local function Artwork(frame)
-    frame:SetFrameStrata("MEDIUM")
-    frame:SetClampedToScreen(true)
+local function Artwork(frame, cosmetic)
+    if not cosmetic then
+        frame:SetFrameStrata("MEDIUM")
+        frame:SetClampedToScreen(true)
+    end
     frame.icon = frame:CreateTexture(nil, "ARTWORK")
     -- Blizzard's 52px extra-action icon uses a 256x128 style texture. Preserve
     -- that authored rectangle: a square squeezes its opening around the icon.
@@ -61,8 +63,8 @@ local function Artwork(frame)
     frame.questItemArtLoaded = ns.Boolean(ns.Call(frame.art.SetTexture, frame.art, "Interface\\ExtraButton\\Default")) == true
 end
 
-local function Style(frame)
-    if not frame or ns.InCombat() then return end
+local function Style(frame, cosmetic)
+    if not frame or (not cosmetic and ns.InCombat()) then return end
     local cfg = addon.Settings()
     local size, borderSize, color = ns.ItemSize(), cfg.itemBorderSize, cfg.itemBorderColor
     local signature = table.concat({ size, tostring(cfg.itemRetailArt), cfg.itemBorderTexture, borderSize,
@@ -110,6 +112,21 @@ local function RefreshVisuals(frame)
     if frame.questItemBorder and frame.questItemBorder.SetAlpha then
         frame.questItemBorder:SetAlpha(cfg.itemIconAlpha or 1)
     end
+end
+
+-- Settings-only sample, separate from both the secure action and EUI mover.
+-- Its appearance may update in combat: this frame has no protected relatives.
+function ns.CreateQuestItemSample(parent)
+    local sample = CreateFrame("Frame", nil, parent)
+    sample:EnableMouse(false)
+    Artwork(sample, true)
+    sample.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+    sample.RefreshAppearance = function()
+        Style(sample, true)
+        RefreshVisuals(sample)
+    end
+    sample.RefreshAppearance()
+    return sample
 end
 
 local function CreatePreview()
@@ -402,6 +419,7 @@ function ns.RegisterQuestItemMover()
 end
 
 function ns.RefreshQuestItem()
+    if ns.RefreshQuestItemHeader then ns.RefreshQuestItemHeader() end
     if ticker then ticker:Cancel(); ticker = nil end
     ns.RegisterQuestItemMover()
     if not visibilityRegistered and EllesmereUI and type(EllesmereUI.RegisterVisibilityUpdater) == "function" then

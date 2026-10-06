@@ -11,11 +11,18 @@ ns.Defaults = {
     objectiveColors = true,
     progressColor = { r = 1, g = 0.82, b = 0.25 },
     completedColor = { r = 0.25, g = 1, b = 0.35 },
-    notifications = true,
     messages = true,
     sounds = false,
     sound = "ready",
-    statuses = { accepted = true, progress = false, objective = true, ready = true, failed = true, turnedIn = true },
+    soundChannel = "Master",
+    statusSounds = { accepted = "global", progress = "none", objective = "global",
+        ready = "global", failed = "global", turnedIn = "global" },
+    notificationDestinations = { localChat = true, toast = false, party = false,
+        raid = false, instance = false, guild = false },
+    toastOpacity = 0.92,
+    toastAccentColor = { r = 0.9, g = 0.62, b = 0.16 },
+    toastX = 0,
+    toastY = 210,
     questItem = false,
     itemRetailArt = true,
     itemSize = 56,
@@ -54,9 +61,10 @@ local function Normalize(source, defaults)
         elseif type(fallback) == "number" then
             value = ns.Number(value) or fallback
             if key == "r" or key == "g" or key == "b" then value = math.max(0, math.min(1, value)) end
-            if key == "itemX" or key == "itemY" then value = math.max(-10000, math.min(10000, value)) end
+            if key == "itemX" or key == "itemY" or key == "toastX" or key == "toastY" then value = math.max(-10000, math.min(10000, value)) end
             if key == "itemSize" then value = math.floor(math.max(24, math.min(112, value)) + 0.5) end
             if key == "itemIconAlpha" then value = math.max(0, math.min(1, value)) end
+            if key == "toastOpacity" then value = math.max(0, math.min(1, value)) end
             if key == "itemProximityYards" then value = math.floor(math.max(1, math.min(1000, value)) + 0.5) end
             if key == "itemBorderSize" then value = math.floor(math.max(1, math.min(4, value)) + 0.5) end
             result[key] = value
@@ -69,11 +77,27 @@ end
 
 function addon.Settings()
     if not ns.settings then
-        ns.settings = Normalize(_G.EllesmereUIExtendQuestTrackerDB, ns.Defaults)
+        local saved = ns.Table(_G.EllesmereUIExtendQuestTrackerDB) or {}
+        local oldStatuses = ns.Table(saved.statuses)
+        ns.settings = Normalize(saved, ns.Defaults)
+        -- Preserve existing opt-outs when old status toggles become None choices.
+        for kind, enabled in pairs(oldStatuses or {}) do
+            if ns.Boolean(enabled) == false then ns.settings.statusSounds[kind] = "none" end
+        end
         if not ({ auto = true, retail = true, classic = true })[ns.settings.wowheadDatabase] then
             ns.settings.wowheadDatabase = "auto"
         end
-        if not ({ ready = true, complete = true, tell = true })[ns.settings.sound] then ns.settings.sound = "ready" end
+        if ns.settings.sound ~= "none" and not (ns.SoundNames and ns.SoundNames[ns.settings.sound]) then
+            ns.settings.sound = "ready"
+        end
+        for kind, key in pairs(ns.settings.statusSounds) do
+            if key ~= "global" and key ~= "none" and not (ns.SoundNames and ns.SoundNames[key]) then
+                ns.settings.statusSounds[kind] = "global"
+            end
+        end
+        if not ({ Master = true, SFX = true, Music = true, Ambience = true, Dialog = true })[ns.settings.soundChannel] then
+            ns.settings.soundChannel = "Master"
+        end
         local vis = ns.settings.itemVisibility
         if vis.visibilityMatch ~= "all" and vis.visibilityMatch ~= "any" then vis.visibilityMatch = "all" end
         if not ({ always = true, never = true, mouseover = true, in_combat = true, out_of_combat = true,
@@ -157,6 +181,7 @@ events:SetScript("OnEvent", function(_, event, ...)
         local name = ...
         if name == addonName then addon.Settings() end
         if ns.RegisterOptions then ns.RegisterOptions() end
+        if ns.RegisterToastMover then ns.RegisterToastMover() end
         if ns.initialized then
             if ns.InitMenus then ns.InitMenus() end
             if ns.RefreshObjectives then ns.RefreshObjectives() end
