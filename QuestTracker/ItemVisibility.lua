@@ -2,6 +2,12 @@ local _, ns = ...
 local addon = ns.Addon
 if not addon then return end
 
+local DEATH_GATE = "[@player,dead] hide; "
+
+function ns.PlayerDeadOrGhost()
+    return ns.Boolean(ns.Call(UnitIsDeadOrGhost, "player"))
+end
+
 local macroOptions = {
     { "visOnlyMounted", "nomounted" }, { "visHideMounted", "mounted" },
     { "visHideNoTarget", "noexists" }, { "visHideWithTarget", "exists" },
@@ -21,8 +27,10 @@ end
 
 function ns.BuildItemVisibilityDriver()
     local store = addon.Settings().itemVisibility
-    if not ns.HasItemVisibility() then return SimpleVisibility(store) or "hide" end
-    local prefix = "[petbattle] hide; "
+    if not ns.HasItemVisibility() then
+        return SimpleVisibility(store) == "show" and (DEATH_GATE .. "show") or "hide"
+    end
+    local prefix = DEATH_GATE .. "[petbattle] hide; "
     local vm = ns.Table(ns.Call(EllesmereUI.GetActiveVisibilityModes, store, "visibility"))
     if store.visibility == "never" then return "hide" end
     if store.visibilityMatch == "any" then
@@ -66,7 +74,8 @@ function ns.ApplyItemVisibility(frame, eligible, hovered)
                 frame:Hide()
             end
         end
-    elseif eligible and driver == "show" then
+    elseif eligible and SimpleVisibility(addon.Settings().itemVisibility) == "show"
+        and ns.PlayerDeadOrGhost() == false then
         frame:Show()
     else
         frame:Hide()

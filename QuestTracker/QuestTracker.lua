@@ -18,10 +18,9 @@ ns.Defaults = {
     statuses = { accepted = true, progress = false, objective = true, ready = true, failed = true, turnedIn = true },
     questItem = false,
     itemRetailArt = true,
-    itemZoneOnly = true,
     itemSize = 56,
     itemIconAlpha = 1,
-    itemBorderAlpha = 1,
+    itemProximityYards = 100,
     itemBorderTexture = "none",
     itemBorderSize = 1,
     itemBorderColor = { r = 1, g = 1, b = 1 },
@@ -58,7 +57,7 @@ local function Normalize(source, defaults)
             if key == "itemX" or key == "itemY" then value = math.max(-10000, math.min(10000, value)) end
             if key == "itemSize" then value = math.floor(math.max(24, math.min(112, value)) + 0.5) end
             if key == "itemIconAlpha" then value = math.max(0, math.min(1, value)) end
-            if key == "itemBorderAlpha" then value = math.max(0, math.min(1, value)) end
+            if key == "itemProximityYards" then value = math.floor(math.max(1, math.min(1000, value)) + 0.5) end
             if key == "itemBorderSize" then value = math.floor(math.max(1, math.min(4, value)) + 0.5) end
             result[key] = value
         else
@@ -131,15 +130,16 @@ end
 
 function addon.Capabilities()
     return { menus = ns.HasMenus(), questLog = ns.HasQuestLog(), objectives = ns.HasObjectives(), questItem = ns.HasQuestItems()
-        and not ns.itemTemplateUnavailable, itemMover = ns.HasItemMover(), itemZone = ns.HasQuestZone(),
-        itemBorders = ns.HasItemBorders(), itemVisibility = ns.HasItemVisibility(), filters = false, collapse = false }
+        and not ns.itemTemplateUnavailable, itemMover = ns.HasItemMover(),
+        itemBorders = ns.HasItemBorders(), itemVisibility = ns.HasItemVisibility(), itemNavigation = ns.HasQuestNavigation(), filters = false, collapse = false }
 end
 
 local events = CreateFrame("Frame")
 local eventNames = { "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "QUEST_LOG_UPDATE",
     "QUEST_ACCEPTED", "QUEST_TURNED_IN", "QUEST_REMOVED", "QUEST_WATCH_LIST_CHANGED", "QUEST_DATA_LOAD_RESULT",
     "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED", "BAG_UPDATE_DELAYED", "SPELL_UPDATE_COOLDOWN", "ZONE_CHANGED_NEW_AREA",
-    "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "QUEST_POI_UPDATE" }
+    "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "QUEST_POI_UPDATE", "SUPER_TRACKING_CHANGED",
+    "PLAYER_DEAD", "PLAYER_ALIVE", "PLAYER_UNGHOST" }
 ns.RegisteredEvents = {}
 for _, event in ipairs(eventNames) do
     ns.RegisteredEvents[event] = pcall(events.RegisterEvent, events, event)
@@ -181,9 +181,21 @@ SlashCmdList.ELLESMEREUIEXTENDQUESTTRACKER = function(message)
         local c = addon.Capabilities()
         ns.Print((ns.Forever() and "Forever" or "Retail") .. "; menus: " .. tostring(c.menus)
             .. "; quest log: " .. tostring(c.questLog) .. "; objective hooks: " .. tostring(c.objectives)
-            .. "; nearest item APIs/template: " .. tostring(c.questItem) .. "; EUI item mover API: " .. tostring(c.itemMover))
-        ns.Print("Item zone maps: " .. tostring(c.itemZone) .. "; borders: " .. tostring(c.itemBorders)
-            .. "; secure visibility: " .. tostring(c.itemVisibility))
+            .. "; tracked item APIs/template: " .. tostring(c.questItem) .. "; EUI item mover API: " .. tostring(c.itemMover))
+        ns.Print("Item borders: " .. tostring(c.itemBorders)
+            .. "; secure visibility: " .. tostring(c.itemVisibility) .. "; nav distance: " .. tostring(c.itemNavigation))
+        if ns.QuestItemDebugInfo then
+            local d = ns.QuestItemDebugInfo()
+            ns.Print("Quest item: quest=" .. tostring(d.questID)
+                .. " nav=" .. tostring(d.navDistance)
+                .. " threshold=" .. tostring(d.proximityYards)
+                .. " eligible=" .. tostring(d.eligible)
+                .. " reason=" .. tostring(d.reason))
+            ns.Print("Item display: liveQuest=" .. tostring(d.liveQuest) .. " shown=" .. tostring(d.shown)
+                .. " alpha=" .. tostring(d.alpha) .. " iconAlpha=" .. tostring(d.iconAlpha)
+                .. " combat=" .. tostring(d.combat) .. " editing=" .. tostring(d.editing) .. " dead=" .. tostring(d.dead)
+                .. " driver=" .. tostring(d.driver))
+        end
         ns.Print("Display-only filtering and native collapse features are omitted: no verified taint-safe integration.")
     elseif not ns.InCombat() and EllesmereUI and type(EllesmereUI.OpenPlugin) == "function" then
         EllesmereUI.OpenPlugin(addonName)

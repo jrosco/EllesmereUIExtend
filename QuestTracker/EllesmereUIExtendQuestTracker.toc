@@ -2,7 +2,7 @@
 ## Title: |cff0cd29fEllesmereUI|r Extend Quest Tracker
 ## Category: |cff0cd29fEllesmere|rUI
 ## Group: EllesmereUI
-## Notes: Wowhead links, objective colors, quest notifications and the nearest tracked quest item.
+## Notes: Wowhead links, objective colors, quest notifications and the navigation-tracked quest item.
 ## Author: jrosco
 ## Version: 0.1.0
 ## Dependencies: EllesmereUI, EllesmereUIQuestTracker

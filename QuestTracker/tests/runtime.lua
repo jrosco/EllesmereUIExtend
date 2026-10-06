@@ -2,6 +2,8 @@
 local unpack = table.unpack or unpack
 local ns, frames, tickers, messages, sounds, menus, widgets = {}, {}, {}, {}, {}, {}, {}
 local combat, now, failTemplate, prebuild, missingExtraArt = false, 100, false, false, false
+local playerDead, playerGhost = false, false
+function UnitIsDeadOrGhost(unit) assert(unit == "player"); return playerDead or playerGhost end
 local checks, nativeUpdates, trackingWrites = 0, 0, 0
 local secret = setmetatable({}, {
     __eq = function() error("secret comparison") end,
@@ -50,6 +52,8 @@ function CreateFrame(kind, name, parent, template)
     end
     function frame:SetSize(width, height) self.width, self.height = width, height end
     function frame:SetAlpha(value) self.alpha = value end
+    function frame:GetAlpha() return self.alpha or 1 end
+    function frame:IsShown() return self.shown end
     function frame:SetColorTexture(...) self.colorTexture = { ... } end
     function frame:SetText(value) self.text = value end
     function frame:EnableMouse(value) self.mouseEnabled = value end
@@ -115,6 +119,15 @@ local quests = {
 }
 local complete, failed, objective, distances, watches, counts = {}, {}, {}, { [10] = 100, [20] = 25, [30] = 1 }, { [10] = 0, [20] = 1 }, { [110] = 1, [120] = 1, [130] = 1 }
 local continent, specialLinks = {}, {}
+local navQuest, navDistance, trackingQuest = 20, 25, true
+C_SuperTrack = {
+    GetSuperTrackedQuestID = function() return navQuest end,
+    IsSuperTrackingQuest = function() return trackingQuest end,
+}
+C_Navigation = { GetDistance = function(...)
+    assert(select("#", ...) == 0, "navigation distance takes no quest argument")
+    return navDistance
+end }
 C_QuestLog = {
     GetNumQuestLogEntries = function() return #quests end,
     GetInfo = function(index) return quests[index] end,
@@ -135,16 +148,6 @@ function GetQuestLogSpecialItemInfo(index)
 end
 function GetQuestLogSpecialItemCooldown() return 90, 30, 1 end
 C_Item = { GetItemCount = function(id) return counts[id] or 0 end }
-Enum = { UIMapType = { Cosmic = 0, World = 1, Continent = 2, Zone = 3, Dungeon = 4, Micro = 5 } }
-local playerMap, mapData, zonePOIs = 900, {}, nil
-C_Map = {
-    GetBestMapForUnit = function(unit) assert(unit == "player"); return playerMap end,
-    GetMapInfo = function(id) return mapData[id] or { mapType = Enum.UIMapType.Zone, parentMapID = 0 } end,
-}
-C_QuestLog.GetQuestsOnMap = function(map)
-    if zonePOIs then return zonePOIs end
-    return { { questID = 10, mapID = map }, { questID = 20, mapID = map }, { questID = 30, mapID = map } }
-end
 local foci = {}
 function GetMouseFoci() return foci end
 Menu = { ModifyMenu = function(tag, callback)
@@ -335,25 +338,63 @@ complete[20], objective[20] = true, { { finished = true, numFulfilled = 1, text 
 Event("QUEST_LOG_UPDATE")
 Check(#messages == before + 2, "final objective and ready notifications both respect their toggles")
 
--- Nearest tracked quest item: distance, bag ownership, completion and combat locks.
+-- Navigation identity and distance must belong to the same quest.
 complete[10], complete[20], complete[30], failed[20] = false, false, false, false
-Check(addon.NearestQuestItem().questID == 20, "nearest tracked quest, not first or nearer untracked quest")
-distances[10] = 25
-Check(addon.NearestQuestItem().questID == 10, "stable quest-ID tie break")
-distances[10] = 100; counts[120] = 0
-Check(addon.NearestQuestItem().questID == 10, "item must be in bags")
-counts[120] = 1; distances[20] = secret
-Check(addon.NearestQuestItem().questID == 10, "secret distance excluded")
-distances[20] = 25; watches[20] = secret
-Check(addon.NearestQuestItem().questID == 10, "secret tracking state excluded")
-watches[20] = 1; continent[20] = false
-Check(addon.NearestQuestItem().questID == 10, "off-continent distance excluded")
-continent[20] = secret
-Check(addon.NearestQuestItem().questID == 10, "secret continent flag excluded")
-continent[20] = true; complete[20] = true
-Check(addon.NearestQuestItem().questID == 10, "completed quest without show-item permission excluded")
+Check(cfg.itemProximityYards == 100, "default proximity is 100 yards")
+C_QuestLog.GetSelectedQuest = function() return 0 end
+Check(addon.NearestQuestItem().questID == 20, "super-tracked quest works with Quest Log selection zero")
+C_QuestLog.GetSelectedQuest = nil
+Check(addon.NearestQuestItem().questID == 20, "Quest Log selection API is not a dependency")
+navDistance = 101
+Check(addon.NearestQuestItem() == nil, "distance above threshold hides the button")
+Check(ns.QuestItemDebugInfo().reason == "item-feature-disabled", "diagnostics distinguish disabled feature")
+cfg.questItem = true
+Check(ns.QuestItemDebugInfo().reason == "too-far" and ns.QuestItemDebugInfo().questID == 20, "distance rejection preserves diagnostic quest identity")
+cfg.questItem = false
+navDistance = 100
+Check(addon.NearestQuestItem() and addon.NearestQuestItem().questID == 20, "distance at threshold shows the button")
+navDistance = 100.1
+Check(addon.NearestQuestItem() == nil, "unrounded distance just outside threshold is rejected")
+cfg.itemProximityYards = 150
+Check(addon.NearestQuestItem().questID == 20, "configured threshold above default is used")
+cfg.itemProximityYards = 50; navDistance = 51
+Check(addon.NearestQuestItem() == nil, "configured threshold below default is used")
+navDistance = 50
+Check(addon.NearestQuestItem().questID == 20, "custom threshold boundary is inclusive")
+cfg.itemProximityYards = 100
+for _, value in ipairs({ secret, -1, math.huge, 0/0, "25" }) do
+    navDistance = value
+    Check(addon.NearestQuestItem() == nil, "unreadable/invalid navigation distance fails closed")
+end
+navDistance = nil
+Check(addon.NearestQuestItem() == nil, "missing navigation distance fails closed")
+navDistance = 0
+Check(addon.NearestQuestItem().questID == 20, "zero distance is valid for an active quest")
+navDistance = 25
+for _, value in ipairs({ 0, secret, 999, 30 }) do
+    navQuest = value
+    Check(addon.NearestQuestItem() == nil, "invalid, absent or unwatched navigation quest never falls back to another item")
+end
+navQuest = 20
+trackingQuest = false
+Check(addon.NearestQuestItem() == nil, "user waypoint does not reuse a retained quest ID")
+trackingQuest = secret
+Check(addon.NearestQuestItem() == nil, "unreadable navigation type fails closed")
+trackingQuest = true
+navQuest = 10
+Check(addon.NearestQuestItem().questID == 10, "changing navigation selects only that quest's item")
+navQuest = 20
+counts[120] = 0
+Check(addon.NearestQuestItem() == nil, "missing selected item never falls back to quest 10")
+counts[120] = 1
+watches[20] = secret
+Check(addon.NearestQuestItem() == nil, "secret tracking state excluded")
+watches[20] = 1; complete[20] = secret
+Check(addon.NearestQuestItem() == nil, "unreadable completion fails closed")
+complete[20] = true
+Check(addon.NearestQuestItem() == nil, "completed quest without show-item permission excluded")
 complete[20] = false; specialLinks[2] = secret
-Check(addon.NearestQuestItem().questID == 10, "secret item link not parsed")
+Check(addon.NearestQuestItem() == nil, "secret item link not parsed")
 specialLinks[2] = nil
 local specialItemAPI = GetQuestLogSpecialItemInfo
 GetQuestLogSpecialItemInfo = function(index)
@@ -364,11 +405,23 @@ complete[20] = true
 Check(addon.NearestQuestItem().questID == 20, "completed quest retains an item explicitly allowed after completion")
 complete[20] = false; GetQuestLogSpecialItemInfo = specialItemAPI
 local distanceAPI = C_QuestLog.GetDistanceSqToQuest
-C_QuestLog.GetDistanceSqToQuest = function() error("distance unavailable") end
-Check(addon.NearestQuestItem() == nil, "throwing distances fail closed")
 C_QuestLog.GetDistanceSqToQuest = nil
-Check(not addon.Capabilities().questItem, "missing distance gates item feature")
+Check(addon.Capabilities().questItem and addon.NearestQuestItem().questID == 20, "legacy squared distance is not a dependency")
 C_QuestLog.GetDistanceSqToQuest = distanceAPI
+local navAPI = C_Navigation.GetDistance
+C_Navigation.GetDistance = function() error("restricted") end
+Check(addon.NearestQuestItem() == nil, "throwing navigation fails closed")
+C_Navigation.GetDistance = nil
+Check(not addon.Capabilities().questItem, "missing navigation gates item controls")
+C_Navigation.GetDistance = navAPI
+local superAPI = C_SuperTrack
+C_SuperTrack = nil
+Check(not addon.Capabilities().questItem and addon.NearestQuestItem() == nil, "missing super-tracking API cannot guess an item")
+C_SuperTrack = superAPI
+local identityAPI = C_SuperTrack.GetSuperTrackedQuestID
+C_SuperTrack.GetSuperTrackedQuestID = function() error("restricted quest identity") end
+Check(addon.NearestQuestItem() == nil, "throwing navigation identity fails closed")
+C_SuperTrack.GetSuperTrackedQuestID = identityAPI
 local timerAPI = C_Timer.NewTicker; C_Timer.NewTicker = nil
 Check(not addon.Capabilities().questItem, "missing movement timer gates item feature")
 C_Timer.NewTicker = timerAPI
@@ -376,13 +429,14 @@ cfg.questItem = true; combat = true; addon.Refresh(); Pump()
 Check(_G.EllesmereUIExtendQuestTrackerItem == nil, "combat login/enable defers secure button creation")
 combat = false; Event("PLAYER_REGEN_ENABLED")
 local itemButton = EllesmereUIExtendQuestTrackerItem
-Check(itemButton.shown and itemButton.attrs.type1 == "item" and itemButton.attrs.item1 == "item:120", "secure nearest item action configured")
+Check(itemButton.shown and itemButton.attrs.type1 == "item" and itemButton.attrs.item1 == "item:120", "secure navigation quest item action configured")
 Check(itemButton.clicks[1] == "AnyDown" and itemButton.clicks[2] == "AnyUp", "both key-down preferences supported")
 Check(itemButton.drag[1] == "RightButton", "right drag leaves left item action intact")
 Check(itemButton.cooldown.cooldown[2] == 30, "quest item cooldown displayed")
 Check(itemButton.width == 56 and itemButton.height == 56, "art fix preserves live button hit area")
 Check(itemButton.art.width == 256 and itemButton.art.height == 128, "native extra-action artwork rectangle is not squeezed to a square")
 Check(itemButton.icon.point[2] == -2 and itemButton.icon.point[3] == 2, "52px icon matches native art proportions")
+Check(addon.Settings().itemProximityYards == 100, "default proximity threshold is 100 yards")
 local function NoAddedBorder(frame)
     for _, region in ipairs(frames) do
         if region.parent == frame and region.kind == "Texture" and region.colorTexture then return false end
@@ -390,15 +444,39 @@ local function NoAddedBorder(frame)
     return true
 end
 Check(NoAddedBorder(itemButton), "live item button has no added solid green outline")
-combat = true; distances[10] = 1
+playerDead = true; Event("PLAYER_DEAD")
+Check(not itemButton.shown, "no-state-driver fallback hides dead player")
+playerDead, playerGhost = false, true; Event("PLAYER_ALIVE")
+Check(not itemButton.shown, "releasing spirit keeps fallback hidden")
+playerGhost = false; Event("PLAYER_UNGHOST")
+Check(itemButton.shown, "fallback restores eligible item after resurrection")
+local deathAPI = UnitIsDeadOrGhost
+UnitIsDeadOrGhost = function() return secret end
+ns.UpdateQuestItem()
+Check(not itemButton.shown, "unreadable fallback death state fails closed")
+UnitIsDeadOrGhost = deathAPI; ns.UpdateQuestItem()
+navDistance = 101; tickers[#tickers].callback()
+Check(not itemButton.shown and itemButton.attrs.item1 == nil, "movement beyond configured yards clears and hides the live item")
+Check(ns.QuestItemDebugInfo().reason == "too-far", "live rejection reports distance instead of no-item")
+navDistance = 100; tickers[#tickers].callback()
+Check(itemButton.shown and itemButton.attrs.item1 == "item:120", "movement back to threshold restores live item")
+navQuest = 10; Event("SUPER_TRACKING_CHANGED")
+Check(itemButton.attrs.item1 == "item:110", "navigation event switches the live item to the correct quest")
+trackingQuest = false; Event("SUPER_TRACKING_CHANGED")
+Check(not itemButton.shown and itemButton.attrs.item1 == nil, "nonquest navigation hides even with a retained quest ID")
+trackingQuest = true; navQuest = 20; Event("SUPER_TRACKING_CHANGED")
+combat = true; navQuest = 10
+navDistance = 101
 Event("QUEST_LOG_UPDATE"); tickers[#tickers].callback()
 Check(itemButton.attrs.item1 == "item:120", "combat never reassigns protected item")
+Check(ns.QuestItemDebugInfo().reason == "combat-deferred; evaluated=too-far", "diagnostics explain why combat retains the prior action")
 cfg.questItem = false; addon.Refresh(); Pump()
 Check(itemButton.shown, "combat disable parks protected visibility until regen")
 combat = false; Event("PLAYER_REGEN_ENABLED")
 Check(not itemButton.shown and itemButton.attrs.item1 == nil, "regen applies disable and clears item")
+navDistance = 25
 cfg.questItem = true; addon.Refresh(); Pump()
-Check(itemButton.attrs.item1 == "item:110", "reenable rescans actual nearest item")
+Check(itemButton.attrs.item1 == "item:110", "reenable rescans current navigation quest item")
 itemButton.x, itemButton.y = 650, 350
 itemButton.scripts.OnDragStop(itemButton)
 Check(cfg.itemX == 150 and cfg.itemY == -50, "readable position saved")
@@ -438,7 +516,7 @@ Event("ADDON_LOADED", "EllesmereUIOptions")
 local moverKey = "EQTX_QuestItem"
 local mover = assert(unlockElements[moverKey])
 local listener = assert(unlockListeners[moverKey])
-Check(mover.label == "Nearest Quest Item" and mover.group == "Extend Quest Tracker", "named EUI quest-item mover")
+Check(mover.label == "Tracked Quest Item" and mover.group == "Extend Quest Tracker", "named EUI quest-item mover")
 Check(mover.noResize and mover.noAnchorTo and mover.noAnchorTarget and mover.noSizeMatchTarget, "fixed mover cannot create secure anchor/size dependencies")
 Check(addon.Capabilities().itemMover, "public mover API capability")
 addon.Refresh(); addon.Refresh(); Pump()
@@ -469,7 +547,7 @@ local timerCount = #tickers
 OpenEdit()
 Check(itemPreview.shown and not itemButton.shown, "edit mode shows preview without an eligible quest item")
 Check(itemButton.attrs.item1 == nil and itemButton.attrs.type1 == nil, "edit mode disables the live secure action")
-Check(#tickers == timerCount and tickers[#tickers].cancelled, "editing stops nearest-item polling")
+Check(#tickers == timerCount and tickers[#tickers].cancelled, "editing stops item polling")
 itemPreview:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 90, -45)
 local pendingPoint = itemPreview.point
 Event("QUEST_LOG_UPDATE"); ns.RefreshQuestItem(); mover.applyPosition()
@@ -573,34 +651,12 @@ for key, func in pairs(publicMoverAPI) do EllesmereUI[key] = func end
 counts[110], counts[120] = 1, 1
 ns.RefreshQuestItem()
 
--- Strict zone selection: explicit player maps, micro-map ancestry, unknowns.
-local normalZoneAPI = C_QuestLog.GetQuestsOnMap
-distances[10], distances[20] = 1, 25
-zonePOIs = { { questID = 20, mapID = 900 }, { questID = 10, mapID = 901 } }
-Check(addon.NearestQuestItem().questID == 20, "nearest eligible current-zone quest wins over closer neighbouring-zone quest")
-mapData[902] = { mapType = Enum.UIMapType.Micro, parentMapID = 900 }
-playerMap = 902
-zonePOIs = { { questID = 10, mapID = 902 } }
-Check(addon.NearestQuestItem().questID == 10, "readable micro-map objectives resolve to current zone")
-playerMap = 903; mapData[903] = { mapType = Enum.UIMapType.Continent, parentMapID = 0 }
-Check(addon.NearestQuestItem() == nil, "continent map does not masquerade as a quest zone")
-playerMap = secret
-Check(addon.NearestQuestItem() == nil, "secret player map fails closed")
-playerMap = 900; zonePOIs = { { questID = secret, mapID = 900 }, { questID = 10, mapID = secret } }
-Check(addon.NearestQuestItem() == nil, "unreadable POI identities are not indexed or guessed")
-zonePOIs = { { questID = 10, mapID = secret }, { questID = 20, mapID = 900 } }
-Check(addon.NearestQuestItem().questID == 20, "unreadable candidates do not suppress other positively confirmed zone quests")
-mapData[900] = { mapType = secret }
-Check(addon.NearestQuestItem() == nil, "unreadable map kind fails closed before comparisons")
-mapData[900] = nil
-C_QuestLog.GetQuestsOnMap = function() error("map POIs restricted") end
-Check(addon.NearestQuestItem() == nil, "throwing POI getter hides zone-restricted item")
-cfg.itemZoneOnly = false
-Check(addon.NearestQuestItem().questID == 10, "disabled zone filter does not query missing zone data")
-cfg.itemZoneOnly = true; C_QuestLog.GetQuestsOnMap = normalZoneAPI
-playerMap = 904; mapData[904] = { mapType = Enum.UIMapType.Micro, parentMapID = 904 }
-Check(addon.NearestQuestItem() == nil, "cyclic map parents fail closed")
-playerMap = 900; zonePOIs = nil
+-- Old saved zone settings cannot restrict navigation-distance eligibility.
+cfg.itemZoneOnly = true
+ns.settings = nil; cfg = addon.Settings()
+Check(cfg.itemZoneOnly == nil, "removed zone setting is dropped during normalization")
+Check(C_Map == nil and C_QuestLog.GetQuestsOnMap == nil and addon.NearestQuestItem().questID == 10,
+    "navigation quest qualifies without any zone/POI APIs")
 
 -- Public border renderer and native visibility driver doubles. The real EUI
 -- compiler itself is exercised separately by tests/visibility.lua.
@@ -627,6 +683,7 @@ local function NativeResolve(frame, driver)
     local shown = driver ~= "hide"
     if driver:find("[combat] show", 1, true) then shown = combat == true end
     if driver:find("[nocombat] show", 1, true) then shown = combat == false end
+    if driver:find("[@player,dead] hide;", 1, true) and (playerDead or playerGhost) then shown = false end
     local wasShown = frame.shown
     frame.shown = shown -- Simulates native secure execution, not addon Show/Hide.
     if wasShown and not shown and frame.scripts.OnHide then frame.scripts.OnHide(frame) end
@@ -662,24 +719,31 @@ Check(itemPreview.questItemBorder.testBorder.texture == "blizzard", "preview use
 cfg.itemBorderTexture = "none"; cfg.itemRetailArt = true; ns.RefreshQuestItem()
 Check(not itemPreview.questItemBorder.shown and itemPreview.art.shown, "None removes border without disabling Retail art")
 cfg.itemIconAlpha = 0.4; ns.RefreshQuestItem()
-Check(Near(itemButton.icon.alpha, 0.4) and Near(itemButton.art.alpha, 0.4), "live icon and background follow opacity setting")
-Check(Near(itemButton.questItemBorder.alpha, 0.4), "live border follows opacity setting")
-OpenEdit(); ns.RefreshQuestItem()
 Check(Near(itemPreview.icon.alpha, 0.4) and Near(itemPreview.art.alpha, 0.4), "preview icon and background follow opacity setting")
 Check(Near(itemPreview.questItemBorder.alpha, 0.4), "preview border follows opacity setting")
 CloseEdit("save")
+Check(Near(itemButton.icon.alpha, 0.4) and Near(itemButton.art.alpha, 0.4), "live appearance updates after leaving preview mode")
+Check(Near(itemButton.questItemBorder.alpha, 0.4), "live border uses the same saved icon alpha")
 Check(itemButton.width == 84 and itemButton.art.shown and not itemButton.questItemBorder.shown, "closing editor applies latest look to the live action")
 cfg.itemVisibility.visibility = "in_combat"; ns.RefreshQuestItem()
 Check(not itemButton.shown and drivers[itemButton]:find("[combat] show", 1, true), "in-combat visibility installs a native driver instead of an addon event Show")
 local writesBeforeCombat = driverWrites
 combat = true; NativeResolve(itemButton, drivers[itemButton]); Event("PLAYER_REGEN_DISABLED")
 Check(itemButton.shown, "native combat visibility can show the secure button during lockdown")
+playerDead = true; NativeResolve(itemButton, drivers[itemButton]); Event("PLAYER_DEAD")
+Check(not itemButton.shown and driverWrites == writesBeforeCombat, "native death gate hides during combat without protected Lua writes")
+Check(ns.QuestItemDebugInfo().reason == "player-dead-or-ghost", "status explains death hiding")
+playerDead, playerGhost = false, true
+NativeResolve(itemButton, drivers[itemButton]); Event("PLAYER_ALIVE")
+Check(not itemButton.shown, "native death gate stays hidden as a ghost")
+playerGhost = false; NativeResolve(itemButton, drivers[itemButton]); Event("PLAYER_UNGHOST")
+Check(itemButton.shown and driverWrites == writesBeforeCombat, "native gate permits combat resurrection without rewriting driver")
 cfg.itemSize, cfg.itemRetailArt = 112, false
-zonePOIs = { { questID = 20, mapID = 900 } }
+navQuest = 20
 Event("ZONE_CHANGED_NEW_AREA"); ns.RefreshQuestItem()
-Check(driverWrites == writesBeforeCombat and itemButton.width == 84 and itemButton.attrs.item1 == "item:110", "combat defers appearance, zone selection and driver rewrites")
+Check(driverWrites == writesBeforeCombat and itemButton.width == 84 and itemButton.attrs.item1 == "item:110", "combat defers appearance, quest selection and driver rewrites")
 combat = false; NativeResolve(itemButton, drivers[itemButton]); Event("PLAYER_REGEN_ENABLED")
-Check(itemButton.width == 112 and not itemButton.art.shown and itemButton.attrs.item1 == "item:120", "regen applies latest appearance and nearest eligible zone item")
+Check(itemButton.width == 112 and not itemButton.art.shown and itemButton.attrs.item1 == "item:120", "regen applies latest appearance and current navigation quest item")
 Check(not itemButton.shown, "addon item refresh does not override native out-of-combat hiding")
 cfg.itemVisibility.visibility = "mouseover"; ns.RefreshQuestItem()
 Check(itemButton.shown and itemButton.alpha == 0, "mouseover remains native-shown for hover but starts transparent")
@@ -692,10 +756,10 @@ Check(not itemButton.shown and itemButton.attrs.item1 ~= nil, "Never hides actio
 OpenEdit()
 Check(itemPreview.shown and not itemButton.shown, "Never visibility still permits a non-clickable edit preview")
 CloseEdit("exit")
-cfg.itemVisibility.visibility = "always"; zonePOIs = {}
+cfg.itemVisibility.visibility = "always"; navQuest = 0
 ns.RefreshQuestItem()
-Check(not itemButton.shown and itemButton.attrs.item1 == nil and drivers[itemButton] == "hide", "no zone candidate overrides Always and clears the action")
-zonePOIs = nil; cfg.itemSize = 56; cfg.itemRetailArt = true
+Check(not itemButton.shown and itemButton.attrs.item1 == nil and drivers[itemButton] == "hide", "no navigation quest overrides Always and clears the action")
+navQuest = 20; cfg.itemSize = 56; cfg.itemRetailArt = true
 cfg.itemIconAlpha = 1
 ns.RefreshQuestItem()
 Check(itemButton.shown and itemButton.width == 56, "restored eligibility resumes the default native appearance")
@@ -708,8 +772,11 @@ for _, page in ipairs(module.pages) do Check(module.buildPage(page, parent, 0) >
 Check(#frames == frameCount, "page prebuild has no frame/runtime side effects")
 prebuild = false
 module.buildPage("Quest Item", parent, 0)
+Check(widgets["Only in quest zone"] == nil, "removed zone control is absent from options")
 for label, widget in pairs(widgets) do Check(type(widget.tooltip) == "string" and #widget.tooltip > 10, "tooltip: " .. label) end
 cfg.enabled = false
+widgets["Quest proximity (yards)"].setValue(250)
+Check(cfg.itemProximityYards == 100, "stale proximity callback respects feature lock")
 local beforeSize, beforeArt = cfg.itemSize, cfg.itemRetailArt
 widgets["Button size"].setValue(95)
 widgets["Retail style background"].setValue(not beforeArt)
@@ -722,12 +789,27 @@ visibilityControl.onChanged()
 Check(cfg.itemVisibility.visibility == "always" and not cfg.itemVisibility.visHideMounted, "already-open native checklist writes only a detached store when locked")
 local originalColor, originalItem = cfg.progressColor.r, cfg.questItem
 widgets["In-progress color"].setValue(0.1, 0.2, 0.3)
-widgets["Show nearest quest item"].setValue(not originalItem)
+widgets["Show tracked quest item"].setValue(not originalItem)
 Check(cfg.progressColor.r == originalColor and cfg.questItem == originalItem, "already-open color/item controls honor master lock")
 local originalStatus = cfg.statuses.accepted
 widgets["Quest accepted"].setValue(not originalStatus)
 Check(cfg.statuses.accepted == originalStatus, "already-open status toggle honors lock")
 cfg.enabled = true
+navDistance = 150
+widgets["Quest proximity (yards)"].setValue(150)
+Check(itemButton.shown and cfg.itemProximityYards == 150, "proximity slider immediately overrides default on live button")
+ns.settings = nil; cfg = addon.Settings()
+Check(cfg.itemProximityYards == 150 and addon.NearestQuestItem() ~= nil, "custom proximity survives saved-settings reload")
+widgets["Quest proximity (yards)"].setValue(149)
+Check(not itemButton.shown and itemButton.attrs.item1 == nil, "reducing proximity immediately hides and clears action")
+widgets["Quest proximity (yards)"].setValue(secret)
+Check(cfg.itemProximityYards == 149, "secret slider input rejected")
+widgets["Quest proximity (yards)"].setValue(10000)
+Check(cfg.itemProximityYards == 1000, "yard slider upper bound enforced")
+widgets["Quest proximity (yards)"].setValue(-10)
+Check(cfg.itemProximityYards == 1, "yard slider lower bound enforced")
+navDistance = 25
+widgets["Quest proximity (yards)"].setValue(100)
 widgets["Button size"].setValue(1000)
 Check(cfg.itemSize == 112, "size slider callback clamps oversized input")
 cfg.itemBorderTexture = "solid"
@@ -738,18 +820,12 @@ Check(cfg.itemBorderSize == 4, "border thickness callback clamps to EUI size ste
 widgets["Border thickness / size"].setValue(2.4)
 Check(cfg.itemBorderSize == 2, "border sizes are integral EUI steps")
 widgets["Quest icon opacity"].setValue(0.35)
-Check(Near(cfg.itemIconAlpha, 0.35) and Near(cfg.itemBorderAlpha, 0.35), "opacity slider stores readable alpha for icon and border")
+Check(Near(itemButton.icon.alpha, 0.35) and Near(itemButton.art.alpha, 0.35)
+    and Near(itemButton.questItemBorder.alpha, 0.35), "one opacity setting drives all three surfaces")
 cfg.itemBorderTexture = "none"
 local savedBorderColor = cfg.itemBorderColor.g
 widgets["Button border color"].setValue(0.1, 0.1, 0.1)
 Check(cfg.itemBorderColor.g == savedBorderColor, "open picker cannot recolor a disabled None border")
-local zoneMapAPI = C_Map.GetBestMapForUnit
-C_Map.GetBestMapForUnit = nil
-widgets["Only in quest zone"].setValue(false)
-Check(not cfg.itemZoneOnly and addon.NearestQuestItem() ~= nil, "missing zone API still allows disabling a saved strict zone filter")
-widgets["Only in quest zone"].setValue(true)
-Check(not cfg.itemZoneOnly, "missing zone API prevents enabling a filter it cannot evaluate")
-C_Map.GetBestMapForUnit = zoneMapAPI; cfg.itemZoneOnly = true
 local objectiveAPI = C_QuestLog.GetQuestObjectives
 C_QuestLog.GetQuestObjectives = nil
 local originalObjectiveStatus = cfg.statuses.objective
@@ -779,11 +855,12 @@ Check(messages[#messages]:find("omitted", 1, true), "diagnostics explain unsuppo
 -- Malformed SavedVariables normalize cleanly; reset restores fresh defaults.
 ns.settings = nil
 EllesmereUIExtendQuestTrackerDB = { enabled = "yes", wowheadDatabase = "bad", sound = "bad", itemX = secret,
-    progressColor = { r = -4, g = 10, b = 0/0 }, statuses = { ready = false } }
+    itemProximityYards = secret, progressColor = { r = -4, g = 10, b = 0/0 }, statuses = { ready = false } }
 cfg = addon.Settings()
 Check(cfg.enabled and cfg.wowheadDatabase == "auto" and cfg.sound == "ready", "malformed settings normalized")
 Check(cfg.progressColor.r == 0 and cfg.progressColor.g == 1 and cfg.progressColor.b == ns.Defaults.progressColor.b, "saved color bounds and NaN normalization")
 Check(cfg.itemX == 0 and not cfg.statuses.ready and cfg.statuses.accepted, "secret setting fallback and explicit false preserved")
+Check(cfg.itemProximityYards == 100, "unreadable saved proximity uses default")
 addon.Reset(); Pump()
 Check(addon.Settings().statuses.ready and not addon.Settings().questItem, "reset fresh defaults")
 Check(nativeUpdates == 0 and trackingWrites == 0, "addon never invokes native layout or changes tracking")
@@ -791,7 +868,7 @@ Check(nativeUpdates == 0 and trackingWrites == 0, "addon never invokes native la
 -- Supported Forever behavior without a secret API; missing menu API is harmless.
 issecretvalue = nil; EUI_CLIENT_FOREVER = true
 Check(addon.WowheadURL("quest", 20):find("classic/quest=20", 1, true), "Forever without secret API URL")
-Check(addon.NearestQuestItem().questID == 10, "Forever readable distance path")
+Check(addon.NearestQuestItem().questID == navQuest, "Forever navigation identity and readable distance path")
 cfg = addon.Settings(); cfg.questItem = true
 OpenEdit()
 Check(itemPreview.shown and itemButton.attrs.type1 == nil, "Forever edit preview works without a secret-value API")

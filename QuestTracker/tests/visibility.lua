@@ -37,6 +37,7 @@ local function Contains(text) return ns.BuildItemVisibilityDriver():find(text, 1
 Select({ always = true })
 Check(ns.HasItemVisibility(), "real shared compiler API available")
 Check(Contains("[petbattle] hide; show"), "Always native tail")
+Check(ns.BuildItemVisibilityDriver():find("[@player,dead] hide;", 1, true) == 1, "player death overrides Always")
 Select({ never = true })
 Check(ns.BuildItemVisibilityDriver() == "hide", "Never terminal")
 Select({ in_combat = true })
@@ -47,6 +48,7 @@ Select({ in_combat = true, in_raid = true })
 Check(Contains("[combat,group:raid] show; hide"), "All combines axes")
 Select({ in_combat = true, in_raid = true }, "any")
 Check(Contains("[combat] show;") and Contains("[group:raid] show;"), "Any emits disjuncts")
+Check(ns.BuildItemVisibilityDriver():find("[@player,dead] hide;", 1, true) == 1, "player death precedes every Any disjunct")
 Select({ in_party = true })
 Check(Contains("[group:party,nogroup:raid] show;"), "party excludes raid as in Action Bars")
 Select({ always = true }, "all", { visHideMounted = true, visHideWithTarget = true })
@@ -59,6 +61,7 @@ Select({ in_combat = true }, "any", { visOnlyInstances = true })
 inInstance = false
 Check(Contains("[combat] show;"), "Any still uses live combat disjunct when instance does not match")
 Select({ mouseover = true })
+Check(ns.BuildItemVisibilityDriver():find("[@player,dead] hide;", 1, true) == 1, "mouseover cannot override native death hiding")
 local frame = { SetAlpha = function(self, alpha) self.alpha = alpha end }
 ns.ItemVisibilityAlpha(frame, false)
 Check(frame.alpha == 0, "mouseover starts faded")
@@ -87,4 +90,8 @@ EllesmereUI.VisWantsMouseover = function() error("unreadable hover condition") e
 ns.ItemVisibilityAlpha(frame, true)
 Check(frame.alpha == 0, "hover cannot reveal unreadable conditions")
 EllesmereUI.VisWantsMouseover = hoverProbe
+Select({ always = true })
+EllesmereUI.BuildVisibilityDriverString = nil
+Check(ns.BuildItemVisibilityDriver() == "[@player,dead] hide; show", "missing EUI compiler retains native death gate")
+EllesmereUI.BuildVisibilityDriverString = compiler
 print("PASS: " .. checks .. " real-EUI visibility compiler and mouseover integration checks")

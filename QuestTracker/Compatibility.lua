@@ -56,7 +56,7 @@ end
 
 function ns.HasQuestItems()
     return ns.HasQuestLog() and type(C_QuestLog.GetQuestWatchType) == "function"
-        and type(C_QuestLog.GetDistanceSqToQuest) == "function"
+        and ns.HasQuestNavigation()
         and type(C_QuestLog.IsComplete) == "function"
         and type(GetQuestLogSpecialItemInfo) == "function"
         and C_Timer and type(C_Timer.NewTicker) == "function"
@@ -71,10 +71,10 @@ function ns.HasItemMover()
         and type(EllesmereUI.IsUnlockModeActive) == "function" or false
 end
 
-function ns.HasQuestZone()
-    return C_Map and type(C_Map.GetBestMapForUnit) == "function" and type(C_Map.GetMapInfo) == "function"
-        and C_QuestLog and type(C_QuestLog.GetQuestsOnMap) == "function"
-        and Enum and Enum.UIMapType and type(Enum.UIMapType.Zone) == "number" or false
+function ns.HasQuestNavigation()
+    return C_Navigation and type(C_Navigation.GetDistance) == "function"
+        and C_SuperTrack and type(C_SuperTrack.GetSuperTrackedQuestID) == "function"
+        and type(C_SuperTrack.IsSuperTrackingQuest) == "function" or false
 end
 
 function ns.HasItemBorders()
@@ -102,52 +102,6 @@ function ns.Copy(value)
     local copy = {}
     for key, child in pairs(value) do copy[key] = ns.Copy(child) end
     return copy
-end
-
--- Resolve the player's map, never the map the user has opened. Micro/subzone
--- maps are lifted only to their Zone ancestor; dungeon maps stay in the dungeon.
-function ns.CurrentZoneQuests()
-    if not ns.HasQuestZone() then return nil end
-    local map = ns.ID(ns.Call(C_Map.GetBestMapForUnit, "player"))
-    if not map then return nil end
-    local seen = {}
-    for _ = 1, 12 do
-        if seen[map] then return nil end
-        seen[map] = true
-        local info = ns.Table(ns.Call(C_Map.GetMapInfo, map))
-        local kind = info and ns.Number(info.mapType)
-        if not kind then return nil end
-        if kind == Enum.UIMapType.Zone or kind == Enum.UIMapType.Dungeon then
-            local pois = ns.Table(ns.Call(C_QuestLog.GetQuestsOnMap, map))
-            if not pois then return nil end
-            local quests = {}
-            for _, poi in ipairs(pois) do
-                poi = ns.Table(poi)
-                local id = poi and ns.ID(poi.questID)
-                local poiMap = poi and ns.ID(poi.mapID)
-                -- Parent-zone POI lists can include neighbouring child maps.
-                -- A POI must belong to this same zone/dungeon, not just appear
-                -- on a continent/parent map. Resolve readable micro ancestors.
-                if id and poiMap then
-                    local visited = {}
-                    for _ = 1, 12 do
-                        if visited[poiMap] then break end
-                        visited[poiMap] = true
-                        if poiMap == map then quests[id] = true; break end
-                        local p = ns.Table(ns.Call(C_Map.GetMapInfo, poiMap))
-                        local pt = p and ns.Number(p.mapType)
-                        if not pt or pt == Enum.UIMapType.Zone or pt == Enum.UIMapType.Dungeon then break end
-                        poiMap = ns.ID(p.parentMapID)
-                        if not poiMap then break end
-                    end
-                end
-            end
-            return quests
-        end
-        if kind == Enum.UIMapType.Continent or kind == Enum.UIMapType.World or kind == Enum.UIMapType.Cosmic then return nil end
-        map = ns.ID(info.parentMapID)
-        if not map then return nil end
-    end
 end
 
 function ns.EachQuest(callback)

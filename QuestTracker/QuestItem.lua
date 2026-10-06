@@ -7,6 +7,9 @@ local preview, editing, editSnapshot, moverElement, moverRegistered, moverHidden
 local MOVER_KEY = "EQTX_QuestItem"
 local SIZE = 56
 local hovered, visibilityRegistered = false, false
+function ns.ItemProximityYards()
+    return math.floor(ns.Clamp(addon.Settings().itemProximityYards, 1, 1000, 100) + 0.5)
+end
 
 function ns.ItemSize()
     return math.floor(ns.Clamp(addon.Settings().itemSize, 24, 112, SIZE) + 0.5)
@@ -82,7 +85,7 @@ local function Style(frame)
         end
         local host = frame.questItemBorder
         host:SetSize(52 * ratio, 52 * ratio)
-        if host.SetAlpha then host:SetAlpha(cfg.itemBorderAlpha or 1) end
+        if host.SetAlpha then host:SetAlpha(cfg.itemIconAlpha or 1) end
         ns.Call(EllesmereUI.ApplyBorderStyle, host, borderSize, color.r, color.g, color.b, 1,
             cfg.itemBorderTexture, nil, nil, nil, nil, "actionbars", borderSize)
     elseif frame.questItemBorder then
@@ -105,7 +108,7 @@ local function RefreshVisuals(frame)
         end
     end
     if frame.questItemBorder and frame.questItemBorder.SetAlpha then
-        frame.questItemBorder:SetAlpha(cfg.itemBorderAlpha or 1)
+        frame.questItemBorder:SetAlpha(cfg.itemIconAlpha or 1)
     end
 end
 
@@ -124,34 +127,62 @@ local function CreatePreview()
     return preview
 end
 
+-- One evaluator for gameplay and diagnostics: navigation distance belongs only
+-- to the active super-tracked destination, never to each quest in the log.
+local function EvaluateItem()
+    local d = { proximityYards = ns.ItemProximityYards(), eligible = false }
+    local function Stop(reason) d.reason = reason; return nil, d end
+    if not ns.HasQuestNavigation() then return Stop("missing-navigation-api") end
+    d.questID = ns.ID(ns.Call(C_SuperTrack.GetSuperTrackedQuestID))
+    d.navDistance = ns.Number(ns.Call(C_Navigation.GetDistance))
+    d.trackingQuest = ns.Boolean(ns.Call(C_SuperTrack.IsSuperTrackingQuest))
+    if d.trackingQuest ~= true then return Stop("navigation-not-a-quest") end
+    if not d.questID then return Stop("no-navigation-quest") end
+    if not ns.HasQuestItems() then return Stop("missing-item-api") end
+    local index
+    ns.EachQuest(function(id, logIndex) if id == d.questID then index = logIndex end end)
+    if not index then return Stop("quest-not-in-log") end
+    d.watch = ns.Number(ns.Call(C_QuestLog.GetQuestWatchType, d.questID))
+    if d.watch == nil then return Stop("quest-not-watched-or-unreadable") end
+    local complete = ns.Boolean(ns.Call(C_QuestLog.IsComplete, d.questID))
+    if complete == nil then return Stop("completion-unreadable") end
+    local link, icon, _, showWhenComplete = ns.Call(GetQuestLogSpecialItemInfo, index)
+    link = ns.String(link)
+    if not link then return Stop("no-quest-item-or-unreadable") end
+    if complete and ns.Boolean(showWhenComplete) ~= true then return Stop("quest-complete") end
+    d.itemID = ns.ID(tonumber(link:match("item:(%d+)")))
+    if not d.itemID then return Stop("invalid-item-link") end
+    local countFunc = C_Item and C_Item.GetItemCount or GetItemCount
+    d.count = ns.Number(ns.Call(countFunc, d.itemID, false))
+    if not d.count or d.count <= 0 then return Stop("item-not-in-bags-or-unreadable") end
+    if not d.navDistance or d.navDistance < 0 then return Stop("no-nav-distance") end
+    if d.navDistance > d.proximityYards then return Stop("too-far") end
+    d.eligible, d.reason = true, "eligible"
+    return { questID = d.questID, index = index, itemID = d.itemID,
+        icon = ns.Number(icon) or ns.String(icon), distance = d.navDistance }, d
+end
+
 function addon.NearestQuestItem()
-    if not ns.HasQuestItems() then return nil end
-    local onlyZone = addon.Settings().itemZoneOnly
-    local zoneQuests = onlyZone and ns.CurrentZoneQuests()
-    if onlyZone and not zoneQuests then return nil end
-    local closest
-    ns.EachQuest(function(id, index)
-        if onlyZone and not zoneQuests[id] then return end
-        local watch = ns.Number(ns.Call(C_QuestLog.GetQuestWatchType, id))
-        if watch == nil then return end
-        local complete = ns.Boolean(ns.Call(C_QuestLog.IsComplete, id))
-        if complete == nil then return end
-        local link, icon, _, showWhenComplete = ns.Call(GetQuestLogSpecialItemInfo, index)
-        link = ns.String(link)
-        if not link or (complete and ns.Boolean(showWhenComplete) ~= true) then return end
-        local itemID = ns.ID(tonumber(link:match("item:(%d+)")))
-        if not itemID then return end
-        local countFunc = C_Item and C_Item.GetItemCount or GetItemCount
-        local count = ns.Number(ns.Call(countFunc, itemID, false))
-        if not count or count <= 0 then return end
-        local distance, sameContinent = ns.Call(C_QuestLog.GetDistanceSqToQuest, id)
-        distance = ns.Number(distance)
-        if not distance or distance < 0 or ns.Boolean(sameContinent) ~= true then return end
-        if not closest or distance < closest.distance or (distance == closest.distance and id < closest.questID) then
-            closest = { questID = id, index = index, itemID = itemID, icon = ns.Number(icon) or ns.String(icon), distance = distance }
-        end
-    end)
-    return closest
+    local item = EvaluateItem()
+    return item
+end
+
+function ns.QuestItemDebugInfo()
+    local _, d = EvaluateItem()
+    d.combat, d.editing = ns.InCombat(), editing == true
+    d.dead = ns.PlayerDeadOrGhost()
+    d.liveQuest = current and current.questID
+    d.shown = button and ns.Boolean(ns.Call(button.IsShown, button)) or false
+    d.alpha = button and ns.Number(ns.Call(button.GetAlpha, button))
+    d.iconAlpha = ns.Number(addon.Settings().itemIconAlpha)
+    d.driver = button and ns.String(button.questItemDriver)
+    if not ns.Active() then d.reason = "extension-disabled"
+    elseif not addon.Settings().questItem then d.reason = "item-feature-disabled"
+    elseif ns.itemTemplateUnavailable then d.reason = "secure-template-unavailable"
+    elseif d.dead then d.reason = "player-dead-or-ghost"
+    elseif d.combat then d.reason = "combat-deferred; evaluated=" .. d.reason
+    elseif editing then d.reason = "edit-preview; evaluated=" .. d.reason end
+    return d
 end
 
 local function Position()
@@ -325,7 +356,7 @@ function ns.RegisterQuestItemMover()
     if active == nil then return end
     if active then BeginEdit() end
     local opts = {
-        key = MOVER_KEY, label = "Nearest Quest Item", group = "Extend Quest Tracker", order = 950,
+        key = MOVER_KEY, label = "Tracked Quest Item", group = "Extend Quest Tracker", order = 950,
         noResize = true, noAnchorTo = true, noAnchorTarget = true, noSizeMatchTarget = true,
         isHidden = function() return not Enabled() end,
         getFrame = function()
@@ -396,7 +427,9 @@ function ns.QuestItemEvent(event)
     elseif event == "QUEST_LOG_UPDATE" or event == "QUEST_WATCH_LIST_CHANGED" or event == "QUEST_REMOVED"
         or event == "QUEST_ACCEPTED" or event == "QUEST_TURNED_IN" or event == "BAG_UPDATE_DELAYED"
         or event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA"
-        or event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "QUEST_POI_UPDATE" then
+        or event == "ZONE_CHANGED" or event == "ZONE_CHANGED_INDOORS" or event == "QUEST_POI_UPDATE"
+        or event == "SUPER_TRACKING_CHANGED" or event == "PLAYER_DEAD"
+        or event == "PLAYER_ALIVE" or event == "PLAYER_UNGHOST" then
         ns.Queue("questItem", ns.UpdateQuestItem)
     end
 end

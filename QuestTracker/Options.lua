@@ -110,15 +110,12 @@ local function BuildPage(page, parent, yOffset)
             })
         end
     elseif page == "Quest Item" then
-        Section("NEAREST TRACKED QUEST ITEM")
+        Section("NAVIGATION-TRACKED QUEST ITEM")
         local function ItemUnavailable() return not addon.Capabilities().questItem end
         local function ItemLocked() return Locked() or not addon.Settings().questItem or ItemUnavailable() end
         local function ItemChanged() if ns.RefreshQuestItem then ns.RefreshQuestItem() end end
-        Toggle("Show nearest quest item", "questItem", "Show a separate extra-action-style button for the nearest tracked quest with an item in your bags. Selection updates out of combat only.",
+        Toggle("Show tracked quest item", "questItem", "Show the item for the quest selected for Blizzard navigation (super-tracked). Distance and selection update out of combat only.",
             ItemUnavailable, "Enable the extension. This feature requires readable quest distance, tracking/item APIs, a timer and a secure item template.", ItemChanged)
-        Toggle("Only in quest zone", "itemZoneOnly", "Choose the nearest eligible tracked quest item with an objective reported in your current player-zone map. Unknown zone data hides the button; opening another map does not change your zone.",
-            function() return ItemLocked() or (not ns.HasQuestZone() and not addon.Settings().itemZoneOnly) end,
-            "Enable the item button. Enabling this filter requires player-map and quest-POI APIs. Turn it off to allow items from other zones.", ItemChanged)
         Section("VISIBILITY")
         if type(EllesmereUI.BuildVisibilityRow) == "function"
             and not (EllesmereUI.IsSearchPrebuild and EllesmereUI.IsSearchPrebuild()) then
@@ -133,7 +130,7 @@ local function BuildPage(page, parent, yOffset)
                 end,
                 disabledFn = VisibilityLocked,
                 disabledTooltip = "Enable the item button on a client with EUI's shared visibility and native secure state drivers.",
-                tooltip = "EUI's action-bar visibility conditions. Always still requires an eligible quest item. Lua-only conditions and zone/item changes refresh out of combat.",
+                tooltip = "EUI's action-bar visibility conditions. Always still requires an eligible quest item. Lua-only conditions and proximity/item changes refresh out of combat.",
                 onChanged = function() if not VisibilityLocked() then ItemChanged() end end,
                 onOptionChanged = function() if not VisibilityLocked() then ItemChanged() end end,
             })
@@ -161,8 +158,16 @@ local function BuildPage(page, parent, yOffset)
                 if ItemLocked() or not ns.Number(value) then return end
                 local alpha = ns.Clamp(value, 0, 1, 1)
                 addon.Settings().itemIconAlpha = alpha
-                addon.Settings().itemBorderAlpha = alpha
                 ItemChanged()
+            end,
+        })
+        Row({ type = "slider", text = "Quest proximity (yards)", min = 1, max = 1000, step = 1,
+            tooltip = "Show at or below this navigation distance in yards (1–1000, default 100). Uses the unrounded distance for the super-tracked quest. Changes apply out of combat.",
+            disabled = ItemLocked, disabledTooltip = "Enable the quest-item button first.",
+            getValue = ns.ItemProximityYards,
+            setValue = function(value)
+                if ItemLocked() or not ns.Number(value) then return end
+                addon.Settings().itemProximityYards = math.floor(ns.Clamp(value, 1, 1000, 100) + 0.5); ItemChanged()
             end,
         })
         local borderValues, borderOrder = ns.ItemBorderOptions()
@@ -200,13 +205,13 @@ local function BuildPage(page, parent, yOffset)
             disabled = function() return Locked() or ns.InCombat() end, disabledTooltip = "Enable the extension and leave combat first.",
             onClick = function() if not Locked() and not ns.InCombat() then addon.ResetItemPosition() end end,
         })
-        Note("Move with EUI Edit Mode", "Enable the quest-item button, enter EUI Edit/Unlock Mode, and move Nearest Quest Item. A non-clickable preview appears even without an available item. Save & Exit commits; Exit Without Saving or Discard restores the previous position.")
-        Note("Combat keeps the last configured item", "Secure item, size, border and zone-gate changes wait until combat ends. Native visibility conditions such as combat and group state remain live through a secure driver.")
+        Note("Move with EUI Edit Mode", "Enable the quest-item button, enter EUI Edit/Unlock Mode, and move Tracked Quest Item. A non-clickable preview appears even without an available item. Save & Exit commits; Exit Without Saving or Discard restores the previous position.")
+        Note("Combat keeps the last configured item", "Secure item, size, border and proximity changes wait until combat ends. Native visibility conditions such as combat and group state remain live through a secure driver.")
         Note("Blizzard's Extra Action Button is preserved", "This extension has its own button. EUI's quest-item hotkey also remains unchanged.")
     else
         Section("SUPPORTED FEATURES")
         Note("Wowhead links, objective colors and notifications", "Supported features use this addon's own settings and native API capability gates. See README.md for installation and client testing.")
-        Note("Nearest tracked quest-item button", "Requires readable distance data. No nearest quest is guessed when the API cannot supply it.")
+        Note("Navigation-tracked quest-item button", "Requires readable navigation distance and super-tracked quest identity. Missing data hides the item.")
         Section("INTEGRATION LIMITATIONS")
         Note("Display-only quest filters are not available", "Current zone, quest type and relative-level filters need a safe native display-filter API. This build never untracks your quests, replaces layout methods or leaves invisible click targets.")
         Note("Native collapse extensions are omitted", "Collapse binding, auto-collapse in instances and restoring collapse at login enter the native layout path that EUI documents as unsafe. No auto-hide substitute is used.")
@@ -222,7 +227,7 @@ function ns.RegisterOptions()
     local ok, result = pcall(EllesmereUI.RegisterPlugin, addonName, {
         label = "Extend Quest Tracker",
         modules = { { key = "QuestTracker", title = "Quest Tracker",
-            description = "Quest links, objective colors, notifications and the nearest tracked quest item.",
+            description = "Quest links, objective colors, notifications and the navigation-tracked quest item.",
             pages = { "General", "Notifications", "Quest Item", "About" }, buildPage = BuildPage,
             onReset = function() addon.Reset() end,
         } },
