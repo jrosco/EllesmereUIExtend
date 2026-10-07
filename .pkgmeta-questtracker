@@ -11,6 +11,7 @@ ignore:
   - .pkgmeta-questtracker
   - AGENTS.md
   - README.md
+  - TESTING.md
   - Nameplates
   - tools
   - docs

@@ -41,6 +41,7 @@
 ## Testing and documentation
 
 - Review the addon tests before changing runtime behavior. Add focused regression coverage for matching, restoration, client capability gates and new UI behavior.
+- Use `TESTING.md` for suite commands, upstream dependencies and in-game checklists; keep release/packaging instructions in `docs/ALPHA-RELEASES.md` rather than expanding feature READMEs.
 - Update the addon README when behavior, options, packaging or commands change. Check current code rather than assuming older README limits or preset descriptions are authoritative.
 - **Verify test paths after the repository move.** Earlier fixtures assumed an `EllesmereUIExtendNameplates/` directory at the repository root and could load upstream EUI files from that checkout. Do not assume those paths or files exist here, and do not edit upstream addons to make tests pass.
 - On Windows, use `npx.cmd --yes --package fengari-node-cli fengari <test-path>` when a native Lua interpreter is unavailable. `npx.ps1` may be blocked by PowerShell execution policy.

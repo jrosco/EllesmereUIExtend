@@ -1,49 +1,59 @@
 # Extension alpha releases
 
-Each extension has one **Ubuntu** job using [BigWigsMods/packager](https://github.com/BigWigsMods/packager). Each ZIP contains only its chosen feature with embedded shared profiles; neither includes or requires the other. No separate Core addon, PowerShell or custom upload scripts are needed in GitHub Actions.
+Each extension has one simple **Ubuntu** job using [BigWigsMods/packager](https://github.com/BigWigsMods/packager). Publish a feature-specific GitHub prerelease to build its ZIP and optionally upload it to CurseForge. No PowerShell/custom upload scripts run in Actions.
 
-| Feature | Prerelease tag example | CurseForge project-ID variable | Packaging metadata |
+## Targets and package layout
+
+Both workflows currently target **WoW Forever 1.60.1 / Interface 16001 only**. The source retains Retail/Forever capability gates, but Retail must be tested before changing a workflow to advertise it.
+
+| Feature | Workflow | Tag example | CurseForge project-ID variable |
 | --- | --- | --- | --- |
-| Nameplates | `nameplates-v0.1.0-alpha.1` | `CURSEFORGE_NAMEPLATES_PROJECT_ID` | `.pkgmeta-nameplates` |
-| Quest Tracker | `questtracker-v0.1.0-alpha.1` | `CURSEFORGE_QUESTTRACKER_PROJECT_ID` | `.pkgmeta-questtracker` |
+| Nameplates | `.github/workflows/nameplates-alpha.yaml` | `nameplates-v0.1.0-alpha.1` | `CURSEFORGE_NAMEPLATES_PROJECT_ID` |
+| Quest Tracker | `.github/workflows/questtracker-alpha.yaml` | `questtracker-v0.1.0-alpha.1` | `CURSEFORGE_QUESTTRACKER_PROJECT_ID` |
 
-Both workflows currently target **Forever 1.60.1 / Interface 16001 only**. Do not advertise Retail support until it has been tested and the workflow's target updated.
+Each ZIP contains **one** installed addon folder: `EllesmereUIExtendNameplates/` or `EllesmereUIExtendQuestTracker/`, including `Shared/Core.lua`, `Shared/Sync.lua`, `Shared/Options.lua`, its README and license. Neither bundles/requires the other extension or creates a standalone Core folder. Tests and upstream addons are excluded.
 
-## Setup
+Both declare **`ellesmereui`** as the required CurseForge dependency; enable its matching Nameplates/Quest Tracker module in game. Lua addon-folder names are not CurseForge slugs—do not add nonexistent module relations such as `ellesmereui-nameplates`.
 
-In GitHub **Settings > Secrets and variables > Actions**, add:
+## GitHub setup
 
-- The feature's project-ID variable from the table above: its numeric ID from the matching CurseForge project dashboard. Never reuse Nameplates' ID for Quest Tracker.
-- Secret **`CF_API_TOKEN`**: your CurseForge API token. Never put it in source or chat.
+In **Settings > Secrets and variables > Actions**:
 
-Leave a feature's project-ID variable unset for GitHub-only publishing, even if `CF_API_TOKEN` is already configured for the other feature. GitHub uploads use the automatic `GITHUB_TOKEN`; no personal GitHub token is needed. Keep each CurseForge project **Unlisted** in its dashboard—the workflows do not change visibility.
+- Set the chosen feature's project-ID variable to the **numeric ID** from its CurseForge dashboard. Never reuse the other feature's project ID.
+- Add **`CF_API_TOKEN`** as a secret; both workflows reuse it. Never put tokens in source, release notes or chat.
 
-## Publish
+Leave a feature's project-ID variable unset for GitHub-only publishing, even if the token is configured for the other feature. GitHub uploads use the automatic `GITHUB_TOKEN`; no personal token is needed. Keep CurseForge projects **Unlisted** in their dashboards; the workflows do not change visibility.
 
-1. Commit/push the chosen feature's workflow, packaging metadata and intended addon changes. Run local tests first.
-2. Create a GitHub release with the feature's tag from the table above, targeting that commit.
-3. Add your notes, check **Set as a pre-release**, and publish.
+## Publish an alpha
 
-The workflow accepts only Nameplates alpha tags on published prereleases. It rewrites the checked-out Nameplates TOC to the alpha version and `Interface: 16001`, without committing those edits. BigWigs builds the ZIP using `.pkgmeta-nameplates`, attaches it to the GitHub prerelease, and uploads to CurseForge when its ID and token are configured. The tag's `alpha` suffix makes the CurseForge file **Alpha**; `-g 1.60.1` targets **Forever only**, not untested Retail.
+1. Run the relevant [testing and in-game checks](../TESTING.md). The intentionally small publishing jobs do not run regression suites.
+2. Commit/push the intended code, workflow, packaging metadata and changelog files.
+3. Create a GitHub release targeting that commit, using the feature's `<prefix>-v<major>.<minor>.<patch>-alpha.<number>` tag from the table. Add notes, check **Set as a pre-release**, and publish; do not mark it as the latest stable release.
+4. Check Actions, then CurseForge moderation when uploads are configured. Share the approved direct file link or GitHub ZIP.
 
-Quest Tracker follows the same steps with its own workflow, TOC, `.pkgmeta-questtracker` and `docs/QUESTTRACKER-ALPHA-CHANGELOG.md`. A `questtracker-v...` prerelease runs only the Quest Tracker packaging job; Nameplates is skipped. Quest Tracker's ZIP contains only `EllesmereUIExtendQuestTracker/`, including all three `Shared/` modules. Its sole CurseForge dependency is `ellesmereui`, with the Quest Tracker module enabled in game. The workflow does not upload to Nameplates' project.
+Only the matching feature's packaging job runs. Draft, beta/stable and unrelated tags cannot deploy through these workflows. The job validates the tag/project ID, rewrites only its checked-out feature TOC to the alpha version and `Interface: 16001`, and adds release notes to its changelog. These changes are not committed.
 
-The ZIP contains only `EllesmereUIExtendNameplates/`, including `Shared/Core.lua`, `Shared/Sync.lua` and `Shared/Options.lua`; it does not bundle upstream addons. The packager declares `ellesmereui` as its required CurseForge dependency; that suite includes the EllesmereUINameplates module, which must be enabled in game. Lua addon-folder names are not necessarily CurseForge project slugs. Release notes include a Forever-only testing notice. BigWigs updates the GitHub release body from that changelog and may attach its standard `release.json` metadata.
+Packaging uses `.pkgmeta-nameplates` or `.pkgmeta-questtracker`. Changelogs are `docs/ALPHA-CHANGELOG.md` and `docs/QUESTTRACKER-ALPHA-CHANGELOG.md`. BigWigs attaches the ZIP to the prerelease, updates its body from the changelog and may add standard `release.json` metadata. The tag's `alpha` suffix selects CurseForge **Alpha**; `-g 1.60.1` prevents Retail/Classic fallback tagging.
 
-Check the Actions run and CurseForge moderation status, then share the approved file link. Use a new tag such as `nameplates-v0.1.0-alpha.2` for each update. **Check CurseForge Files before rerunning a failed upload**, since retries can produce duplicates.
+Use a new numbered alpha/tag for changed code; never retarget a published tag to a different commit. **Check CurseForge Files before rerunning a failed upload**: an upload can succeed without returning its result, and retries can create duplicates.
 
-GitHub prereleases on public repositories are public, and CurseForge Unlisted links can be forwarded. Alpha-only new projects may be website-only rather than available in the CurseForge app; use manual ZIP downloads initially. Each feature owns its own files, so uninstalling one cannot remove the other's embedded core. Verify actual addon-manager install/uninstall behavior before wider distribution.
+## Local packaging
 
-If updating from an older bundled-core alpha, update both extensions and disable/remove the old standalone `EllesmereUIExtend/` addon. Embedded profiles start fresh; the old core database is not migrated or deleted.
-
-## Local checks
-
-Existing PowerShell scripts remain available locally:
+`tools/Package.ps1` remains available for local installs; it builds independent ZIPs in git-ignored `dist/` and excludes tests/upstream files. Keep installed folder names and their identity-matching TOCs.
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test.ps1 -UnitOnly
+# Both features, using source versions/interfaces.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Package.ps1
+
+# A single Forever alpha; use -Feature QuestTracker for the other extension.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Package.ps1 -Feature Nameplates -Version 0.1.0-alpha.1 -Interface 16001
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Package.ps1 -Feature QuestTracker -Version 0.1.0-alpha.1 -Interface 16001
 ```
 
-Use full tests with your upstream EUI checkout before releasing. This intentionally small publishing workflow does not run the regression suites. Mocked tests do not replace Forever in-game checks; test Retail before advertising it in future releases.
+`-Feature` accepts Nameplates, QuestTracker or All (default). `-Version` and `-Interface` override only packaged TOCs, not source. `-OutputDirectory` changes the destination. Local alpha filenames use `<addon identity>-<version>.zip`; GitHub workflows use `<addon identity>-<full feature tag>.zip`. Rebuild both packages when shared source changes and maintain embedded API compatibility across independently updated releases.
+
+## Upgrades and distribution caveats
+
+- Update both installed extensions for the current synchronization implementation; older embedded builds do not understand its metadata. Shared profile records merge independent feature edits, but cannot recover edits already overwritten by an older build.
+- When replacing a bundled-core alpha, disable/remove the old standalone `EllesmereUIExtend/` addon and update both features. Its old database and other legacy SavedVariables remain untouched; they are not migrated into embedded profiles.
+- Extract only the feature folders into `Interface/AddOns/`. Uninstalling one feature leaves the other's embedded code and saved snapshot intact; removing both saved snapshots loses profiles. Verify actual addon-manager install/update/uninstall behavior before wider distribution.
+- Public GitHub prereleases are public. CurseForge Unlisted is not private access control; links can be forwarded. New alpha-only projects may be website-only instead of appearing in the CurseForge app, so use manual ZIP downloads during this phase.
