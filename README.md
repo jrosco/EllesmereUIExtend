@@ -4,6 +4,6 @@ Independently installable extensions for EllesmereUI on **Retail and WoW Forever
 
 | Source | Installed addon folder | Purpose |
 | --- | --- | --- |
-| `Core/` | `EllesmereUIExtend/` | Shared profiles and EUI settings hub; required by each extension |
+| `Core/` | Embedded in each feature's `Shared/` | Shared profiles and EUI settings hub; no separate addon |
 | `Nameplates/` | `EllesmereUIExtendNameplates/` | Rule-based nameplate appearances |
 | `QuestTracker/` | `EllesmereUIExtendQuestTracker/` | Quest links, objective colors, notifications and tracked quest items |

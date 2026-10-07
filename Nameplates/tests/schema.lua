@@ -14,7 +14,10 @@ end
 local namespace
 local function LoadRuntime()
     namespace = {}
-    assert(loadfile("Core/Core.lua"))("EllesmereUIExtend")
+    local saved = EllesmereUIExtendDB -- explicit synthetic runtime root for this schema fixture
+    EllesmereUIExtend = nil
+    assert(loadfile("Core/Core.lua"))("EllesmereUIExtendNameplates")
+    EllesmereUIExtendDB = saved
     assert(loadfile("Nameplates/Helpers.lua"))("EllesmereUIExtendNameplates", namespace)
     assert(loadfile("Nameplates/Nameplates.lua"))("EllesmereUIExtendNameplates", namespace)
     return EllesmereUIExtendNameplates

@@ -1,8 +1,8 @@
 package-as: EllesmereUIExtendNameplates
 
 move-folders:
+  EllesmereUIExtendNameplates/Core: EllesmereUIExtendNameplates/Nameplates/Shared
   EllesmereUIExtendNameplates/Nameplates: EllesmereUIExtendNameplates
-  EllesmereUIExtendNameplates/Core: EllesmereUIExtend
 
 ignore:
   - .github

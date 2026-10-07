@@ -1,10 +1,30 @@
 local addonName = ...
 if EUI_CLIENT_BLOCKED then return end
 
-local core = { PluginID = addonName, MaxProfiles = 100, APIVersion = 1 }
+-- Every feature embeds these files. Only the first copy creates the runtime.
+local existing = _G.EllesmereUIExtend
+if existing and existing.EmbeddedVersion then
+    existing.RegisterOwner(addonName)
+    return
+end
+local core = { PluginID = "EllesmereUIExtend", MaxProfiles = 100, APIVersion = 1, EmbeddedVersion = 1 }
 _G.EllesmereUIExtend = core
 local features, modules = {}, {}
 local store, activeName, character
+local owners, loadedOwners = {}, {}
+local revision, selectedOwner = 0, nil
+-- This is an in-memory root, not a SavedVariable. Old standalone-core data
+-- is deliberately not imported into the embedded architecture.
+_G.EllesmereUIExtendDB = nil
+
+function core.RegisterOwner(name)
+    if name == "EllesmereUIExtendNameplates" then
+        owners[name] = "EllesmereUIExtendNameplatesProfiles"
+    elseif name == "EllesmereUIExtendQuestTracker" then
+        owners[name] = "EllesmereUIExtendQuestTrackerProfiles"
+    end
+end
+core.RegisterOwner(addonName)
 
 local function Secret(value)
     return type(issecretvalue) == "function" and issecretvalue(value)
@@ -212,10 +232,35 @@ end
 local events = CreateFrame("Frame")
 events:RegisterEvent("ADDON_LOADED")
 events:RegisterEvent("PLAYER_LOGIN")
+events:RegisterEvent("PLAYER_LOGOUT")
 events:SetScript("OnEvent", function(_, event, name)
-    if event == "ADDON_LOADED" and name == addonName then Store() end
+    if event == "ADDON_LOADED" and owners[name] then
+        loadedOwners[name] = true
+        local snapshot = _G[owners[name]]
+        if type(snapshot) == "table" and snapshot.format == 1 and type(snapshot.data) == "table"
+            and type(snapshot.revision) == "number" and snapshot.revision >= 0
+            and snapshot.revision < math.huge and snapshot.revision % 1 == 0 then
+            -- Whole-root selection prevents a stale disabled/reinstalled addon
+            -- from resurrecting deleted profiles. Equal revisions normally
+            -- contain identical data; use a stable owner tie-break regardless
+            -- of addon loading order.
+            if not selectedOwner or snapshot.revision > revision
+                or (snapshot.revision == revision and name < selectedOwner) then
+                revision, selectedOwner = snapshot.revision, name
+                _G.EllesmereUIExtendDB = Copy(snapshot.data)
+            end
+        end
+        Store()
+    end
     if event == "PLAYER_LOGIN" then
         Changed()
         if core.RegisterOptions then core.RegisterOptions() end
+    end
+    if event == "PLAYER_LOGOUT" then
+        Store()
+        revision = revision + 1
+        for owner in pairs(loadedOwners) do
+            _G[owners[owner]] = { format = 1, revision = revision, data = Copy(store) }
+        end
     end
 end)

@@ -54,17 +54,20 @@ EllesmereUI = {
 
 local function Load(which, forever)
     frames, registrations, registered, rows = {}, 0, nil, {}
-    EllesmereUIExtendDB = nil
+    EllesmereUIExtend, EllesmereUIExtendDB = nil, nil
+    EllesmereUIExtendNameplatesProfiles, EllesmereUIExtendQuestTrackerProfiles = nil, nil
     EUI_CLIENT_FOREVER = forever
-    assert(loadfile("Core/Core.lua"))("EllesmereUIExtend")
-    assert(loadfile("Core/Options.lua"))("EllesmereUIExtend")
     if which ~= "quest" then
+        assert(loadfile("Core/Core.lua"))("EllesmereUIExtendNameplates")
+        assert(loadfile("Core/Options.lua"))("EllesmereUIExtendNameplates")
         local ns = {}
         assert(loadfile("Nameplates/Helpers.lua"))("EllesmereUIExtendNameplates", ns)
         assert(loadfile("Nameplates/Nameplates.lua"))("EllesmereUIExtendNameplates", ns)
         assert(loadfile("Nameplates/Options.lua"))("EllesmereUIExtendNameplates", ns)
     end
     if which ~= "nameplates" then
+        assert(loadfile("Core/Core.lua"))("EllesmereUIExtendQuestTracker")
+        assert(loadfile("Core/Options.lua"))("EllesmereUIExtendQuestTracker")
         local ns = {}
         assert(loadfile("QuestTracker/Compatibility.lua"))("EllesmereUIExtendQuestTracker", ns)
         assert(loadfile("QuestTracker/QuestTracker.lua"))("EllesmereUIExtendQuestTracker", ns)
@@ -72,7 +75,8 @@ local function Load(which, forever)
     end
     Check(registrations == 0, "feature registration waits until login")
     Check(EllesmereUIExtendDB == nil, "no early saved database initialization")
-    Event("ADDON_LOADED", "EllesmereUIExtend")
+    if which ~= "quest" then Event("ADDON_LOADED", "EllesmereUIExtendNameplates") end
+    if which ~= "nameplates" then Event("ADDON_LOADED", "EllesmereUIExtendQuestTracker") end
     Event("PLAYER_LOGIN")
     Check(registrations == 1, "hub registered exactly once at login")
     local keys = {}

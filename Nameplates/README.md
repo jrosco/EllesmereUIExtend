@@ -122,9 +122,11 @@ Turning the override off, leaving its match, disabling rules/styling, retargetin
 
 ## Install
 
-Copy `Core/` to `Interface/AddOns/EllesmereUIExtend/` and `Nameplates/` to `Interface/AddOns/EllesmereUIExtendNameplates/`, retaining their identity-matching TOCs. Requires `EllesmereUI`, `EllesmereUIExtend` and `EllesmereUINameplates` enabled. Feature release ZIPs include the core automatically; see `Core/README.md` for packaging. Open **Extend > Nameplate > Style**. Do not run the previous Nameplate Extras addon alongside it, since both would style the same plates.
+Extract the Nameplates release ZIP into `Interface/AddOns/`. It installs only `EllesmereUIExtendNameplates/`, with shared code embedded under `Shared/`; no separate Core addon is needed. Requires `EllesmereUI` and its `EllesmereUINameplates` module enabled. For source installation, copy `Nameplates/` to that addon folder and copy `Core/Core.lua` and `Core/Options.lua` into its `Shared/` subfolder. Open **Extend > Nameplate > Style**. Do not run the previous Nameplate Extras addon alongside it, since both would style the same plates.
 
-The addon starts with fresh settings in `EllesmereUIExtendDB.profiles[profileName].nameplates`, owned by the core. Existing addon databases remain untouched, without migration or aliases. Rule-set prefixes and the serialized wire-format identifier remain stable, so sharing codes continue to use the existing codec.
+The embedded singleton keeps live settings in `EllesmereUIExtendDB.profiles[profileName].nameplates`. Each extension saves its own full shared-profile snapshot; Nameplates owns `EllesmereUIExtendNameplatesProfiles`. Both installed extensions share one profiles UI and use the newest snapshot at startup. Uninstalling either extension leaves the other's embedded code and saved profiles intact. This architecture starts fresh: previous standalone-core and legacy databases are not migrated or modified. Disable/remove the old standalone `EllesmereUIExtend/` addon if upgrading from a bundled-core alpha. Rule sharing identifiers remain unchanged.
+
+The initial [GitHub/CurseForge alpha workflow](../docs/ALPHA-RELEASES.md) builds Nameplates + core for **WoW Forever 1.60.1 only**. Retail has not yet been tested for that alpha, so its generated TOCs and CurseForge metadata do not advertise Retail. The source retains both clients' compatibility gates. CurseForge uploads are opt-in and always Alpha; the workflow never changes the project's Unlisted visibility.
 
 ## Extension points
 
