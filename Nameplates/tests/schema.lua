@@ -14,15 +14,16 @@ end
 local namespace
 local function LoadRuntime()
     namespace = {}
+    assert(loadfile("Core/Core.lua"))("EllesmereUIExtend")
     assert(loadfile("Nameplates/Helpers.lua"))("EllesmereUIExtendNameplates", namespace)
     assert(loadfile("Nameplates/Nameplates.lua"))("EllesmereUIExtendNameplates", namespace)
     return EllesmereUIExtendNameplates
 end
-EllesmereUIExtendNameplatesDB = { profiles = { Default = { rules = {
+EllesmereUIExtendDB = { profiles = { Default = { nameplates = { rules = {
     { name = "Any", conditions = { target = {} } },
     { name = "No", conditions = { target = { no = true } } },
     { name = "Missing", conditions = {} },
-} } } }
+} } } } }
 local api = LoadRuntime()
 local failures = 0
 local function Check(ok, label)
@@ -48,7 +49,7 @@ Check(startersByName["Non Target"].conditions.target.no == true
 assert(api.SelectProfile("Default"))
 CheckTargets("switch")
 -- Model serialization/reload with a fresh root and fresh runtime locals.
-EllesmereUIExtendNameplatesDB = Copy(EllesmereUIExtendNameplatesDB)
+EllesmereUIExtendDB = Copy(EllesmereUIExtendDB)
 api = LoadRuntime()
 CheckTargets("reload")
 assert(failures == 0, failures .. " target normalization regressions failed")
@@ -173,7 +174,7 @@ local code = assert(api.ExportRuleSet())
 assert(code == "!EUI_NPEX_RULES2!schema", "export version changed")
 Same(payload.rules[1].conditions, expected, "export preserves selections/custom data")
 assert(api.ImportRuleSet(code))
-EllesmereUIExtendNameplatesDB = Copy(EllesmereUIExtendNameplatesDB)
+EllesmereUIExtendDB = Copy(EllesmereUIExtendDB)
 api = LoadRuntime()
 LoadRuleIO()
 Same(api.GetRules()[1].conditions, expected, "import then reload preserves selections/custom data")

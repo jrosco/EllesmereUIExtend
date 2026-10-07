@@ -5,8 +5,7 @@
 ## Notes: Wowhead links, objective colors, quest notifications and the navigation-tracked quest item.
 ## Author: jrosco
 ## Version: 0.1.0
-## Dependencies: EllesmereUI, EllesmereUIQuestTracker
-## SavedVariables: EllesmereUIExtendQuestTrackerDB
+## Dependencies: EllesmereUI, EllesmereUIExtend, EllesmereUIQuestTracker
 ## IconTexture: Interface\AddOns\EllesmereUI\media\eg-logo.tga
 
 Compatibility.lua

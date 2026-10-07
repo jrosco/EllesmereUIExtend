@@ -3,10 +3,10 @@
 ## Repository structure and scope
 
 - This is a monorepo for **separate, independently installable World of Warcraft addons** that extend EllesmereUI. The repository is not itself a single addon.
-- The current addon is **EllesmereUIExtendNameplates**, with source under `Nameplates/`. Future addons may have their own sibling directories, TOCs, saved settings, documentation and tests.
+- Feature addons are **EllesmereUIExtendNameplates** under `Nameplates/` and **EllesmereUIExtendQuestTracker** under `QuestTracker/`. The small shared core lives under `Core/` and installs as **EllesmereUIExtend**. Each has its own TOC, README and tests.
 - Read the relevant addon's `README.md`, TOC and any more-specific `AGENTS.md` before editing. For Nameplates, start with `Nameplates/README.md`.
 - Check `git status` before making changes. Treat unfamiliar changes as user work; do not overwrite, revert, reset or discard them.
-- Keep changes scoped to the requested addon. Do not introduce cross-addon runtime dependencies merely because addons share this repository.
+- Keep changes scoped to the requested addon. Features may depend on the explicitly shared core, but must never require each other. The core alone owns `EllesmereUIExtendDB`, profiles and the combined EUI plugin registration; features own their settings sections and runtime behavior. Read `Core/README.md` for its registration/loading contract.
 - **Do not modify upstream EllesmereUI or EllesmereUINameplates files.** Integrate through existing public APIs, shared renderers and carefully scoped hooks. Upstream code may be inspected for reference, but implementation belongs here.
 - Commit or push only when explicitly requested. Exclude unrelated user changes from commits unless the user asks to include them.
 
@@ -34,7 +34,7 @@
 - Keep the primary TOC named **`EllesmereUIExtendNameplates.toc`**, matching the installed folder. Do not rename it to `Nameplates.toc` without changing the installed addon identity.
 - Lua files use simplified names: `Nameplates.lua`, `Options.lua`, `Borders.lua`, `Glows.lua`, `Text.lua`, `Scaling.lua`, `TargetArrows.lua`, `CastStyles.lua`, `RuleIO.lua` and `Preview.lua`.
 - Update TOC entries and references when moving or renaming files. Do not change Lua runtime addon IDs to the monorepo source-directory name.
-- The current public API and SavedVariables are `EllesmereUIExtendNameplates` and `EllesmereUIExtendNameplatesDB`. Diagnostics use `/enp` and `/extendnameplates`.
+- The Nameplates public API is `EllesmereUIExtendNameplates`; its settings are the `nameplates` section of the core-owned `EllesmereUIExtendDB` profiles. QuestTracker uses the `questTracker` section. No feature TOC declares SavedVariables. Nameplates diagnostics use `/enp` and `/extendnameplates`; `/eqtx` opens QuestTracker and `/eextend` opens shared profiles.
 - The user does **not** want legacy settings migration, copying old SavedVariables, or legacy API/slash aliases. Do not add these unless requested.
 - Existing sharing wire identifiers may intentionally retain historical names; do not change serialized formats as an incidental cleanup.
 

@@ -132,10 +132,10 @@ Near(cast.alpha, 0.3, "disabled rule dims cast sample")
 rows["Health-bar texture"].set("blizzard")
 Check(style.texture == "flat" and Texture(health) == "Interface\\Buttons\\WHITE8x8", "disabled callbacks preserve sample and rule")
 rows["Rule enabled"].set(true)
-rows["Enable rule styling"].set(false)
+rows["Enable Nameplate styling"].set(false)
 Near(Preview("Health-bar").alpha, 0.3, "global lock dims health sample")
 Near(Preview("Cast-bar").alpha, 0.3, "global lock dims cast sample")
-rows["Enable rule styling"].set(true)
+rows["Enable Nameplate styling"].set(true)
 Near(Preview("Health-bar").alpha, 1, "reenable restores sample brightness")
 
 -- Selected-rule changes use the selected rule's appearance.

@@ -51,14 +51,14 @@ all.set(true); f.Flush()
 for _, row in ipairs(Cog().rows) do Check(row.get(), "scale all " .. row.label) end
 
 local stale = Cog()
-rows["Enable rule styling"].set(false); f.Flush()
+rows["Enable Nameplate styling"].set(false); f.Flush()
 Check(stale.disabled(), "global off locks cog")
 for _, row in ipairs(stale.rows) do
     Check(row.disabled(), "global off locks popup " .. row.label)
     row.set(false)
 end
 Check(first.style.scaleElements == nil, "open popup cannot write with global styling off")
-rows["Enable rule styling"].set(true); f.Flush()
+rows["Enable Nameplate styling"].set(true); f.Flush()
 stale = Cog()
 rows["Rule enabled"].set(false); f.Flush()
 Check(stale.disabled(), "individual rule off locks cog")

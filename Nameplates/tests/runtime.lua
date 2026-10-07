@@ -237,12 +237,14 @@ local function Near(actual, expected, label)
         label .. ": expected " .. expected .. ", got " .. tostring(actual))
 end
 local function Settings(name, scale, r)
-    return { enabled = true, selectedRule = 1, rules = {
+    return { profiles = { Default = { nameplates = { enabled = true, selectedRule = 1, rules = {
         { name = name, enabled = true, conditions = { target = "yes" },
           style = { scale = scale, borderSize = 0, healthColor = { r = r, g = 0.3, b = 0.4 } } },
-    } }
+    } } } } }
 end
 local namespace = {}
+assert(loadfile("Core/Core.lua"))("EllesmereUIExtend")
+assert(loadfile("Core/Options.lua"))("EllesmereUIExtend")
 assert(loadfile("Nameplates/Helpers.lua"))("EllesmereUIExtendNameplates", namespace)
 local borderAPI = assert(loadfile("Nameplates/tests/border-mocks.lua"))()
 EllesmereUI = EllesmereUI or {}
@@ -279,7 +281,7 @@ assert(loadfile("Nameplates/Text.lua"))("EllesmereUIExtendNameplates", namespace
 assert(loadfile("Nameplates/Scaling.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/TargetArrows.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/CastStyles.lua"))("EllesmereUIExtendNameplates", namespace)
-assert(EllesmereUIExtendNameplatesDB == nil, "new SavedVariables initialized before ADDON_LOADED")
+assert(EllesmereUIExtendDB == nil, "new SavedVariables initialized before ADDON_LOADED")
 local api = EllesmereUIExtendNameplates
 assert(api, "public API missing")
 if ... == "traits" or ... == "scaling" then
@@ -288,9 +290,9 @@ if ... == "traits" or ... == "scaling" then
 end
 
 -- Model the fresh Extras SavedVariables loading after addon chunks execute.
-EllesmereUIExtendNameplatesDB = Settings("Loaded rule", 150, 0.2)
+EllesmereUIExtendDB = Settings("Loaded rule", 150, 0.2)
 Fire("ADDON_LOADED", "EllesmereUIExtendNameplates")
-assert(api.GetSettings() == EllesmereUIExtendNameplatesDB.profiles.Default)
+assert(api.GetSettings() == EllesmereUIExtendDB.profiles.Default.nameplates)
 assert(type(api.GetRules()[1].conditions.target) == "table"
     and api.GetRules()[1].conditions.target.yes == true,
     "legacy scalar target condition was not migrated to a selection set")
@@ -299,18 +301,18 @@ assert(type(api.GetRules()[1].conditions.unitType) == "table"
     "missing condition should normalize to an empty (Any) selection")
 assert(api.GetProfileInfo().character == "TestCharacter - TestRealm")
 assert(api.GetProfileInfo().active == "Default")
-assert(EllesmereUIExtendNameplatesDB.characterProfiles["TestCharacter - TestRealm"] == "Default")
+assert(EllesmereUIExtendDB.characterProfiles["TestCharacter - TestRealm"] == "Default")
 assert(namespace.FindRule("nameplate1").name == "Loaded rule")
 Near(plate.scale, 1.5, "saved scale")
 Near(plate.health.color[1], 0.2, "saved color")
 
 -- Profile loading/switching must preserve Any, No-only, and omitted target selections.
-local loadedStore = EllesmereUIExtendNameplatesDB
-EllesmereUIExtendNameplatesDB = { profiles = { Default = { rules = {
+local loadedStore = EllesmereUIExtendDB
+EllesmereUIExtendDB = { profiles = { Default = { nameplates = { rules = {
     { name = "Any target", conditions = { target = {} } },
     { name = "Not target", conditions = { target = { no = true } } },
     { name = "Generic rule", conditions = {} },
-} } } }
+} } } } }
 local function CheckTargetSelections()
     local rules = api.GetRules()
     assert(next(rules[1].conditions.target) == nil, "reload/switch changed Any target to Yes")
@@ -340,14 +342,14 @@ assert(namespace.FindRule("nameplate1").name == "Generic rule", "No-only rule mu
 UnitIsUnit = function() return false end
 assert(namespace.FindRule("nameplate1").name == "Not target", "No-only rule must match non-target")
 UnitIsUnit = originalIsUnit
-EllesmereUIExtendNameplatesDB = loadedStore
+EllesmereUIExtendDB = loadedStore
 api.Refresh(); Flush()
 
 -- Replacing the table must not leave the renderer reading its previous rules.
-EllesmereUIExtendNameplatesDB = Settings("Replacement rule", 115, 0.6)
+EllesmereUIExtendDB = Settings("Replacement rule", 115, 0.6)
 api.Refresh(); Flush()
-assert(api.GetRules() == EllesmereUIExtendNameplatesDB.profiles.Default.rules)
-assert(namespace.db.profile == EllesmereUIExtendNameplatesDB.profiles.Default)
+assert(api.GetRules() == EllesmereUIExtendDB.profiles.Default.nameplates.rules)
+assert(namespace.db.profile == EllesmereUIExtendDB.profiles.Default.nameplates)
 Near(plate.scale, 1.15, "replacement scale")
 Near(plate.health.color[1], 0.6, "replacement color")
 
@@ -413,7 +415,7 @@ local contentHeader = CreateFrame()
 local W = {}
 local widgetRefreshes = {}
 function W:SectionHeader(_, text)
-    if text == "RULE STYLING" or text == "NAMEPLATE EXTRAS" then
+    if text == "NAMEPLATE STYLING" or text == "NAMEPLATE EXTENSION" then
         for index = #sectionHeaders, 1, -1 do sectionHeaders[index] = nil end
     end
     sectionHeaders[#sectionHeaders + 1] = text
@@ -514,7 +516,7 @@ local deflate = {
 function LibStub(name)
     if name == "LibDeflate" then return deflate end
 end
-local exportedPopup, importedPopup, legacyImportPopup, deleteConfirm
+local exportedPopup, importedPopup, legacyImportPopup, deleteConfirm, openedPage
 EllesmereUI = {
     PP = borderAPI.PP, ApplyBorderStyle = borderAPI.ApplyBorderStyle, GetBorderTextureDropdown = borderAPI.GetBorderTextureDropdown,
     Widgets = W,
@@ -581,22 +583,24 @@ EllesmereUI = {
     Print = Noop,
     RegisterPlugin = function(id, value) registeredID = id; spec = value; return true end,
     IsPluginRegistered = function() return false end,
+    OpenPlugin = function(id, module, page) openedPage = { id, module, page }; return true end,
     GetPluginModuleKey = function() return "plugin:test:Styles" end,
     InvalidateModulePageCache = Noop,
     RefreshPage = function()
         for i = #widgetRefreshes, 1, -1 do widgetRefreshes[i] = nil end
-        spec.modules[1].buildPage("Rules", parent, 0)
+        spec.modules[1].buildPage("Style", parent, 0)
     end,
 }
 assert(loadfile("Nameplates/RuleIO.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/Preview.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/Options.lua"))("EllesmereUIExtendNameplates", namespace)
 Fire("PLAYER_LOGIN")
-assert(registeredID == "EllesmereUIExtendNameplates")
-assert(spec.label == "Extend Nameplates")
-assert(spec.modules[1].key == "NameplateStyle" and spec.modules[1].title == "Nameplate Style")
-assert(spec.modules[1].pages[2] == "Profiles" and spec.modules[1].pages[3] == "Sharing")
-spec.modules[1].buildPage("Rules", parent, 0)
+assert(registeredID == "EllesmereUIExtend")
+assert(spec.label == "Extend")
+assert(spec.modules[1].key == "NameplateStyle" and spec.modules[1].title == "Nameplate")
+assert(spec.modules[1].pages[1] == "Style", "Nameplate must open on its Style tab")
+assert(spec.modules[1].pages[2] == "Sharing" and spec.modules[2].key == "Profiles")
+spec.modules[1].buildPage("Style", parent, 0)
 assert(rows["Edit rule"].row == rows["Rule name"].row, "selector and name must share a row")
 assert(rows["Nameplate size (%)"].row == rows["Opacity (%)"].row, "nameplate size and opacity must share a row")
 if ... == "ui-locks" then
@@ -605,7 +609,8 @@ if ... == "ui-locks" then
         header = contentHeader, secret = secretValue, GetPreview = function() return contentHeader._extrasRulePreview end,
         GetConfirm = function() return deleteConfirm end }
 end
-local masterToggle = assert(rows["Enable rule styling"], "Rules page is missing the global toggle")
+local masterToggle = assert(rows["Enable Nameplate styling"], "Style page is missing the global toggle")
+assert(rows["Enable rule styling"] == nil, "retired master toggle label must not appear")
 local storedRules, storedSelection = api.GetRules(), api.GetSettings().selectedRule
 local enabledFlags = {}
 for i, rule in ipairs(storedRules) do enabledFlags[i] = rule.enabled end
@@ -627,7 +632,7 @@ Near(plate:GetScale(), styledScale, "global reenable restores rule appearance")
 assert(api.GetRules() == storedRules and api.GetSettings().selectedRule == storedSelection,
     "global reenable changed rules or selection")
 for i, rule in ipairs(storedRules) do assert(rule.enabled == enabledFlags[i], "global reenable changed individual rule flags") end
-rows["Enable rule styling"] = nil
+rows["Enable Nameplate styling"] = nil
 local beforeAbout = #frames
 local oldMetadata = C_AddOns
 C_AddOns = { GetAddOnMetadata = function(name, key)
@@ -636,7 +641,7 @@ C_AddOns = { GetAddOnMetadata = function(name, key)
 end }
 local aboutHeight = spec.modules[1].buildPage("About", parent, 0)
 C_AddOns = oldMetadata
-assert(rows["Enable rule styling"] == nil, "About must not contain the global toggle")
+assert(rows["Enable Nameplate styling"] == nil, "About must not contain the global toggle")
 assert(aboutHeight > 200, "About page is missing its summary")
 local aboutText = {}
 for i = beforeAbout + 1, #frames do
@@ -649,23 +654,26 @@ end
 local aboutBody = table.concat(aboutText, "\n")
 for _, detail in ipairs({ "test-version", "rule-based styling", "size and opacity", "quest objectives",
     "interruptible casts", "interrupts on cooldown", "uninterruptible casts", "profiles", "export or import",
-    "Enable rule styling", "without deleting" }) do
+    "Enable Nameplate styling", "Style tab", "without deleting" }) do
     assert(aboutBody:find(detail, 1, true), "About is missing " .. detail)
 end
-assert(rows["Open Nameplate Style Rules"], "About must retain its Rules navigation button")
-spec.modules[1].buildPage("Rules", parent, 0)
+assert(rows["Open Nameplate Style"], "About must retain its Style navigation button")
+rows["Open Nameplate Style"].click()
+assert(openedPage[1] == "EllesmereUIExtend" and openedPage[2] == "NameplateStyle" and openedPage[3] == "Style",
+    "About navigation must open the renamed Style tab through the unchanged module key")
+spec.modules[1].buildPage("Style", parent, 0)
 
-spec.modules[1].buildPage("Profiles", parent, 0)
+spec.modules[2].buildPage("Profiles", parent, 0)
 assert(rows["Profile for this character"].values.Default,
     "Profiles page doesn't list the shared Default profile")
 rows["Create Profile"].click()
-assert(legacyImportPopup and legacyImportPopup.title == "Create Nameplate Profile")
+assert(legacyImportPopup and legacyImportPopup.title == "Create Extend Profile")
 legacyImportPopup.onConfirm("UI Test Profile")
 assert(api.GetProfileInfo().active == "UI Test Profile", "Profiles tab didn't create/select its profile")
 assert(api.GetSettings().rules[1].name == api.DefaultRules[1].name, "Profiles tab didn't create a fresh profile")
 rows["Profile for this character"].set("Default")
 assert(api.GetProfileInfo().active == "Default", "Profiles tab didn't switch back to Default")
-spec.modules[1].buildPage("Rules", parent, 0)
+spec.modules[1].buildPage("Style", parent, 0)
 local ruleCode = assert(api.ExportRuleSet())
 assert(ruleCode:sub(1, 17) == "!EUI_NPEX_RULES2!", "standalone export prefix missing")
 local wirePayload = wirePayloads[ruleCode:sub(18)]
@@ -953,9 +961,9 @@ rows["Move Rule Up"].click(); Flush()
 assert(rows["Edit rule"].values["1"] == "[1] Target Rule" and api.GetRules()[1] == renamed)
 
 EllesmereUI.IsSearchPrebuild = function() return true end
-spec.modules[1].buildPage("Rules", {}, 0)
+spec.modules[1].buildPage("Style", {}, 0)
 EllesmereUI.IsSearchPrebuild = function() return false end
-spec.modules[1].buildPage("Rules", parent, 0)
+spec.modules[1].buildPage("Style", parent, 0)
 
 rows["Nameplate size (%)"].set(115); Flush()
 api.GetRules()[1].style.opacity = 50
@@ -977,13 +985,13 @@ Near(plate.scale, 1, "disable restores engine scale")
 Near(plate.alpha, 1, "disable restores recycled engine alpha")
 
 -- Existing option callbacks must also follow a replaced SavedVariables table.
-EllesmereUIExtendNameplatesDB = Settings("Late replacement", 100, 0.1)
+EllesmereUIExtendDB = Settings("Late replacement", 100, 0.1)
 rows["Nameplate size (%)"].set(130)
 rows["Health-bar color"].set(0.4, 0.5, 0.6)
 Flush()
 Near(plate.scale, 1.3, "cached options use current settings")
 Near(plate.health.color[1], 0.4, "cached color picker uses current settings")
-assert(namespace.db.profile == EllesmereUIExtendNameplatesDB.profiles.Default)
+assert(namespace.db.profile == EllesmereUIExtendDB.profiles.Default.nameplates)
 
 rows["Add Rule"].click(); Flush()
 local countBeforeDelete = #api.GetRules()
@@ -1153,7 +1161,7 @@ Flush()
 Near(plate.health.color[1], 0.4, "health color override resumes after tap denial")
 
 EllesmereUI.IsSearchPrebuild = function() return true end
-spec.modules[1].buildPage("Rules", {}, 0)
+spec.modules[1].buildPage("Style", {}, 0)
 EllesmereUI.IsSearchPrebuild = function() return false end
 
 print("PASS: settings, rules, copy, search, scaling, health/cast overrides, engine repaints, restoration, recycling")

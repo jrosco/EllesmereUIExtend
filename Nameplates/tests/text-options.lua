@@ -41,10 +41,10 @@ rows["Rule enabled"].set(false)
 staleSlot("healthMax"); staleColor(1, 0, 0)
 Check(rule.style.textSlots.textSlotTop == nil and rule.style.textColors.name.r == 0.2, "disabled rule blocks stale text callbacks")
 rows["Rule enabled"].set(true)
-rows["Enable rule styling"].set(false)
+rows["Enable Nameplate styling"].set(false)
 rows["Override text"].set(false)
 Check(rule.style.textEnabled, "global lock preserves text enable flag")
-rows["Enable rule styling"].set(true)
+rows["Enable Nameplate styling"].set(true)
 staleSlot = rows["Top text content"].set
 local other = { name = "Other text rule", enabled = true, conditions = {}, style = {} }
 for key, value in pairs(rule.style) do other.style[key] = value end

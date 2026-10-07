@@ -59,10 +59,10 @@ for _, key in ipairs({ "buffs", "debuffs", "cc" }) do
 end
 np.NPC_AttachPlate(plate, bundle)
 for _, observation in ipairs(observations) do observation.base = observation.object:GetEffectiveScale() end
-EllesmereUIExtendNameplatesDB = { enabled = true, rules = {
+EllesmereUIExtendDB = { profiles = { Default = { nameplates = { enabled = true, rules = {
     { name = "Scaling", enabled = true, conditions = {}, style = { scale = 150, healthEnabled = false,
         scaleElements = { buffs = false, debuffs = true, cc = false, other = true } } },
-} }
+} } } } }
 f.Fire("ADDON_LOADED", "EllesmereUIExtendNameplates")
 local rule = api.GetRules()[1]
 Check(rule.style.scaleElements.buffs == nil and rule.style.scaleElements.debuffs == nil

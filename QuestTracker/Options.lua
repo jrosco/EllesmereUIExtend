@@ -397,10 +397,7 @@ end
 
 function ns.RegisterOptions()
     if ns.optionsRegistered then return true end
-    if not EllesmereUI or type(EllesmereUI.RegisterPlugin) ~= "function" then return false end
-    local ok, result = pcall(EllesmereUI.RegisterPlugin, addonName, {
-        label = "Extend Quest Tracker",
-        modules = { { key = "QuestTracker", title = "Quest Tracker",
+    local result = EllesmereUIExtend.RegisterModule({ key = "QuestTracker", title = "Quest Tracker",
             description = "Quest links, objective colors, notifications and the navigation-tracked quest item.",
             pages = { "General", "Notifications", "Quest Item", "About" }, buildPage = BuildPage,
             getHeaderBuilder = function(page)
@@ -412,9 +409,8 @@ function ns.RegisterOptions()
                 if page == "Quest Item" and ns.RefreshQuestItemHeader then ns.RefreshQuestItemHeader(true) end
             end,
             onReset = function() addon.Reset() end,
-        } },
     })
-    ns.optionsRegistered = ok and result == true
+    ns.optionsRegistered = result == true
     return ns.optionsRegistered
 end
 

@@ -77,9 +77,9 @@ hero.Update()
 Check(hero.scripts.OnUpdate == nil, "hidden widget refresh cannot restart preview")
 hero:Show()
 f.header:SetHeight(150)
-f.spec.modules[1].onPageCacheRestore("Rules")
-Check(f.header.height == hero.height and hero.scripts.OnUpdate, "cached Rules resumes ticker and repairs header height")
-Check(hero.health._glow._mockGlowActive and hero.cast._glow._mockGlowActive, "cached Rules restarts glows")
+f.spec.modules[1].onPageCacheRestore("Style")
+Check(f.header.height == hero.height and hero.scripts.OnUpdate, "cached Style resumes ticker and repairs header height")
+Check(hero.health._glow._mockGlowActive and hero.cast._glow._mockGlowActive, "cached Style restarts glows")
 
 rows["Override target arrows"].set(false)
 hero = f.GetPreview()
@@ -95,14 +95,15 @@ rows["Opacity (%)"].set(40)
 Near(hero.health._appearance.alpha, 0.4, "master-off health opacity remains visible")
 Near(hero.cast._appearance.alpha, 0.4, "master-off cast opacity remains visible")
 
--- Only Rules provides the fixed hero; other pages clear it and its animations.
+-- Only Style provides the fixed hero; other pages clear it and its animations.
 for _, page in ipairs({ "Profiles", "Sharing", "About" }) do
-    f.spec.modules[1].buildPage(page, f.parent, 0)
+    local module = page == "Profiles" and f.spec.modules[2] or f.spec.modules[1]
+    module.buildPage(page, f.parent, 0)
     Check(f.GetPreview() == nil and f.spec.modules[1].getHeaderBuilder(page) == nil, page .. " has no preview header")
-    Check(hero.scripts.OnUpdate == nil, page .. " stops the former Rules animation")
+    Check(hero.scripts.OnUpdate == nil, page .. " stops the former Style animation")
     EllesmereUI:RefreshPage()
     hero = f.GetPreview()
-    Check(hero.scripts.OnUpdate, "Rules recreates header after " .. page)
+    Check(hero.scripts.OnUpdate, "Style recreates header after " .. page)
 end
 
 -- Owned UI dimensions/font metrics use public EUI profile data, not unit data.
@@ -114,4 +115,4 @@ f.header:SetWidth(250)
 hero.Update()
 Check(hero.plate:GetScale() > 0 and hero.height >= 150, "narrow header fits the complete sample instead of clipping it")
 f.Flush()
-print("PASS: " .. checks .. " pinned Rules-only hero, repeating casts, live settings, independent scaling/arrows, scrolling, cache restoration and teardown")
+print("PASS: " .. checks .. " pinned Style-only hero, repeating casts, live settings, independent scaling/arrows, scrolling, cache restoration and teardown")

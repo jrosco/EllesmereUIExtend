@@ -1,6 +1,6 @@
 # EllesmereUI Extend Quest Tracker
 
-An independently installable extension of **EllesmereUIQuestTracker** for Retail and WoW Forever. Source lives in `QuestTracker/`; install it as `Interface/AddOns/EllesmereUIExtendQuestTracker/`, retaining `EllesmereUIExtendQuestTracker.toc`. Requires EllesmereUI and EllesmereUIQuestTracker. No upstream files or Nameplates extension are changed or required.
+An independently installable extension of **EllesmereUIQuestTracker** for Retail and WoW Forever. Source lives in `QuestTracker/`; install it as `Interface/AddOns/EllesmereUIExtendQuestTracker/`, retaining `EllesmereUIExtendQuestTracker.toc`. Also install `Core/` as `Interface/AddOns/EllesmereUIExtend/`. Requires EllesmereUI, EllesmereUIExtend and EllesmereUIQuestTracker; feature release ZIPs bundle the core automatically. No upstream files or Nameplates extension are changed or required.
 
 ## Features
 
@@ -11,7 +11,7 @@ An independently installable extension of **EllesmereUIQuestTracker** for Retail
 
 ## Quest notifications
 
-Open **Extend Quest Tracker > Quest Tracker > Notifications**. **Notification messages** and **Notification sounds** are independent switches: either can be used without the other. Messages use the selected destinations; each of the two supported statuses has its own sound choice. Its sound dropdown also enables or disables that status. Controls are gated when the client lacks the required status API.
+Open **Extend > Quest Tracker > Notifications**. **Notification messages** and **Notification sounds** are independent switches: either can be used without the other. Messages use the selected destinations; each of the two supported statuses has its own sound choice. Its sound dropdown also enables or disables that status. Controls are gated when the client lacks the required status API.
 
 ### Status sounds
 
@@ -58,7 +58,7 @@ Duplicate same-quest/status/detail events within one second are suppressed. Shar
 
 ## Using the quest-item button
 
-1. Open `/eqtx` out of combat, then **Extend Quest Tracker > Quest Tracker > Quest Item**.
+1. Open `/eqtx` out of combat, then **Extend > Quest Tracker > Quest Item**.
 2. Enable **Show tracked quest item**. This feature is **off by default**.
 3. Set **Quest proximity (yards)** to the desired distance. The default is **100 yards**.
 4. Make the quest with the usable item the active Blizzard navigation target, and keep its item in your bags.
@@ -120,7 +120,7 @@ The shared border renderer uses Action Bars' media defaults without requiring th
 
 ### Moving the quest-item button with EUI Edit Mode
 
-Enable **Show tracked quest item** under **Extend Quest Tracker > Quest Tracker > Quest Item**, then enter EUI's **Edit/Unlock Mode**. Move **Tracked Quest Item** in the **Extend Quest Tracker** group. A preview appears even when no eligible quest item is available. **Save & Exit** commits its position; **Exit Without Saving** or **Discard** restores the original position. Disabling the extension or item feature hides its mover/preview. The position Reset control also remains available.
+Enable **Show tracked quest item** under **Extend > Quest Tracker > Quest Item**, then enter EUI's **Edit/Unlock Mode**. Move **Tracked Quest Item** in the **Extend Quest Tracker** mover group. A preview appears even when no eligible quest item is available. **Save & Exit** commits its position; **Exit Without Saving** or **Discard** restores the original position. Disabling the extension or item feature hides its mover/preview. The position Reset control also remains available.
 
 The mover registers through EUI's public `MakeUnlockElement`, `RegisterUnlockElements` and `RegisterUnlockModeListener` APIs and checks the public `IsUnlockModeActive` method. It moves a separate non-secure, non-clickable preview, never the secure item button or its parent/anchor. The live item action is cleared and hidden during editing; polling pauses, and the latest eligible item resumes afterward. Combat suspends the preview without losing staged placement, and any live-action restoration waits until out of combat. Mover resizing, anchoring and size matching are intentionally disabled; use the size slider in settings instead. If the required EUI mover APIs are absent or cannot register, **right-drag out of combat** remains the positioning fallback. This is EUI's own editor, not Blizzard's separate Edit Mode.
 
@@ -129,7 +129,7 @@ The mover registers through EUI's public `MakeUnlockElement`, `RegisterUnlockEle
 - **`/eqtx`** opens this extension's EUI settings outside combat.
 - **`/eqtx status`** prints capabilities and quest-item diagnostics, including during combat.
 
-Settings use a fresh, separate `EllesmereUIExtendQuestTrackerDB`, shared across characters; there are no legacy aliases, migration or changes to EUI profiles. Cosmetic objective colors and quest messages start enabled; sounds and the secure item button start off.
+Settings use the shared core's `EllesmereUIExtendDB.profiles[profileName].questTracker` section. Open **Extend > Profiles**, or `/eextend`, to select one character-assigned profile for all installed extensions. Default is shared by unassigned characters; named profiles share settings across characters assigned to them. New profiles start with defaults. QuestTracker reset affects only its section; switching profiles keeps protected item changes deferred until combat ends. Profile management is blocked during EUI Edit Mode. Existing addon databases remain untouched: there are no legacy aliases, migration or changes to EUI profiles. Cosmetic objective colors and quest messages start enabled; sounds and the secure item button start off.
 
 ### Troubleshooting a missing icon
 
@@ -189,12 +189,12 @@ From the repository root on Windows:
 ```powershell
 npx.cmd --yes --package fengari-node-cli fengari QuestTracker/tests/runtime.lua
 npx.cmd --yes --package fengari-node-cli fengari QuestTracker/tests/notifications.lua
-$env:EUI_TEST_ROOT = 'C:\Users\joel_\GitRepos\jrosco-EllesmereUI'
+$env:EUI_TEST_ROOT = 'C:\path\to\EllesmereUI'
 npx.cmd --yes --package fengari-node-cli fengari QuestTracker/tests/visibility.lua
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File QuestTracker/tests/packaging.ps1
 git diff --check
 ```
 
-The runtime and focused notification suites load only this addon's source and mock WoW/EUI. Notification coverage includes per-status/global/None sound resolution, output channels, multi-destination routing, group and restriction gates, formatting/UTF-8 limits, toast lifecycle, search prebuild and stale UI locks. The visibility integration suite loads the actual upstream `EllesmereUI_VisibilityRules.lua` and `EllesmereUI_Visibility.lua` **read-only**, from `EUI_TEST_ROOT` (default `../jrosco-EllesmereUI`); set it to your checkout. It tests real shared compiler and mouseover semantics, without editing upstream. Inspect PASS output: Fengari can print an assertion failure without a nonzero exit code. Runtime tests also cover settings, navigation identity and yard thresholds, independence from zone/POI APIs, appearance/media/border gates, native-driver transitions, menus, color restoration, secure selection, combat recovery and EUI mover Save/Discard behavior. The PowerShell suite checks packaging and native-ownership source invariants separately because Fengari does not implement `io.open`. These suites do not reproduce Retail's secret-value VM, EUI's full native mover engine, native menu rendering or secure hardware clicks. For new untracked files, also use `git -c core.autocrlf=false diff --no-index --check -- NUL <file>` to check whitespace; an empty result with exit code 1 indicates file differences, not a whitespace failure.
+The runtime and focused notification suites load only this addon's source and mock WoW/EUI. Notification coverage includes per-status/global/None sound resolution, output channels, multi-destination routing, group and restriction gates, formatting/UTF-8 limits, toast lifecycle, search prebuild and stale UI locks. The visibility integration suite loads the actual upstream `EllesmereUI_VisibilityRules.lua` and `EllesmereUI_Visibility.lua` **read-only**, from `EUI_TEST_ROOT` (default `../EllesmereUI`); replace the example path with your own checkout location. It tests real shared compiler and mouseover semantics, without editing upstream. Inspect PASS output: Fengari can print an assertion failure without a nonzero exit code. Runtime tests also cover settings, navigation identity and yard thresholds, independence from zone/POI APIs, appearance/media/border gates, native-driver transitions, menus, color restoration, secure selection, combat recovery and EUI mover Save/Discard behavior. The PowerShell suite checks packaging and native-ownership source invariants separately because Fengari does not implement `io.open`. These suites do not reproduce Retail's secret-value VM, EUI's full native mover engine, native menu rendering or secure hardware clicks. For new untracked files, also use `git -c core.autocrlf=false diff --no-index --check -- NUL <file>` to check whitespace; an empty result with exit code 1 indicates file differences, not a whitespace failure.
 
 Before release, test on **both Retail and Forever**: toggle Retail artwork; test minimum/default/maximum sizes, Solid and textured borders, tints and None; verify cooldown/hover geometry and no green outline by default; test Always/Never/Mouseover, combat visibility, group/target/mounted conditions and Match All/Any; check that absent quest items always hide gameplay; switch navigation quests and user waypoints, cross the configured proximity threshold and verify quests without map POIs can qualify; enter combat and change distance/tracking/items/look, then verify post-combat recovery; use both cast-on-key-down preferences; move the no-item preview in EUI Edit Mode and test Save & Exit, Exit Without Saving/Discard, Reset and reload; ensure combat suspension preserves staged placement; verify preview clicks cannot use items; test missing-API fallbacks; trigger a real native extra action alongside this button; exercise menus, objective colors and notifications; open the map and tooltips during combat with taint logging enabled. Native collapse, instance visibility and untracking must continue behaving exactly as before.

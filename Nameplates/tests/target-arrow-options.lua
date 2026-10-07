@@ -41,10 +41,10 @@ oldStyle("simple")
 Check(first.style.targetArrowStyle == "winged" and rows["Target-arrow style"].disabled(), "disabled rule blocks stale style callback")
 rows["Rule enabled"].set(true)
 local oldToggle = rows["Override target arrows"].set
-rows["Enable rule styling"].set(false)
+rows["Enable Nameplate styling"].set(false)
 oldToggle(false)
 Check(first.style.targetArrowsEnabled, "global lock blocks stale override callback")
-rows["Enable rule styling"].set(true)
+rows["Enable Nameplate styling"].set(true)
 
 for _, invalid in ipairs({ "missing", "../arrow", 42, true, {} }) do
     first.style.targetArrowStyle = invalid

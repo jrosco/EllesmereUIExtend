@@ -19,6 +19,7 @@ local function Check(condition, label)
 end
 local function Near(a, b) return math.abs(a - b) < 0.0001 end
 function InCombatLockdown() return combat end
+function UnitFullName() return "QuestCharacter", "TestRealm" end
 function GetTime() return now end
 local function Noop() end
 local function Protected(frame)
@@ -194,10 +195,10 @@ local widgetRefreshCalls = 0
 EllesmereUI = {
     _widgetRefreshList = { function() widgetRefreshCalls = widgetRefreshCalls + 1 end },
     RegisterPlugin = function(id, value)
-        Check(id == "EllesmereUIExtendQuestTracker", "plugin installed identity")
+        Check(id == "EllesmereUIExtend", "shared hub identity")
         pluginCalls = pluginCalls + 1; spec = value; return true
     end,
-    OpenPlugin = function(id) Check(id == "EllesmereUIExtendQuestTracker", "slash opens own section") end,
+    OpenPlugin = function(id, key) Check(id == "EllesmereUIExtend" and key == "QuestTracker", "slash opens feature in shared hub") end,
     IsSearchPrebuild = function() return prebuild end,
     CONTENT_PAD = 20,
     L = function(text) return text end,
@@ -227,12 +228,15 @@ EllesmereUI = {
     },
 }
 local files = { "Compatibility", "QuestTracker", "Wowhead", "Objectives", "NotificationOutput", "Notifications", "ItemVisibility", "QuestItem", "Preview", "Options" }
+assert(loadfile("Core/Core.lua"))("EllesmereUIExtend")
+assert(loadfile("Core/Options.lua"))("EllesmereUIExtend")
 for _, file in ipairs(files) do assert(loadfile("QuestTracker/" .. file .. ".lua"))("EllesmereUIExtendQuestTracker", ns) end
 local addon = EllesmereUIExtendQuestTracker
-Check(pluginCalls == 1, "plugin registered once at load")
-Check(_G.EllesmereUIExtendQuestTrackerDB == nil, "saved settings not initialized before addon load")
+Check(pluginCalls == 0, "hub registration waits for all feature addons")
+Check(_G.EllesmereUIExtendDB == nil, "saved settings not initialized before addon load")
 Event("ADDON_LOADED", "EllesmereUIExtendQuestTracker")
 Event("PLAYER_LOGIN")
+Check(pluginCalls == 1, "shared hub registered once at login")
 local cfg = addon.Settings()
 Check(cfg.objectiveColors and cfg.messages, "cosmetic/message defaults")
 Check(not cfg.questItem and not cfg.sounds, "secure item and sounds opt in")
@@ -617,7 +621,7 @@ Check(not itemPreview.shown and cfg.itemX == 321 and cfg.itemY == -88, "Save & E
 counts[110], counts[120] = 1, 1; Event("BAG_UPDATE_DELAYED")
 Check(itemButton.shown and itemButton.attrs.item1 == "item:110" and itemButton.attrs.type1 == "item", "after edit mode the latest real quest item action resumes")
 Check(itemButton.point[4] == 321 and itemButton.point[5] == -88, "live button applies committed EUI position")
-ns.settings = nil; cfg = addon.Settings()
+EllesmereUIExtendDB.profiles.Default.questTracker = EllesmereUIExtend.Copy(cfg); cfg = addon.Settings()
 Check(cfg.itemX == 321 and cfg.itemY == -88, "mover position survives saved-settings reload normalization")
 
 OpenEdit()
@@ -706,7 +710,7 @@ ns.RefreshQuestItem()
 
 -- Old saved zone settings cannot restrict navigation-distance eligibility.
 cfg.itemZoneOnly = true
-ns.settings = nil; cfg = addon.Settings()
+EllesmereUIExtendDB.profiles.Default.questTracker = EllesmereUIExtend.Copy(cfg); cfg = addon.Settings()
 Check(cfg.itemZoneOnly == nil, "removed zone setting is dropped during normalization")
 Check(C_Map == nil and C_QuestLog.GetQuestsOnMap == nil and addon.NearestQuestItem().questID == 10,
     "navigation quest qualifies without any zone/POI APIs")
@@ -988,7 +992,7 @@ cfg.questItem = true; ns.RefreshQuestItem()
 navDistance = 150
 widgets["Quest proximity (yards)"].setValue(150)
 Check(itemButton.shown and cfg.itemProximityYards == 150, "proximity slider immediately overrides default on live button")
-ns.settings = nil; cfg = addon.Settings()
+EllesmereUIExtendDB.profiles.Default.questTracker = EllesmereUIExtend.Copy(cfg); cfg = addon.Settings()
 Check(cfg.itemProximityYards == 150 and addon.NearestQuestItem() ~= nil, "custom proximity survives saved-settings reload")
 widgets["Quest proximity (yards)"].setValue(149)
 Check(not itemButton.shown and itemButton.attrs.item1 == nil, "reducing proximity immediately hides and clears action")
@@ -1041,15 +1045,26 @@ SlashCmdList.ELLESMEREUIEXTENDQUESTTRACKER(" status ")
 Check(messages[#messages]:find("omitted", 1, true), "diagnostics explain unsupported features")
 
 -- Malformed SavedVariables normalize cleanly; reset restores fresh defaults.
+local defaultSettings = addon.Settings()
+defaultSettings.questItem = true; addon.Refresh(); Pump()
+combat = true
+local previousItem = itemButton.attrs.item1
+Check(EllesmereUIExtend.CreateProfile("Combat profile"), "shared profile can switch in combat")
+Check(not addon.Settings().questItem and itemButton.attrs.item1 == previousItem,
+    "new shared profile defers protected item changes in combat")
+combat = false; Event("PLAYER_REGEN_ENABLED")
+Check(not itemButton.shown and itemButton.attrs.item1 == nil, "new profile applied after combat")
+Check(EllesmereUIExtend.SelectProfile("Default"), "shared Default restored")
+Check(addon.Settings() == defaultSettings, "profile switch restores the same settings object")
 ns.settings = nil
-EllesmereUIExtendQuestTrackerDB = { enabled = false, wowheadDatabase = "bad", itemX = secret,
-    itemProximityYards = secret, progressColor = { r = -4, g = 10, b = 0/0 }, statuses = { ready = false } }
+EllesmereUIExtendDB = { profiles = { Default = { questTracker = { enabled = false, wowheadDatabase = "bad", itemX = secret,
+    itemProximityYards = secret, progressColor = { r = -4, g = 10, b = 0/0 }, statusSounds = { ready = "none" } } } } }
 cfg = addon.Settings()
 Check(cfg.enabled == nil and cfg.wowheadDatabase == "auto" and cfg.sound == nil,
     "removed global enable setting is ignored and remaining settings normalize")
 Check(cfg.progressColor.r == 0 and cfg.progressColor.g == 1 and cfg.progressColor.b == ns.Defaults.progressColor.b, "saved color bounds and NaN normalization")
 Check(cfg.itemX == 0 and cfg.statuses == nil and cfg.statusSounds.ready == "none"
-    and cfg.statusSounds.progress == "none", "old ready opt-out is preserved and remaining status defaults normalize")
+    and cfg.statusSounds.progress == "none", "explicit None is preserved and remaining status defaults normalize")
 Check(cfg.itemProximityYards == 100, "unreadable saved proximity uses default")
 addon.Reset(); Pump()
 Check(addon.Settings().statusSounds.ready == "ready" and addon.Settings().statusSounds.progress == "none"

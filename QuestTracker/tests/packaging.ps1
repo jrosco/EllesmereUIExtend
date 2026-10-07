@@ -8,8 +8,8 @@ function Check([bool] $condition, [string] $label) {
     $script:checks++
     if (-not $condition) { throw $label }
 }
-Check ($toc -match '## Dependencies: EllesmereUI, EllesmereUIQuestTracker\r?\n') 'Independent addon dependencies'
-Check ($toc -match '## SavedVariables: EllesmereUIExtendQuestTrackerDB\r?\n') 'Independent SavedVariables identity'
+Check ($toc -match '## Dependencies: EllesmereUI, EllesmereUIExtend, EllesmereUIQuestTracker\r?\n') 'Core dependency without Nameplates dependency'
+Check ($toc -notmatch '## SavedVariables:') 'Shared core alone owns SavedVariables'
 Check ($toc -match '## Interface: .*16001') 'Forever interface included'
 $files = @([regex]::Matches($toc, '(?m)^([A-Za-z]+\.lua)\r?$') | ForEach-Object { $_.Groups[1].Value })
 Check ($files.Count -eq 10) 'All ten runtime modules are in the TOC'

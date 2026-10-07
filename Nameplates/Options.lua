@@ -2,7 +2,7 @@ local _, private = ...
 local addon = EllesmereUIExtendNameplates
 if not addon then return end
 
-local PLUGIN_ID = "EllesmereUIExtendNameplates"
+local PLUGIN_ID = "EllesmereUIExtend"
 local MAX_RULES = addon.MaxRules or 12
 local rulesHeaderBuilder, rulesPreview
 
@@ -169,29 +169,6 @@ local function ImportRuleSet()
     end
 end
 
-local function ProfilePrompt(title, initialText, confirmText, submit)
-    EllesmereUI:ShowInputPopup({
-        title = title,
-        message = title:find("^Create")
-            and "New profiles start with the built-in default rules and settings. Profiles are shared by name across characters. Use 1-32 characters."
-            or "Profiles are shared by name across characters. Use 1-32 characters.",
-        placeholder = "Enter profile name...",
-        initialText = initialText or "",
-        maxLetters = 32,
-        confirmText = confirmText,
-        cancelText = "Cancel",
-        onConfirm = function(name)
-            local ok, err = submit(name)
-            if not ok then
-                EllesmereUI.PrintError(err or "Could not update Extend Nameplates profiles.")
-                return
-            end
-            Changed()
-            Rebuild()
-        end,
-    })
-end
-
 local function AttachTooltip(control, text)
     if not control or not text or type(control.HookScript) ~= "function" then return end
     -- Keep EUI's existing hover styling and click handlers.
@@ -205,67 +182,6 @@ local function ButtonTooltips(row, ...)
     for index, button in ipairs({ row:GetChildren() }) do
         AttachTooltip(button, select(index, ...))
     end
-end
-
-local function BuildProfilesPage(parent, yOffset)
-    local W = EllesmereUI.Widgets
-    local y = yOffset
-    local _, h
-    local info = addon.GetProfileInfo()
-    _, h = W:SectionHeader(parent, "CHARACTER PROFILE - " .. info.character, y); y = y - h
-
-    local values, order = {}, {}
-    for _, name in ipairs(info.names) do
-        values[name] = name
-        order[#order + 1] = name
-    end
-    _, h = W:Dropdown(parent, "Profile for this character", y, values,
-        function() return addon.GetProfileInfo().active end,
-        function(name)
-            local ok, err = addon.SelectProfile(name)
-            if not ok then EllesmereUI.PrintError(err or "Could not select profile."); return end
-            Changed()
-            Rebuild()
-        end, order,
-        "Choose this character's rules profile. Characters using the same profile share its rules.")
-    y = y - h
-
-    _, h = W:SectionHeader(parent, "MANAGE PROFILES", y); y = y - h
-    if info.active == "Default" then
-        local row
-        row, h = W:WideButton(parent, "Create Profile", y,
-            function() ProfilePrompt("Create Nameplate Profile", nil, "Create", addon.CreateProfile) end, 420)
-        ButtonTooltips(row, "Create a profile with the default rules and select it for this character.")
-        y = y - h
-        _, h = W:SectionHeader(parent, "DEFAULT IS SHARED AND CANNOT BE RENAMED OR DELETED", y); y = y - h
-    else
-        local row
-        row, h = W:WideDualButton(parent, "Create Profile", "Rename Profile", y,
-            function() ProfilePrompt("Create Nameplate Profile", nil, "Create", addon.CreateProfile) end,
-            function() ProfilePrompt("Rename Nameplate Profile", info.active, "Rename", addon.RenameProfile) end,
-            210)
-        ButtonTooltips(row, "Create a profile with the default rules and select it for this character.",
-            "Rename this profile for every character using it.")
-        y = y - h
-        row, h = W:WideButton(parent, "Delete Active Profile", y, function()
-            EllesmereUI:ShowConfirmPopup({
-                title = "Delete Nameplate Profile?",
-                message = ("Delete '%s'? Characters using it will switch to Default."):format(info.active),
-                confirmText = "Delete Profile",
-                cancelText = "Cancel",
-                onConfirm = function()
-                    local ok, err = addon.DeleteProfile()
-                    if not ok then EllesmereUI.PrintError(err or "Could not delete profile."); return end
-                    Changed()
-                    Rebuild()
-                end,
-            })
-        end, 420)
-        ButtonTooltips(row, "Delete this profile. Characters using it switch to Default.")
-        y = y - h
-    end
-
-    return math.abs(y)
 end
 
 local function BuildSharingPage(parent, yOffset)
@@ -294,7 +210,7 @@ local function NewRule(index)
     }
 end
 
-local function BuildRulesPage(parent, yOffset)
+local function BuildStylePage(parent, yOffset)
     local W = EllesmereUI.Widgets
     local y = yOffset
     local _, h
@@ -314,7 +230,7 @@ local function BuildRulesPage(parent, yOffset)
         return GlobalLocked() or rule.enabled == false or GetRule().enabled == false
     end
     local function LockTip()
-        if GlobalLocked() then return "Enable rule styling to edit rules." end
+        if GlobalLocked() then return "Enable Nameplate styling to edit rules." end
         return "Enable this rule to edit its settings."
     end
     local function LockConfig(cfg, scope)
@@ -461,8 +377,8 @@ local function BuildRulesPage(parent, yOffset)
         return height
     end
 
-    _, h = W:SectionHeader(parent, "RULE STYLING", y); y = y - h
-    _, h = W:Toggle(parent, "Enable rule styling", y,
+    _, h = W:SectionHeader(parent, "NAMEPLATE STYLING", y); y = y - h
+    _, h = W:Toggle(parent, "Enable Nameplate styling", y,
         function() return DB().enabled ~= false end,
         function(value) DB().enabled = value; Changed(); Rebuild() end,
         "Apply this profile's rules. Off restores EUI styling and locks editing without deleting your rules.")
@@ -1102,65 +1018,51 @@ local function BuildAboutPage(parent, yOffset)
     end
     local version
     local getMetadata = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
-    if type(getMetadata) == "function" then version = getMetadata(PLUGIN_ID, "Version") end
+    if type(getMetadata) == "function" then version = getMetadata("EllesmereUIExtendNameplates", "Version") end
     local versionText = type(version) == "string" and version ~= "" and ("Version " .. version .. ". ") or ""
-    Section("NAMEPLATE EXTRAS", versionText ..
-        "Adds customizable, rule-based styling to EllesmereUI Nameplates so important units and casts stand out. Requires EllesmereUI and EllesmereUI Nameplates.")
+    Section("NAMEPLATE EXTENSION", versionText ..
+        "Adds customizable, rule-based styling to EllesmereUI Nameplates so important units and casts stand out. Requires EllesmereUI, the Extend core and EllesmereUI Nameplates.")
     Section("CUSTOM APPEARANCE",
         "Adjust nameplate size and opacity, health-bar colors and textures, borders, animated border glows, and target-arrow styles. Apply styles based on unit type, reaction, classification, quest objectives, targets, threat and casts.")
     Section("CAST COLORS",
         "Customize cast-bar appearance, including separate colors for interruptible casts, interrupts on cooldown and uninterruptible casts.")
     Section("PROFILES AND SHARING",
-        "Save profiles for different characters and export or import your rules. Use Enable rule styling on the Rules page to pause all styling without deleting your setup.")
+        "Use Extend > Profiles for shared profiles across extensions and characters, and export or import your rules on Sharing. Enable Nameplate styling on the Style tab pauses styling without deleting your setup.")
     local row
-    row, h = W:Button(parent, "Open Nameplate Style Rules", y, function()
-        EllesmereUI.OpenPlugin(PLUGIN_ID, "NameplateStyle", "Rules")
+    row, h = W:Button(parent, "Open Nameplate Style", y, function()
+        EllesmereUI.OpenPlugin(PLUGIN_ID, "NameplateStyle", "Style")
     end)
-    ButtonTooltips(row, "Open the rule editor.")
+    ButtonTooltips(row, "Open the Style tab to edit nameplate rules.")
     y = y - h
     return math.abs(y)
 end
 
 local function Register()
-    if not (EllesmereUI and type(EllesmereUI.RegisterPlugin) == "function"
-        and type(EllesmereUI.IsPluginRegistered) == "function") then
-        addon.pluginRegistrationError = "This EllesmereUI build does not expose the plugin registration API"
-        return false
-    end
-    if EllesmereUI.IsPluginRegistered(PLUGIN_ID) then
-        addon.pluginRegistered = true
-        return true
-    end
-    local ok, registered = pcall(EllesmereUI.RegisterPlugin, PLUGIN_ID, {
-        label = "Extend Nameplates",
-        modules = {
-            {
+    if addon.pluginRegistered then return true end
+    local registered = EllesmereUIExtend.RegisterModule({
                 key = "NameplateStyle",
-                title = "Nameplate Style",
+                title = "Nameplate",
                 description = "Rule-based nameplate styling by unit, target, cast and rank.",
-                pages = { "Rules", "Profiles", "Sharing", "About" },
+                pages = { "Style", "Sharing", "About" },
                 buildPage = function(pageName, parent, yOffset)
-                    if pageName ~= "Rules" and not EllesmereUI.IsSearchPrebuild() and EllesmereUI.ClearContentHeader then EllesmereUI:ClearContentHeader() end
-                    if pageName == "Profiles" then return BuildProfilesPage(parent, yOffset) end
+                    if pageName ~= "Style" and not EllesmereUI.IsSearchPrebuild() and EllesmereUI.ClearContentHeader then EllesmereUI:ClearContentHeader() end
                     if pageName == "Sharing" then return BuildSharingPage(parent, yOffset) end
                     if pageName == "About" then return BuildAboutPage(parent, yOffset) end
-                    return BuildRulesPage(parent, yOffset)
+                    return BuildStylePage(parent, yOffset)
                 end,
-                getHeaderBuilder = function(pageName) if pageName == "Rules" then return rulesHeaderBuilder end end,
+                getHeaderBuilder = function(pageName) if pageName == "Style" then return rulesHeaderBuilder end end,
                 onPageCacheRestore = function(pageName)
-                    if pageName == "Rules" and rulesPreview then rulesPreview.Update(true) end
+                    if pageName == "Style" and rulesPreview then rulesPreview.Update(true) end
                 end,
                 onReset = function()
                     addon.ResetActiveProfile()
                     Rebuild()
                     Changed()
                 end,
-            },
-        },
     })
-    addon.pluginRegistered = ok and registered == true
+    addon.pluginRegistered = registered == true
     addon.pluginRegistrationError = addon.pluginRegistered and nil
-        or (ok and "EllesmereUI rejected the plugin specification" or tostring(registered))
+        or "The shared core rejected the Nameplates module"
     return addon.pluginRegistered
 end
 

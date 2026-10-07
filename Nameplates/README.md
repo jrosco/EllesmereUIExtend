@@ -1,19 +1,19 @@
 # EllesmereUI Extend Nameplates
 
 
-This extensible add-on currently provides one feature: **Nameplate Style**. It adds an **Extend Nameplates > Nameplate Style** section using `EllesmereUI.RegisterPlugin`; it does not modify the built-in Nameplates options page. The addon folder/ID is `EllesmereUIExtendNameplates`, supporting Retail and Forever.
+This independently installable addon provides rule-based nameplate styling under **Extend > Nameplate > Style**. The shared core registers the EUI settings section; this addon does not modify the built-in Nameplates options page. The addon folder/ID is `EllesmereUIExtendNameplates`, supporting Retail and Forever. It requires the lightweight `EllesmereUIExtend` core, but not the QuestTracker extension.
 
-The **Rules** page starts with **Enable rule styling**, the master switch for the active profile. Turning it off restores EUI appearance and locks the rule editor while keeping saved rules, order, selection and individual enabled flags. Only the master toggle remains usable on Rules until styling is reenabled. Disabling the selected rule locks its name, conditions, appearance, Copy/Delete and reorder controls; rule selection, Add Rule and Rule enabled remain available while global styling is on. Lock tooltips explain what to enable, and existing override/style requirements still apply after unlocking. The **About** page provides a short overview of custom appearances, cast colors, profiles and sharing.
+The **Style** tab starts with **Enable Nameplate styling**, the master switch for the active profile. Turning it off restores EUI appearance and locks the rule editor while keeping saved rules, order, selection and individual enabled flags. Only the master toggle remains usable on Style until styling is reenabled. Disabling the selected rule locks its name, conditions, appearance, Copy/Delete and reorder controls; rule selection, Add Rule and Rule enabled remain available while global styling is on. Lock tooltips explain what to enable, and existing override/style requirements still apply after unlocking. The **About** page provides a short overview of custom appearances, cast colors, profiles and sharing. Individual rules and rule sharing retain their terminology; this is a settings-label change, not a data-format change.
 
 Under **Rule Order**, Edit rule and Rule name share one row. Add, Copy, Delete, Move Up and Move Down share a single action row that stays together during page search.
 
 Settings, condition choices, cog controls and action buttons have short hover descriptions. Disabled controls explain what to enable or which client/style is required. Condition lists accept any selected choice; leaving them empty means Any, while all condition groups must match.
 
-## Rules preview header
+## Style preview header
 
-The **Rules** page has a fixed hero header using EUI's native `SetContentHeader` system, like its built-in Nameplates page. The combined sample contains a health bar, an always-visible cast bar with a repeating three-second cast/timer, and target arrows. It stays above the settings while you scroll and replaces the old inline previews. Profiles, Sharing and About have no preview header.
+The **Style** tab has a fixed hero header using EUI's native `SetContentHeader` system, like its built-in Nameplates page. The combined sample contains a health bar, an always-visible cast bar with a repeating three-second cast/timer, and target arrows. It stays above the settings while you scroll and replaces the old inline previews. Profiles, Sharing and About have no preview header.
 
-The sample follows the **selected rule's saved appearance**, without evaluating its match conditions or requiring a real unit/cast. Fill textures, colors, media borders, glows, opacity and arrow styles update immediately. Nameplate size and the Health bar, Cast bar, Text and Other scaling selections are reflected independently. Border/arrow settings that are not overridden fall back to the current EUI profile. Master bar overrides off leave the sample visible so nameplate opacity can still be inspected; global/individual rule locks dim the sample. The header reserves space for scaling/effects and fits narrow panels. Closing it or leaving Rules stops cast/glow animations; cached Rules headers resume and refresh their current size when restored.
+The sample follows the **selected rule's saved appearance**, without evaluating its match conditions or requiring a real unit/cast. Fill textures, colors, media borders, glows, opacity and arrow styles update immediately. Nameplate size and the Health bar, Cast bar, Text and Other scaling selections are reflected independently. Border/arrow settings that are not overridden fall back to the current EUI profile. Master bar overrides off leave the sample visible so nameplate opacity can still be inspected; global/individual rule locks dim the sample. The header reserves space for scaling/effects and fits narrow panels. Closing it or leaving Style stops cast/glow animations; cached Style headers resume and refresh their current size when restored.
 
 ## Per-rule text overrides
 
@@ -23,13 +23,13 @@ Health/nameplate choices are **Name**, **Level**, **Health percentage**, **Curre
 
 In **Text Colors**, each element has an independent override toggle and color picker. Color-only overrides can tint EUI's existing labels without replacing their content. EUI-combined name/level labels retain native embedded color formatting; choose separate name and level slots for fully independent colors. Native stock level artwork/level boxes are not new text-slot positions. Turning text/color overrides off, leaving a match, disabling styling or recycling reveals EUI's latest text visibility and colors. The native Interrupted label takes precedence during interrupted flashes. Saved content/colors are preserved when the master is disabled and are included in validated rule sharing.
 
-The pinned Rules header displays the selected content/colors, including custom sample cast-time formats. Retail health percentages use the native ScaleTo100 curve, while health/name/duration values go directly to native text-format sinks without branching or arithmetic on secrets. Forever uses EUI's available number formatter and guarded readable health/timestamp fallbacks. Cast-target-name APIs are Retail-only: unavailable or restricted display decisions produce blank text rather than guessing a cast target from the unit's temporary target. Unknown health/time data is also left blank when no safe rendering path is available. Actual layouts and restricted-content behavior still need testing on both clients.
+The pinned Style header displays the selected content/colors, including custom sample cast-time formats. Retail health percentages use the native ScaleTo100 curve, while health/name/duration values go directly to native text-format sinks without branching or arithmetic on secrets. Forever uses EUI's available number formatter and guarded readable health/timestamp fallbacks. Cast-target-name APIs are Retail-only: unavailable or restricted display decisions produce blank text rather than guessing a cast target from the unit's temporary target. Unknown health/time data is also left blank when no safe rendering path is available. Actual layouts and restricted-content behavior still need testing on both clients.
 
 ## Character profiles
 
-The **Profiles** tab assigns a named rules profile to each character. **Default** is shared by characters that have not selected another profile. Creating a profile starts with the built-in default rules and appearance settings, then assigns only the current character; selecting the same named profile on other characters shares its rules with them. Renaming or deleting a named profile updates every character assigned to it. EUI's own active profile does not control these assignments; use **Copy Rule** to duplicate an individual rule.
+**Extend > Profiles** assigns one named extension profile to each character, shared by all installed extensions. **Default** is shared by characters that have not selected another profile. Creating a profile starts with each feature's built-in defaults, then assigns only the current character; selecting the same named profile on other characters shares its settings with them. Renaming or deleting updates every assigned character and all feature sections. Profile management is blocked during EUI Edit Mode. EUI's own active profile does not control these assignments; use **Copy Rule** to duplicate an individual rule. `/eextend` opens the shared profile manager.
 
-**Reset Nameplate Style** resets the active Extras profile to fresh built-in settings, including rule order, selection, enabled state and all appearance/condition overrides. It preserves the profile name, character assignments and other profiles. Reset normalizes the starter conditions and rebuilds the editor/header immediately. The Non Target starter selects both Not current target and No target selected. After installing an updated addon build, `/reload` before resetting so the running addon uses that build's defaults.
+**Reset Nameplate** resets the active profile's Nameplate settings to fresh built-in defaults, including rule order, selection, enabled state and all appearance/condition overrides. It preserves the profile name, character assignments, other profiles and other extensions' settings. Reset normalizes the starter conditions and rebuilds the editor/header immediately. The Non Target starter selects both Not current target and No target selected. After installing an updated addon build, `/reload` before resetting so the running addon uses that build's defaults.
 
 ## Included rules
 
@@ -69,7 +69,7 @@ The integration is contained entirely in `EllesmereUIExtendNameplates`; no edits
 
 The Health Bar section uses the same layout as Cast Bar: a master **Override health bar** switch, **Custom health color** beside its color picker, a fill-texture selector, and **Override health border** beside its color picker. **Health border texture** and size share the next row. Controls are dimmed when their override is off.
 
-The combined Rules header previews the selected rule's health/cast fill textures, colors, opacity and media borders. **Use EUI texture** shows the corresponding fill texture from the current EUI profile. Health uses a fixed sample value and cast progress repeats, rather than reading live units/casts. Turning an override off restores its baseline sample without dimming the preview, so nameplate opacity remains visible. Global styling and individual-rule editor locks still dim the samples.
+The combined Style header previews the selected rule's health/cast fill textures, colors, opacity and media borders. **Use EUI texture** shows the corresponding fill texture from the current EUI profile. Health uses a fixed sample value and cast progress repeats, rather than reading live units/casts. Turning an override off restores its baseline sample without dimming the preview, so nameplate opacity remains visible. Global styling and individual-rule editor locks still dim the samples.
 
 The border toggle preserves its saved color, texture and thickness. Older rules without a border-texture selection use **Solid**; a saved health border size of zero remains off until enabled. Turning the health master off restores EUI color, fill texture and native border. Whole-nameplate size/opacity and cast-bar overrides remain independent.
 
@@ -83,7 +83,7 @@ All implementation stays inside Extras. It requires EUI's shared border-renderin
 
 ## Animated border glows
 
-**Health border glow** and **Cast border glow** add independent animated effects alongside the media borders. Only bar-suited effects are offered: **None**, **Pixel Glow**, and **Auto-Cast Shine**, with a separate color for each bar. Both bars in the combined Rules header show their glow. The Pixel Glow cog exposes lines, thickness, speed and an optional background/color. For Auto-Cast Shine, the cog exposes **Sparkle size (%)**, independently for health and cast bars: 50–200%, with 100% matching EUI's normal sparkles. This changes the individual sparkle sizes, not the bar, orbit speed or sparkle count. The Extras adapter calls EUI's public lower-level Shine renderer and reuses animations until color, dimensions or sparkle size changes; no EUI files are modified.
+**Health border glow** and **Cast border glow** add independent animated effects alongside the media borders. Only bar-suited effects are offered: **None**, **Pixel Glow**, and **Auto-Cast Shine**, with a separate color for each bar. Both bars in the combined Style header show their glow. The Pixel Glow cog exposes lines, thickness, speed and an optional background/color. For Auto-Cast Shine, the cog exposes **Sparkle size (%)**, independently for health and cast bars: 50–200%, with 100% matching EUI's normal sparkles. This changes the individual sparkle sizes, not the bar, orbit speed or sparkle count. The Extras adapter calls EUI's public lower-level Shine renderer and reuses animations until color, dimensions or sparkle size changes; no EUI files are modified.
 
 Glows default to None and use the **first matching ordinary rule**, with the existing conditions and priority. They require the corresponding health/cast master override, but do not require a custom border override: they can surround EUI's original border too. Health glows follow the Health bar scaling category; cast glows follow Cast bar and stay with lifted casts. They inherit the bar/nameplate opacity. Leaving a match, disabling the corresponding master or styling, and recycling tear down the effect. Hidden previews stop animating and restart when the page is shown again.
 
@@ -112,7 +112,7 @@ Cooldown/interruptibility transitions still reevaluate matching snapshots for ex
 
 ## Target-arrow overrides
 
-Under **Appearance – Target Arrows**, enable **Override target arrows** and choose **Target-arrow style**. The combined Rules header and dropdown thumbnails show EUI's available artwork: Simple, Double, Winged, Feathered, Split, Celestial, Rune, Demon, Halo, Curved, Barbed, Holy Spear, Bracket, Diamond, Crystal and Classic. **Use EUI arrow style** follows the current EUI profile's style while letting the matching rule show arrows.
+Under **Appearance – Target Arrows**, enable **Override target arrows** and choose **Target-arrow style**. The combined Style header and dropdown thumbnails show EUI's available artwork: Simple, Double, Winged, Feathered, Split, Celestial, Rune, Demon, Halo, Curved, Barbed, Holy Spear, Bracket, Diamond, Crystal and Classic. **Use EUI arrow style** follows the current EUI profile's style while letting the matching rule show arrows.
 
 The first enabled matching ordinary rule controls these arrows, using the existing target, classification, reaction, cast, threat and other conditions. For example, place an elite-target rule with Winged above a casting-target rule with Double, followed by a general current-target rule with Simple. Overrides are off by default; a higher-priority matching rule without an arrow override preserves EUI's normal arrows rather than using a lower rule's override.
 
@@ -122,13 +122,13 @@ Turning the override off, leaving its match, disabling rules/styling, retargetin
 
 ## Install
 
-Copy this repository's `Nameplates/` directory to `Interface/AddOns/EllesmereUIExtendNameplates/`, retaining `EllesmereUIExtendNameplates.toc`. It requires both `EllesmereUI` and `EllesmereUINameplates` to be enabled. Open the EUI options panel and select **Extend Nameplates > Nameplate Style**. Do not run the previous Nameplate Extras addon alongside it, since both would style the same plates.
+Copy `Core/` to `Interface/AddOns/EllesmereUIExtend/` and `Nameplates/` to `Interface/AddOns/EllesmereUIExtendNameplates/`, retaining their identity-matching TOCs. Requires `EllesmereUI`, `EllesmereUIExtend` and `EllesmereUINameplates` enabled. Feature release ZIPs include the core automatically; see `Core/README.md` for packaging. Open **Extend > Nameplate > Style**. Do not run the previous Nameplate Extras addon alongside it, since both would style the same plates.
 
-The addon starts with fresh `EllesmereUIExtendNameplatesDB` settings. There is no settings migration, old API alias or old slash-command alias. Rule-set prefixes and the serialized wire-format identifier remain stable, so sharing codes continue to use the existing codec.
+The addon starts with fresh settings in `EllesmereUIExtendDB.profiles[profileName].nameplates`, owned by the core. Existing addon databases remain untouched, without migration or aliases. Rule-set prefixes and the serialized wire-format identifier remain stable, so sharing codes continue to use the existing codec.
 
 ## Extension points
 
-The public runtime API is `EllesmereUIExtendNameplates`. Future features can be registered as additional modules in `Options.lua`; runtime matchers/effects belong in `Nameplates.lua` and its feature modules. The TOC retains the addon-folder name (`EllesmereUIExtendNameplates.toc`) as required for WoW addon discovery. Other addon code can call:
+The public runtime API is `EllesmereUIExtendNameplates`. Settings modules register with the shared core during startup; runtime matchers/effects belong in `Nameplates.lua` and its feature modules. The TOC retains the addon-folder name (`EllesmereUIExtendNameplates.toc`) as required for WoW addon discovery. Other addon code can call:
 
 ```lua
 EllesmereUIExtendNameplates.Refresh()
@@ -155,7 +155,7 @@ Scale is a multiplier on EUI's base scale, including its target/cast animation. 
 
 From the repository root, run `lua Nameplates/tests/runtime.lua` (or `npx.cmd --yes --package fengari-node-cli fengari Nameplates/tests/runtime.lua`). Other suites live in `Nameplates/tests/` and can be run with that command by replacing `runtime.lua` with the suite filename. Inspect output for Lua errors as well as the PASS message: Fengari can return a successful exit code after an assertion fails. The mocked tests do not replace in-game testing on Retail and Forever.
 
-The scaling, rendering, cast-color, cooldown-transition and options-search suites also load real upstream EUI files read-only. Set `EUI_TEST_ROOT` to the checkout containing `EllesmereUI_Kick.lua`; it defaults to the sibling `../jrosco-EllesmereUI` directory. In PowerShell, for example: `$env:EUI_TEST_ROOT = 'C:\Users\joel_\GitRepos\jrosco-EllesmereUI'`. No upstream source is bundled or modified.
+The scaling, rendering, cast-color, cooldown-transition and options-search suites also load real upstream EUI files read-only. Set `EUI_TEST_ROOT` to the checkout containing `EllesmereUI_Kick.lua`; it defaults to the sibling `../EllesmereUI` directory. In PowerShell, for example: `$env:EUI_TEST_ROOT = 'C:\path\to\EllesmereUI'`. Replace the example path with your own checkout location. No upstream source is bundled or modified.
 
 Run `Nameplates/tests/schema.lua` from the repository root for target reload/profile-switch regressions, shared condition validation/normalization, categorical values, v1/v2 imports, and custom-condition preservation.
 
@@ -179,7 +179,7 @@ Focused follow-up suites are `tests/style-capability.lua`, `tests/cooldown-trans
 
 `tests/rule-glows.lua` and `tests/glow-options.lua` cover bar glows, borders, authored geometry, Important Cast restoration, restrictions, Forever, scaling, previews, Pixel/Shine settings, stale callbacks and sharing.
 
-`tests/header-preview.lua` covers the pinned Rules-only header, repeating casts, scrolling, combined bars/arrows, scaling, caches, sizing and teardown.
+`tests/header-preview.lua` covers the pinned Style-only header, repeating casts, scrolling, combined bars/arrows, scaling, caches, sizing and teardown.
 
 `tests/text-overrides.lua` and `tests/text-options.lua` cover text content/colors, native restoration, secret sinks, Forever fallbacks, previews, locks and sharing.
 

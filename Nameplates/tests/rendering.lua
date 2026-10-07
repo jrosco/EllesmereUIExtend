@@ -77,6 +77,7 @@ end
 local LoadUpstream = assert(loadfile("Nameplates/tests/upstream.lua"))()
 LoadUpstream("EllesmereUINameplates/EllesmereUINameplates_CastOverlay.lua")("Nameplates", NP)
 local namespace = {}
+assert(loadfile("Core/Core.lua"))("EllesmereUIExtend")
 assert(loadfile("Nameplates/Helpers.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/Nameplates.lua"))("EllesmereUIExtendNameplates", namespace)
 local api = EllesmereUIExtendNameplates
@@ -103,11 +104,11 @@ local function Fresh(opacity, scale, initialAlpha)
     NP.plates, NP.friendlyPlates = { nameplate1 = plate }, {}
     NP.db.profile.castOverlayEnabled = true
     NP.RefreshCastOverlay(plate)
-    EllesmereUIExtendNameplatesDB = { enabled = true, rules = {
+    EllesmereUIExtendDB = { profiles = { Default = { nameplates = { enabled = true, rules = {
         { name = "Rendering", conditions = { target = "yes" }, style = {
             opacity = opacity, scale = scale or 100, healthEnabled = false, borderSize = 0,
         } },
-    } }
+    } } } } }
     api.Refresh(); Flush()
     return plate, api.GetRules()[1].style
 end

@@ -33,10 +33,10 @@ EllesmereUI.IS_FOREVER = false
 rows["Instance Type"].set("delve", true)
 Check(first.conditions.instanceType.delve, "Retail choice available")
 local combat, instance = rows["Player combat state"].set, rows["Instance Type"].set
-rows["Enable rule styling"].set(false)
+rows["Enable Nameplate styling"].set(false)
 combat("inCombat", true); instance("world", true)
 Check(next(first.conditions.playerCombat) == nil and not first.conditions.instanceType.world, "global lock guards stale context callbacks")
-rows["Enable rule styling"].set(true)
+rows["Enable Nameplate styling"].set(true)
 rows["Rule enabled"].set(false)
 rows["Player combat state"].set("inCombat", true)
 Check(next(first.conditions.playerCombat) == nil, "disabled rule locks context edits")
