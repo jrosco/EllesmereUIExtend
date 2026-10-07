@@ -6,6 +6,8 @@ Rule-based styling for EllesmereUI nameplates on Retail and WoW Forever, configu
 
 Extract the addon ZIP into `Interface/AddOns/`. The installed folder/TOC identity is **EllesmereUIExtendNameplates**. Requires **EllesmereUI** and its **EllesmereUINameplates** module enabled; shared profiles are embedded, so no separate Core addon or Quest Tracker extension is needed. Do not run the previous Nameplate Extras addon alongside it.
 
+Release packages target **Retail 12.1.0** and **WoW Forever 1.60.1** with the same ZIP. Retail 12.0.x and Classic clients are not advertised. Retail in-game verification is still required before publishing; see [Testing](../TESTING.md).
+
 For source installs, copy `Nameplates/` into that addon folder and put `Core/Core.lua`, `Core/Sync.lua` and `Core/Options.lua` in its `Shared/` subfolder.
 
 ## Rules and matching

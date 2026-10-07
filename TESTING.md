@@ -53,7 +53,7 @@ Paths below are relative to each addon's `tests/` directory.
 | --- | --- |
 | `runtime.lua` | Real feature adapters; either/both installs; profiles, assignments, defaults/reset isolation, UI locks, stale popups, secret identity and one combined UI. |
 | `persistence.lua` | Both load orders, reload, uninstall/reinstall, independent edits, renames, deletion tombstones, same-name creations, invalid snapshots and clock fallback. |
-| `packaging.ps1` | Single-folder ZIP ownership, every TOC entry, identical embedded modules/load order, dependencies, SavedVariables and non-mutating alpha/interface overrides. |
+| `packaging.ps1` | Single-folder ZIP ownership, every TOC entry, identical embedded modules/load order, dependencies, SavedVariables, dual-client TOC/workflow metadata and non-mutating alpha/interface overrides. |
 
 ### Nameplates
 

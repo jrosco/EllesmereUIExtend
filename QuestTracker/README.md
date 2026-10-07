@@ -6,6 +6,8 @@ Quality-of-life features for **EllesmereUIQuestTracker** on Retail and WoW Forev
 
 Extract the ZIP into `Interface/AddOns/`. The installed folder/TOC identity is **EllesmereUIExtendQuestTracker**. Requires **EllesmereUI** and its **EllesmereUIQuestTracker** module; shared profiles are embedded, with no separate Core addon or Nameplates extension required.
 
+Release packages target **Retail 12.1.0** and **WoW Forever 1.60.1** with the same ZIP. Retail 12.0.x and Classic clients are not advertised. Retail in-game verification is still required before publishing; see [Testing](../TESTING.md).
+
 For source installs, copy `QuestTracker/` into that addon folder and put `Core/Core.lua`, `Core/Sync.lua` and `Core/Options.lua` in its `Shared/` subfolder.
 
 - `/eqtx`: opens settings outside combat.
