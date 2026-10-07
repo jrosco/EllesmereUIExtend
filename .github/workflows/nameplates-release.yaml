@@ -4,11 +4,10 @@ on:
   release:
     types: [published]
 
-permissions:
-  contents: write
-
 jobs:
   release:
+    permissions:
+      contents: write
     if: startsWith(github.event.release.tag_name, 'nameplates-v')
     runs-on: ubuntu-latest
     steps:
