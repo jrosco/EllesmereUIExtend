@@ -8,6 +8,7 @@ ignore:
   - .github
   - .gitignore
   - .pkgmeta-nameplates
+  - .pkgmeta-questtracker
   - AGENTS.md
   - README.md
   - QuestTracker

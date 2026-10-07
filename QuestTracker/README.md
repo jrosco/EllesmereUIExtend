@@ -4,6 +4,10 @@ An independently installable extension of **EllesmereUIQuestTracker** for Retail
 
 Both extensions share one Extend profiles UI when installed together. QuestTracker saves a full shared-profile snapshot in `EllesmereUIExtendQuestTrackerProfiles`; independently edited feature settings merge at startup and all loaded extensions save synchronized copies at logout. Renames retain those edits, and deletion tombstones prevent stale profiles from returning. Uninstalling one extension leaves the other's code and profiles intact. Update both installed extensions to the current synchronization code. Previous standalone-core and legacy settings are not migrated or modified; disable/remove an old standalone `EllesmereUIExtend/` addon.
 
+## Alpha publishing
+
+The [alpha release guide](../docs/ALPHA-RELEASES.md) covers the simple Ubuntu/BigWigs workflow. Publish a GitHub prerelease tagged `questtracker-v0.1.0-alpha.1` to build a Forever-only Quest Tracker ZIP. Set `CURSEFORGE_QUESTTRACKER_PROJECT_ID` and the `CF_API_TOKEN` secret for optional CurseForge Alpha uploads; leaving the project ID unset publishes to GitHub only. No Nameplates files or separate Core addon are packaged.
+
 ## Features
 
 - **Wowhead menus:** adds a copyable URL to supported native quest-tracker, quest-log and achievement-tracker context menus. Copy with Ctrl+C; addons cannot launch your browser or copy silently. Auto routing uses Retail URLs on Retail and Classic URLs on Forever. Choose a different database in settings if needed. Custom Forever content may not exist on Wowhead. Entries are omitted when their ID cannot be safely identified; quest titles are never used to guess IDs.
