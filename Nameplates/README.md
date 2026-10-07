@@ -51,4 +51,4 @@ Public API: `EllesmereUIExtendNameplates`. `GetSettings()`, `GetRules()` and `Re
 
 `Helpers.lua` provides private namespace utilities; `Nameplates.lua` owns matching/runtime coordination, `Options.lua` the editor, and the remaining modules rendering/sharing. Predicate results are shared only within one refresh. Preserve native frame hierarchy, pooling, cast lifting and interrupted effects; use EUI renderers and check secrets before Lua comparisons/arithmetic. No upstream files are modified.
 
-See [Testing](../TESTING.md) for regression suites and verification, and [Alpha releases](../docs/ALPHA-RELEASES.md) for supported release targets and publishing.
+See [Testing](../TESTING.md) for regression suites and verification, and [Releases](../docs/RELEASES.md) for supported release targets and publishing.

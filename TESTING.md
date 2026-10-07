@@ -79,7 +79,7 @@ Paths below are relative to each addon's `tests/` directory.
 
 ## In-game verification: Retail and Forever
 
-Mocks do not reproduce Retail's secret-value VM, native rendering/menu/mover engines or secure hardware clicks. Verify changed behavior on **both clients**, including missing-API fallbacks. Passing mock tests does not establish release support; see [Alpha releases](docs/ALPHA-RELEASES.md) for the current target.
+Mocks do not reproduce Retail's secret-value VM, native rendering/menu/mover engines or secure hardware clicks. Verify changed behavior on **both clients**, including missing-API fallbacks. Passing mock tests does not establish release support; see [Releases](docs/RELEASES.md) for the current target.
 
 ### Shared profiles
 

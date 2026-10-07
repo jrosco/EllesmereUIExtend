@@ -35,4 +35,4 @@ Switching refreshes installed features and settings pages. Renaming updates assi
 
 Features own their capability gates, validation and safe refresh scheduling. Never share a SavedVariable declaration between feature TOCs or edit upstream EUI to integrate.
 
-See [Testing](../TESTING.md) for suites and in-game checks, and [Alpha releases](../docs/ALPHA-RELEASES.md) for packaging, publishing and upgrade guidance.
+See [Testing](../TESTING.md) for suites and in-game checks, and [Releases](../docs/RELEASES.md) for packaging, publishing and upgrade guidance.

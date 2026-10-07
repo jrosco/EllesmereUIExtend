@@ -20,7 +20,7 @@ ignore:
   - Nameplates/tests
 
 manual-changelog:
-  filename: docs/ALPHA-CHANGELOG.md
+  filename: docs/NAMEPLATES-CHANGELOG.md
   markup-type: markdown
 
 required-dependencies:

@@ -8,4 +8,4 @@ Independently installable extensions for EllesmereUI on **Retail and WoW Forever
 | `Nameplates/` | `EllesmereUIExtendNameplates/` | Rule-based nameplate appearances |
 | `QuestTracker/` | `EllesmereUIExtendQuestTracker/` | Quest links, objective colors, notifications and tracked quest items |
 
-Details: [Core](Core/README.md), [Nameplates](Nameplates/README.md), [Quest Tracker](QuestTracker/README.md). Development: [Testing](TESTING.md) and [Alpha releases](docs/ALPHA-RELEASES.md).
+Details: [Core](Core/README.md), [Nameplates](Nameplates/README.md), [Quest Tracker](QuestTracker/README.md). Development: [Testing](TESTING.md) and [Releases](docs/RELEASES.md).

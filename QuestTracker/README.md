@@ -53,4 +53,4 @@ Public API: `EllesmereUIExtendQuestTracker`; feature modules use a private addon
 
 Never call native tracker Update/collapse/layout methods, replace selection methods, reparent native frames, auto-untrack quests or write protected item state in combat. Display-only filtering and addon-driven collapse/keybind behavior are intentionally omitted because no verified taint-safe integration exists. Native mouse collapse and tracking remain untouched. Missing capabilities gate controls or preserve native behavior; unreadable quest data is never guessed.
 
-See [Testing](../TESTING.md) for suites and in-game checklists, and [Alpha releases](../docs/ALPHA-RELEASES.md) for packaging and publishing.
+See [Testing](../TESTING.md) for suites and in-game checklists, and [Releases](../docs/RELEASES.md) for packaging and publishing.

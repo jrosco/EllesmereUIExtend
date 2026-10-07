@@ -20,7 +20,7 @@ ignore:
   - QuestTracker/tests
 
 manual-changelog:
-  filename: docs/QUESTTRACKER-ALPHA-CHANGELOG.md
+  filename: docs/QUESTTRACKER-CHANGELOG.md
   markup-type: markdown
 
 required-dependencies:
