@@ -3,10 +3,10 @@
 ## Repository structure and scope
 
 - This is a monorepo for **separate, independently installable World of Warcraft addons** that extend EllesmereUI. The repository is not itself a single addon.
-- Feature addons are **EllesmereUIExtendNameplates** under `Nameplates/` and **EllesmereUIExtendQuestTracker** under `QuestTracker/`. The small shared core lives under `Core/` and installs as **EllesmereUIExtend**. Each has its own TOC, README and tests.
+- Feature addons are **EllesmereUIExtendNameplates** under `Nameplates/` and **EllesmereUIExtendQuestTracker** under `QuestTracker/`. Shared source lives under `Core/` and is embedded as `Shared/` inside each feature package, not installed as a separate addon. Each feature has its own TOC, README and tests.
 - Read the relevant addon's `README.md`, TOC and any more-specific `AGENTS.md` before editing. For Nameplates, start with `Nameplates/README.md`.
 - Check `git status` before making changes. Treat unfamiliar changes as user work; do not overwrite, revert, reset or discard them.
-- Keep changes scoped to the requested addon. Features may depend on the explicitly shared core, but must never require each other. The core alone owns `EllesmereUIExtendDB`, profiles and the combined EUI plugin registration; features own their settings sections and runtime behavior. Read `Core/README.md` for its registration/loading contract.
+- Keep changes scoped to the request. Features embed the shared core but must never require each other or a standalone Core addon. The embedded singleton owns the in-memory `EllesmereUIExtendDB`, profiles and combined EUI registration. Features declare distinct profile-snapshot SavedVariables; newest whole-root revision wins at startup and all loaded owners save synchronized snapshots at logout. Read `Core/README.md` for the loading/persistence contract.
 - **Do not modify upstream EllesmereUI or EllesmereUINameplates files.** Integrate through existing public APIs, shared renderers and carefully scoped hooks. Upstream code may be inspected for reference, but implementation belongs here.
 - Commit or push only when explicitly requested. Exclude unrelated user changes from commits unless the user asks to include them.
 
@@ -34,7 +34,7 @@
 - Keep the primary TOC named **`EllesmereUIExtendNameplates.toc`**, matching the installed folder. Do not rename it to `Nameplates.toc` without changing the installed addon identity.
 - Lua files use simplified names: `Nameplates.lua`, `Options.lua`, `Borders.lua`, `Glows.lua`, `Text.lua`, `Scaling.lua`, `TargetArrows.lua`, `CastStyles.lua`, `RuleIO.lua` and `Preview.lua`.
 - Update TOC entries and references when moving or renaming files. Do not change Lua runtime addon IDs to the monorepo source-directory name.
-- The Nameplates public API is `EllesmereUIExtendNameplates`; its settings are the `nameplates` section of the core-owned `EllesmereUIExtendDB` profiles. QuestTracker uses the `questTracker` section. No feature TOC declares SavedVariables. Nameplates diagnostics use `/enp` and `/extendnameplates`; `/eqtx` opens QuestTracker and `/eextend` opens shared profiles.
+- The Nameplates public API is `EllesmereUIExtendNameplates`; its settings are the `nameplates` section of the singleton's in-memory `EllesmereUIExtendDB` profiles. QuestTracker uses `questTracker`. Feature TOCs declare `EllesmereUIExtendNameplatesProfiles` and `EllesmereUIExtendQuestTrackerProfiles` respectively, never the same SavedVariable in both TOCs. Nameplates diagnostics use `/enp` and `/extendnameplates`; `/eqtx` opens QuestTracker and `/eextend` opens shared profiles.
 - The user does **not** want legacy settings migration, copying old SavedVariables, or legacy API/slash aliases. Do not add these unless requested.
 - Existing sharing wire identifiers may intentionally retain historical names; do not change serialized formats as an incidental cleanup.
 

@@ -1,4 +1,4 @@
-param([string] $EUIRoot)
+param([string] $EUIRoot, [switch] $UnitOnly)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
@@ -8,8 +8,15 @@ try {
     $tests = @(Get-ChildItem 'Nameplates/tests/*.lua' | Where-Object {
         $_.BaseName -notin @('upstream', 'glow-mocks', 'border-mocks')
     } | ForEach-Object { 'Nameplates/tests/' + $_.Name })
-    $tests += @('Core/tests/runtime.lua', 'QuestTracker/tests/runtime.lua',
+    $tests += @('Core/tests/runtime.lua', 'Core/tests/persistence.lua', 'QuestTracker/tests/runtime.lua',
         'QuestTracker/tests/notifications.lua', 'QuestTracker/tests/visibility.lua')
+    if ($UnitOnly) {
+        $integration = @('Nameplates/tests/scaling.lua', 'Nameplates/tests/rendering.lua',
+            'Nameplates/tests/cast-colors.lua', 'Nameplates/tests/cooldown-transitions.lua',
+            'Nameplates/tests/options-search.lua', 'QuestTracker/tests/visibility.lua')
+        $tests = @($tests | Where-Object { $_ -notin $integration })
+        Write-Output 'Unit-only mode: six read-only upstream integration suites excluded; no EUI checkout required.'
+    }
     foreach ($test in $tests) {
         $output = (& npx.cmd --yes --package fengari-node-cli fengari $test 2>&1 | Out-String)
         Write-Output ($test + "`n" + $output.Trim())
@@ -21,7 +28,9 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Core packaging checks failed' }
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'QuestTracker/tests/packaging.ps1'
     if ($LASTEXITCODE -ne 0) { throw 'QuestTracker packaging checks failed' }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'tools/tests/release.ps1'
+    if ($LASTEXITCODE -ne 0) { throw 'Alpha release checks failed' }
     & git diff --check
     if ($LASTEXITCODE -ne 0) { throw 'Whitespace checks failed' }
-    Write-Output "PASS: $($tests.Count) Lua suites, two packaging suites and git diff --check"
+    Write-Output "PASS: $($tests.Count) Lua suites, two packaging suites, alpha release checks and git diff --check"
 } finally { Pop-Location }

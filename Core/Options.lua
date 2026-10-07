@@ -1,5 +1,6 @@
 local core = EllesmereUIExtend
-if not core then return end
+if not core or core.optionsLoaded then return end
+core.optionsLoaded = true
 
 function core.RefreshOptions()
     local eui = EllesmereUI

@@ -1,6 +1,8 @@
 # EllesmereUI Extend Quest Tracker
 
-An independently installable extension of **EllesmereUIQuestTracker** for Retail and WoW Forever. Source lives in `QuestTracker/`; install it as `Interface/AddOns/EllesmereUIExtendQuestTracker/`, retaining `EllesmereUIExtendQuestTracker.toc`. Also install `Core/` as `Interface/AddOns/EllesmereUIExtend/`. Requires EllesmereUI, EllesmereUIExtend and EllesmereUIQuestTracker; feature release ZIPs bundle the core automatically. No upstream files or Nameplates extension are changed or required.
+An independently installable extension of **EllesmereUIQuestTracker** for Retail and WoW Forever. Extract its release ZIP into `Interface/AddOns/`; it installs only `EllesmereUIExtendQuestTracker/`, with shared profiles code embedded under `Shared/`. Requires EllesmereUI and its EllesmereUIQuestTracker module; no separate Core addon or Nameplates extension is needed. For source installation, copy `QuestTracker/` to that addon folder, then copy `Core/Core.lua` and `Core/Options.lua` into its `Shared/` subfolder.
+
+Both extensions share one Extend profiles UI when installed together. QuestTracker saves a full shared-profile snapshot in `EllesmereUIExtendQuestTrackerProfiles`; the newest installed snapshot wins at startup and all loaded extensions save synchronized copies at logout. Uninstalling one extension leaves the other's code and profiles intact. Previous standalone-core and legacy settings are not migrated or modified; disable/remove the old standalone `EllesmereUIExtend/` addon if upgrading from a bundled-core alpha.
 
 ## Features
 
