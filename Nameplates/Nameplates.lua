@@ -59,22 +59,11 @@ local function MergeMissing(dst, src)
 end
 
 local db                 -- active named profile's settings
-local profileStore       -- SavedVariables root: profiles + character->profile assignments
-local activeCharacterKey
-local activeProfileName = "Default"
+local core = EllesmereUIExtend
 local QueueRefresh
 local DEFAULT_PROFILE = { enabled = true, selectedRule = 1, rules = DEFAULT_RULES }
 local MAX_RULES = 100
-local MAX_PROFILES = 100
-
-local function CurrentCharacterKey()
-    local name, realm
-    if UnitFullName then name, realm = UnitFullName("player") end
-    if type(name) ~= "string" or name == "" then name = UnitName and UnitName("player") end
-    if type(name) ~= "string" or name == "" then return nil end
-    if type(realm) ~= "string" or realm == "" then realm = GetRealmName and GetRealmName() or "" end
-    return realm ~= "" and (name .. " - " .. realm) or name
-end
+local MAX_PROFILES = core.MaxProfiles
 
 local function NormalizeMultiCondition(value, allowed)
     local selected = {}
@@ -144,153 +133,29 @@ local function NormalizeProfile(profile)
 end
 
 local function GetSettings()
-    local saved = _G.EllesmereUIExtendNameplatesDB
-    if type(saved) ~= "table" then saved = {} end
-    local characterKey = CurrentCharacterKey()
-    if profileStore == saved and db and characterKey == activeCharacterKey
-       and saved.profiles and saved.profiles[activeProfileName] == db
-       and (not characterKey or saved.characterProfiles[characterKey] == activeProfileName) then
-        return db
+    local name, saved
+    db, name, saved = core.GetSettings("nameplates")
+    if not addon.db or addon.db.profile ~= db or addon.db.profileName ~= name or addon.db.sv ~= saved then
+        addon.db = { sv = saved, folder = addonName, profile = db, profileName = name }
     end
-    if type(saved.profiles) ~= "table" then
-        -- First upgrade from the pre-profile layout: keep existing rules as
-        -- the shared Default profile rather than resetting the user's setup.
-        local oldDefault
-        if type(saved.rules) == "table" then
-            oldDefault = {
-                rules = saved.rules,
-                enabled = saved.enabled,
-                selectedRule = saved.selectedRule,
-            }
-        end
-        saved.profiles = { Default = oldDefault or Copy(DEFAULT_PROFILE) }
-    end
-    if type(saved.characterProfiles) ~= "table" then saved.characterProfiles = {} end
-    if type(saved.profiles.Default) ~= "table" then saved.profiles.Default = Copy(DEFAULT_PROFILE) end
-    for name, profile in pairs(saved.profiles) do
-        if type(name) ~= "string" or name == "" then
-            saved.profiles[name] = nil
-        else
-            saved.profiles[name] = NormalizeProfile(profile)
-        end
-    end
-    saved.rules, saved.enabled, saved.selectedRule = nil, nil, nil
-    local selectedProfile = characterKey and saved.characterProfiles[characterKey] or "Default"
-    if type(selectedProfile) ~= "string" or type(saved.profiles[selectedProfile]) ~= "table" then
-        selectedProfile = "Default"
-    end
-    if characterKey then saved.characterProfiles[characterKey] = selectedProfile end
-    profileStore = saved
-    activeCharacterKey = characterKey
-    activeProfileName = selectedProfile
-    db = saved.profiles[selectedProfile]
-    addon.db = { sv = saved, folder = addonName, profile = db, profileName = selectedProfile }
-    _G.EllesmereUIExtendNameplatesDB = saved
     return db
 end
 
-local function ProfileInfo()
-    GetSettings()
-    local names, other = { "Default" }, {}
-    for name in pairs(profileStore.profiles) do
-        if name ~= "Default" then other[#other + 1] = name end
-    end
-    table.sort(other, function(a, b) return a:lower() < b:lower() end)
-    for _, name in ipairs(other) do names[#names + 1] = name end
-    return {
-        character = activeCharacterKey or "Character not available yet",
-        active = activeProfileName,
-        names = names,
-        canManage = activeCharacterKey ~= nil,
-    }
-end
-
-local function CleanProfileName(name)
-    if type(name) ~= "string" then return nil, "Enter a profile name." end
-    name = name:gsub("|", ""):gsub("%c", " "):gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
-    if name == "" then return nil, "Profile names cannot be blank." end
-    if #name > 32 then return nil, "Profile names must be 32 characters or fewer." end
-    if name:lower() == "default" then return nil, "Default is reserved for the shared default profile." end
-    return name
-end
-
-local function FindProfileName(name)
-    local lower = name:lower()
-    for existing in pairs(profileStore.profiles) do
-        if existing:lower() == lower then return existing end
-    end
-end
-
-local function SelectCharacterProfile(name)
-    GetSettings()
-    if not activeCharacterKey then return false, "The character name is not available yet." end
-    if type(name) ~= "string" or type(profileStore.profiles[name]) ~= "table" then
-        return false, "That Extend Nameplates profile does not exist."
-    end
-    profileStore.characterProfiles[activeCharacterKey] = name
-    GetSettings()
-    if QueueRefresh then QueueRefresh() end
-    return true
-end
-
-local function CreateCharacterProfile(name)
-    GetSettings()
-    if not activeCharacterKey then return false, "The character name is not available yet." end
-    name = CleanProfileName(name)
-    if not name then return false, "Enter a valid profile name (1-32 characters)." end
-    if FindProfileName(name) then return false, "A profile with that name already exists." end
-    local count = 0
-    for _ in pairs(profileStore.profiles) do count = count + 1 end
-    if count >= MAX_PROFILES then return false, ("You can have up to %d profiles."):format(MAX_PROFILES) end
-    profileStore.profiles[name] = Copy(DEFAULT_PROFILE)
-    profileStore.characterProfiles[activeCharacterKey] = name
-    GetSettings()
-    if QueueRefresh then QueueRefresh() end
-    return true
-end
-
-local function RenameCharacterProfile(name)
-    GetSettings()
-    local oldName = activeProfileName
-    if oldName == "Default" then return false, "The shared Default profile cannot be renamed." end
-    name = CleanProfileName(name)
-    if not name then return false, "Enter a valid profile name (1-32 characters)." end
-    local existing = FindProfileName(name)
-    if existing and existing ~= oldName then return false, "A profile with that name already exists." end
-    if name == oldName then return true end
-    profileStore.profiles[name] = profileStore.profiles[oldName]
-    profileStore.profiles[oldName] = nil
-    for character, profileName in pairs(profileStore.characterProfiles) do
-        if profileName == oldName then profileStore.characterProfiles[character] = name end
-    end
-    GetSettings()
-    if QueueRefresh then QueueRefresh() end
-    return true
-end
-
-local function DeleteCharacterProfile()
-    GetSettings()
-    local oldName = activeProfileName
-    if oldName == "Default" then return false, "The shared Default profile cannot be deleted." end
-    profileStore.profiles[oldName] = nil
-    for character, profileName in pairs(profileStore.characterProfiles) do
-        if profileName == oldName then profileStore.characterProfiles[character] = "Default" end
-    end
-    GetSettings()
-    if QueueRefresh then QueueRefresh() end
-    return true
-end
+local ProfileInfo = core.GetProfileInfo
+local SelectCharacterProfile = core.SelectProfile
+local CreateCharacterProfile = core.CreateProfile
+local RenameCharacterProfile = core.RenameProfile
+local DeleteCharacterProfile = core.DeleteProfile
 
 local function ResetActiveProfile()
-    local current = GetSettings()
-    local fresh = NormalizeProfile(Copy(DEFAULT_PROFILE))
-    -- Keep the active settings object/profile assignment stable for consumers,
-    -- but remove every customization instead of resetting only selected keys.
-    for key in pairs(current) do current[key] = nil end
-    for key, value in pairs(fresh) do current[key] = value end
-    if QueueRefresh then QueueRefresh() end
-    return true
+    return core.ResetFeature("nameplates")
 end
+
+core.RegisterFeature("nameplates", { defaults = DEFAULT_PROFILE, normalize = NormalizeProfile,
+    refresh = function()
+        GetSettings()
+        if QueueRefresh then QueueRefresh() end
+    end })
 
 addon.defaultRules = DEFAULT_RULES
 
@@ -1215,8 +1080,8 @@ SlashCmdList.EXTENDNAMEPLATES = function(message)
     local function Report(message)
         print("Extend Nameplates: " .. message)
     end
-    Report("diagnostics v3; addon=EllesmereUIExtendNameplates; feature=Nameplate Style; enabled=" .. Text(db.enabled ~= false)
-        .. "; settings shared with options=" .. Text(db == _G.EllesmereUIExtendNameplatesDB))
+    Report("diagnostics v3; addon=EllesmereUIExtendNameplates; feature=Nameplate; enabled=" .. Text(db.enabled ~= false)
+        .. "; settings shared with options=" .. Text(db == core.GetSettings("nameplates")))
     local pluginRegistered = EllesmereUI and EllesmereUI.IsPluginRegistered
         and EllesmereUI.IsPluginRegistered("EllesmereUIExtendNameplates") or false
     Report("EUI plugin section registered=" .. Text(pluginRegistered))

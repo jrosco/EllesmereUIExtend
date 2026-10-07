@@ -94,9 +94,13 @@ EllesmereUI = {
     end,
     RegisterWidgetRefresh = Noop,
 }
+assert(loadfile("Core/Core.lua"))("EllesmereUIExtend")
+assert(loadfile("Core/Sync.lua"))("EllesmereUIExtend")
+assert(loadfile("Core/Options.lua"))("EllesmereUIExtend")
 for _, file in ipairs({ "Compatibility", "QuestTracker", "NotificationOutput", "Notifications", "Options" }) do
     assert(loadfile("QuestTracker/" .. file .. ".lua"))("EllesmereUIExtendQuestTracker", ns)
 end
+assert(EllesmereUIExtend.RegisterOptions())
 local addon = ns.Addon
 ns.initialized = true
 local cfg = addon.Settings()
@@ -387,14 +391,14 @@ Check(HasLayout("QUEST MESSAGE NOTIFICATIONS", "Local chat", "Local toast")
 widgets["Local chat"].setValue(false)
 Check(not cfg.notificationDestinations.localChat, "older EUI supports destinations through independent toggles")
 ns.settings = nil
-EllesmereUIExtendQuestTrackerDB = { soundChannel = "bad", statusSounds = { accepted = "bad", failed = "none", progress = "bad", ready = "none" }, statuses = { progress = false },
-    notificationDestinations = { localChat = false, guild = secret } }
+EllesmereUIExtendDB = { profiles = { Default = { questTracker = { soundChannel = "bad", statusSounds = { accepted = "bad", failed = "none", progress = "none", ready = "none" },
+    notificationDestinations = { localChat = false, guild = secret } } } } }
 cfg = addon.Settings()
 Check(cfg.soundChannel == "Master" and cfg.statusSounds.progress == "none" and cfg.statusSounds.ready == "none"
     and cfg.statusSounds.accepted == nil and cfg.statusSounds.failed == nil,
     "malformed sound selections normalize without losing explicit None")
 Check(not cfg.notificationDestinations.localChat and not cfg.notificationDestinations.guild, "explicit false and secret destination normalization")
-Check(cfg.statusSounds.progress == "none", "old disabled status is preserved as None")
+Check(cfg.statusSounds.progress == "none", "explicit None is preserved")
 local catalog, catalogOrder = ns.SoundKitOptions(true)
 Check(#catalogOrder == 14 and catalog.raidWarning == "Raid warning" and catalog.achievement == "Achievement"
     and catalog.global == nil,

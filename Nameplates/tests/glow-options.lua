@@ -64,11 +64,11 @@ Check(rule.style.healthGlowShineSize == 50, "health Shine popup guarded after st
 f.Flush()
 local popup = rows["Health glow settings"]
 local before = rule.style.healthGlowLines
-rows["Enable rule styling"].set(false)
+rows["Enable Nameplate styling"].set(false)
 Check(popup.disabled(), "global lock disables open glow cog")
 popup.rows[1].set(16)
 Check(rule.style.healthGlowLines == before, "global lock guards stale cog callback")
-rows["Enable rule styling"].set(true)
+rows["Enable Nameplate styling"].set(true)
 popup = rows["Health glow settings"]
 rows["Rule enabled"].set(false)
 popup.rows[1].set(16)

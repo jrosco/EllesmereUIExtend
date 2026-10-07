@@ -1,0 +1,47 @@
+name: Quest Tracker release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: startsWith(github.event.release.tag_name, 'questtracker-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prepare Forever release
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          CF_PROJECT_ID: ${{ vars.CURSEFORGE_QUESTTRACKER_PROJECT_ID || '0' }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^questtracker-v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta)\.[0-9]+)?$ ]] || exit 1
+          [[ "$CF_PROJECT_ID" =~ ^[0-9]+$ ]] || exit 1
+          version="${RELEASE_TAG#questtracker-v}"
+          expected_prerelease=false
+          [[ "$version" == *-alpha.* || "$version" == *-beta.* ]] && expected_prerelease=true
+          if [[ "$RELEASE_PRERELEASE" != "$expected_prerelease" ]]; then
+            echo '::error::Alpha/beta tags must be GitHub prereleases; stable tags must be regular releases.'
+            exit 1
+          fi
+          sed -i -E "s/^## Version:.*/## Version: $version/; s/^## Interface:.*/## Interface: 16001/" \
+            QuestTracker/EllesmereUIExtendQuestTracker.toc
+          printf '%s\n\n' 'Quest Tracker for WoW Forever 1.60.1 only; Retail is not tagged as supported. Shared Extend profiles are built in; no separate Core addon is needed. Requires EllesmereUI with its Quest Tracker module enabled.' > docs/QUESTTRACKER-CHANGELOG.md
+          jq -r '.release.body // ""' "$GITHUB_EVENT_PATH" >> docs/QUESTTRACKER-CHANGELOG.md
+
+      - name: Package and publish
+        uses: BigWigsMods/packager@e50a250f8705041e40f2fa1ddcb280a686d65aa0
+        with:
+          pandoc: 'false'
+          args: -m .pkgmeta-questtracker -g 1.60.1 -p ${{ vars.CURSEFORGE_QUESTTRACKER_PROJECT_ID || '0' }} -n "{package-name}-${{ github.event.release.tag_name }}:{project-version} (Forever)"
+        env:
+          GH_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}

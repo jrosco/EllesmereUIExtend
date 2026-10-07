@@ -3,10 +3,10 @@
 ## Repository structure and scope
 
 - This is a monorepo for **separate, independently installable World of Warcraft addons** that extend EllesmereUI. The repository is not itself a single addon.
-- The current addon is **EllesmereUIExtendNameplates**, with source under `Nameplates/`. Future addons may have their own sibling directories, TOCs, saved settings, documentation and tests.
+- Feature addons are **EllesmereUIExtendNameplates** under `Nameplates/` and **EllesmereUIExtendQuestTracker** under `QuestTracker/`. Shared source lives under `Core/` and is embedded as `Shared/` inside each feature package, not installed as a separate addon. Each feature has its own TOC, README and tests.
 - Read the relevant addon's `README.md`, TOC and any more-specific `AGENTS.md` before editing. For Nameplates, start with `Nameplates/README.md`.
 - Check `git status` before making changes. Treat unfamiliar changes as user work; do not overwrite, revert, reset or discard them.
-- Keep changes scoped to the requested addon. Do not introduce cross-addon runtime dependencies merely because addons share this repository.
+- Keep changes scoped to the request. Features embed the shared core but must never require each other or a standalone Core addon. The embedded singleton owns the in-memory `EllesmereUIExtendDB`, profiles and combined EUI registration. Features declare distinct profile-snapshot SavedVariables. `Core/Sync.lua` merges independently edited feature sections by stable profile ID, tracks shared renames/assignments and deletion tombstones, and saves synchronized copies at logout. Never choose a whole-root winner just because its session counter is larger. Read `Core/README.md` for the loading/persistence contract.
 - **Do not modify upstream EllesmereUI or EllesmereUINameplates files.** Integrate through existing public APIs, shared renderers and carefully scoped hooks. Upstream code may be inspected for reference, but implementation belongs here.
 - Commit or push only when explicitly requested. Exclude unrelated user changes from commits unless the user asks to include them.
 
@@ -34,13 +34,14 @@
 - Keep the primary TOC named **`EllesmereUIExtendNameplates.toc`**, matching the installed folder. Do not rename it to `Nameplates.toc` without changing the installed addon identity.
 - Lua files use simplified names: `Nameplates.lua`, `Options.lua`, `Borders.lua`, `Glows.lua`, `Text.lua`, `Scaling.lua`, `TargetArrows.lua`, `CastStyles.lua`, `RuleIO.lua` and `Preview.lua`.
 - Update TOC entries and references when moving or renaming files. Do not change Lua runtime addon IDs to the monorepo source-directory name.
-- The current public API and SavedVariables are `EllesmereUIExtendNameplates` and `EllesmereUIExtendNameplatesDB`. Diagnostics use `/enp` and `/extendnameplates`.
+- The Nameplates public API is `EllesmereUIExtendNameplates`; its settings are the `nameplates` section of the singleton's in-memory `EllesmereUIExtendDB` profiles. QuestTracker uses `questTracker`. Feature TOCs declare `EllesmereUIExtendNameplatesProfiles` and `EllesmereUIExtendQuestTrackerProfiles` respectively, never the same SavedVariable in both TOCs. Nameplates diagnostics use `/enp` and `/extendnameplates`; `/eqtx` opens QuestTracker and `/eextend` opens shared profiles.
 - The user does **not** want legacy settings migration, copying old SavedVariables, or legacy API/slash aliases. Do not add these unless requested.
 - Existing sharing wire identifiers may intentionally retain historical names; do not change serialized formats as an incidental cleanup.
 
 ## Testing and documentation
 
 - Review the addon tests before changing runtime behavior. Add focused regression coverage for matching, restoration, client capability gates and new UI behavior.
+- Use `TESTING.md` for suite commands, upstream dependencies and in-game checklists; keep release/packaging instructions in `docs/RELEASES.md` rather than expanding feature READMEs.
 - Update the addon README when behavior, options, packaging or commands change. Check current code rather than assuming older README limits or preset descriptions are authoritative.
 - **Verify test paths after the repository move.** Earlier fixtures assumed an `EllesmereUIExtendNameplates/` directory at the repository root and could load upstream EUI files from that checkout. Do not assume those paths or files exist here, and do not edit upstream addons to make tests pass.
 - On Windows, use `npx.cmd --yes --package fengari-node-cli fengari <test-path>` when a native Lua interpreter is unavailable. `npx.ps1` may be blocked by PowerShell execution policy.

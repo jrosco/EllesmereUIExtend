@@ -44,7 +44,7 @@ for _, style in ipairs({ "eui", "classic", "blizzard", "forever" }) do
     Capability(supported, style)
     for _, key in ipairs(keys) do
         for _, selection in ipairs({ key, { [key] = true } }) do
-            EllesmereUIExtendNameplatesDB = { enabled = true, rules = { Rule(selection) } }
+            EllesmereUIExtendDB = { profiles = { Default = { nameplates = { enabled = true, rules = { Rule(selection) } } } } }
             local rule = api.GetRules()[1]
             Equal(rule.conditions.castState[key], true, style .. " saved choice retained")
             Palette(supported and { [key] = true } or {}, style .. " saved " .. key)
@@ -248,8 +248,9 @@ end
 EllesmereUI.IsPluginRegistered = function() return false end
 EllesmereUI.RegisterPlugin = function(_, value) spec = value; return true end
 assert(loadfile("Nameplates/Options.lua"))("EllesmereUIExtendNameplates", runtime)
+assert(EllesmereUIExtend.RegisterOptions())
 assert(spec, "production Options registration failed")
-spec.modules[1].buildPage("Rules", CreateFrame("Frame"), 0)
+spec.modules[1].buildPage("Style", CreateFrame("Frame"), 0)
 local items = {}
 for _, item in ipairs(castDropdown.items) do items[item.key] = item end
 for _, style in ipairs({ "eui", "classic", "blizzard", "forever" }) do

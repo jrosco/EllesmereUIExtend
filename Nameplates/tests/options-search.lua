@@ -20,6 +20,7 @@ function CreateFrame(kind, _, parent)
     function frame:ClearAllPoints() self.point = nil end
     function frame:SetText(text) self.text = text end
     function frame:SetScript(event, fn) self[event] = fn end
+    function frame:RegisterEvent() end
     function frame:HookScript(event, fn)
         local previous = self[event]
         self[event] = function(...)
@@ -59,6 +60,10 @@ local db = { selectedRule = 1, rules = { Rule("First rule"), Rule("Second rule")
 EllesmereUIExtendNameplates = { GetSettings = function() return db end, Refresh = Noop,
     CastStyleDefaults = {}, SupportsInstanceType = function() return true end }
 local namespace = {}
+SlashCmdList = {}
+assert(loadfile("Core/Core.lua"))("EllesmereUIExtend")
+assert(loadfile("Core/Sync.lua"))("EllesmereUIExtend")
+assert(loadfile("Core/Options.lua"))("EllesmereUIExtend")
 assert(loadfile("Nameplates/Helpers.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/Scaling.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/Borders.lua"))("EllesmereUIExtendNameplates", namespace)
@@ -73,11 +78,11 @@ local parent = CreateFrame("Frame") -- GlobalSearch also passes a real wrapper, 
 local contentHeader = CreateFrame("Frame")
 local function UpdateIndex()
     for _, entry in ipairs(searchEntries) do
-        if entry.page == "Rules" then index[entry.label] = entry end
+        if entry.page == "Style" then index[entry.label] = entry end
     end
 end
 local function Register(label, tooltip, section)
-    EllesmereUI._RegisterSearchEntry(label, nil, tooltip, "plugin:test:NameplateStyle", "Rules",
+    EllesmereUI._RegisterSearchEntry(label, nil, tooltip, "plugin:test:NameplateStyle", "Style",
         section or currentSection)
     UpdateIndex()
 end
@@ -207,15 +212,16 @@ EllesmereUI._deferredInits[1]()
 for key, value in pairs(mockRows) do W[key] = value end
 local function Build()
     currentSection, pageRows = nil, {}
-    local h = spec.modules[1].buildPage("Rules", parent, -6)
+    local h = spec.modules[1].buildPage("Style", parent, -6)
     -- Panel captures final anchors after the builder finishes, including manual moves.
     for _, row in ipairs(pageRows) do row._origAnchor = { unpack(row.point) } end
     return h
 end
 EllesmereUI.RefreshPage = Build
 assert(loadfile("Nameplates/Options.lua"))("EllesmereUIExtendNameplates", namespace)
+assert(EllesmereUIExtend.RegisterOptions())
 searchNS.modules["plugin:test:NameplateStyle"] = {
-    pages = { "Rules", "About" }, buildPage = spec.modules[1].buildPage,
+    pages = { "Style", "About" }, buildPage = spec.modules[1].buildPage,
 }
 
 local actions = { "Add Rule", "Copy Rule", "Delete Rule", "Move Rule Up", "Move Rule Down" }
@@ -236,11 +242,11 @@ local function PrebuildTest()
     assert(#refreshes == 1 and refreshes[1] == previousPageRefresh,
         "prebuild leaked refresh callbacks or lost the prior live page's registry")
     assert(EllesmereUI.Widgets == W and not EllesmereUI._prebuilding, "prebuild state not restored")
-    assert(index["Enable rule styling"] and index["Enable rule styling"].section == "RULE STYLING",
-        "global styling toggle must be indexed on Rules")
+    assert(index["Enable Nameplate styling"] and index["Enable Nameplate styling"].section == "NAMEPLATE STYLING",
+        "global styling toggle must be indexed on Style")
     local aboutIndexed = false
     for _, entry in ipairs(searchEntries) do
-        assert(not (entry.page == "About" and entry.label == "Enable rule styling"),
+        assert(not (entry.page == "About" and entry.label == "Enable Nameplate styling"),
             "global toggle is still indexed on About")
         if entry.page == "About" and entry.label == "CAST COLORS" then aboutIndexed = true end
     end
@@ -306,8 +312,8 @@ local function SectionsTest()
     assert(index["Health-bar preview"] == nil and index["Cast-bar preview"] == nil and index["Target-arrow preview"] == nil,
         "removed inline previews must not be indexed as settings")
     assert(contentHeader._extrasRulePreview.parent == contentHeader, "combined preview is outside scroll/search rows")
-    assert(spec.modules[1].getHeaderBuilder("Rules") and not spec.modules[1].getHeaderBuilder("Profiles"),
-        "plugin exposes cached header builder for Rules only")
+    assert(spec.modules[1].getHeaderBuilder("Style") and not spec.modules[1].getHeaderBuilder("Profiles"),
+        "plugin exposes cached header builder for Style only")
     assert(fields["Edit rule"].values["2"]:find("Renamed second rule", 1, true), "selector context stale")
     assert(fields["Edit rule"].values["2"] == "[2] Renamed second rule", "rule priority/name format incorrect")
     print("PASS sections: first-indexed exact destinations survive selection and rename; current name/position visible")

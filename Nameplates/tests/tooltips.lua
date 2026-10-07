@@ -66,10 +66,10 @@ for _, frame in ipairs(f.frames) do
     if frame.allPoints == button and frame.scripts.OnEnter then lock = frame end
 end
 Check(lock ~= nil, "action keeps its editor-lock overlay")
-rows["Enable rule styling"].set(false)
+rows["Enable Nameplate styling"].set(false)
 lock.scripts.OnEnter(lock)
-Check(shown:find("Enable rule styling", 1, true), "lock explanation takes priority over normal action help")
-rows["Enable rule styling"].set(true)
+Check(shown:find("Enable Nameplate styling", 1, true), "lock explanation takes priority over normal action help")
+rows["Enable Nameplate styling"].set(true)
 rule.style.healthGlowStyle, rule.style.castGlowStyle = 3, 3
 EllesmereUI:RefreshPage()
 for _, name in ipairs({ "Health glow settings", "Cast glow settings" }) do
@@ -88,19 +88,20 @@ EllesmereUI.ApplyBorderStyle = renderBorder
 EllesmereUI:RefreshPage()
 
 local module = f.spec.modules[1]
-module.buildPage("Profiles", f.parent, 0)
+f.spec.modules[2].buildPage("Profiles", f.parent, 0)
 Tooltip(rows["Profile for this character"].tooltip, "character profile")
 Hover("Create Profile")
 Check(api.CreateProfile("Tooltip profile"), "named profile created")
-module.buildPage("Profiles", f.parent, 0)
+f.spec.modules[2].buildPage("Profiles", f.parent, 0)
 Hover("Create Profile"); Hover("Rename Profile"); Hover("Delete Active Profile")
 module.buildPage("Sharing", f.parent, 0)
 Hover("Export Rule Set"); Hover("Import Rule Set")
 module.buildPage("About", f.parent, 0)
-Hover("Open Nameplate Style Rules")
+Hover("Open Nameplate Style")
 local count = #f.frames
 EllesmereUI.IsSearchPrebuild = function() return true end
-for _, page in ipairs({ "Profiles", "Sharing", "About" }) do module.buildPage(page, f.parent, 0) end
+f.spec.modules[2].buildPage("Profiles", f.parent, 0)
+for _, page in ipairs({ "Sharing", "About" }) do module.buildPage(page, f.parent, 0) end
 Check(#f.frames == count, "button tooltips create no frames during search prebuild")
 print("PASS: " .. checks .. " tooltip checks across " .. settings .. " settings, " .. choices
     .. " condition choices, cogs, actions, profiles, sharing and native hover/lock handling")

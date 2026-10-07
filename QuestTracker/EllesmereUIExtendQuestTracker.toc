@@ -6,9 +6,12 @@
 ## Author: jrosco
 ## Version: 0.1.0
 ## Dependencies: EllesmereUI, EllesmereUIQuestTracker
-## SavedVariables: EllesmereUIExtendQuestTrackerDB
+## SavedVariables: EllesmereUIExtendQuestTrackerProfiles
 ## IconTexture: Interface\AddOns\EllesmereUI\media\eg-logo.tga
 
+Shared/Core.lua
+Shared/Sync.lua
+Shared/Options.lua
 Compatibility.lua
 QuestTracker.lua
 Wowhead.lua

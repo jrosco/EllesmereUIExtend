@@ -2,6 +2,7 @@ local addonName, ns = ...
 if EUI_CLIENT_BLOCKED or not ns.IsSecret then return end
 
 local addon = {}
+local core = EllesmereUIExtend
 ns.Addon = addon
 _G.EllesmereUIExtendQuestTracker = addon
 ns.Defaults = {
@@ -73,40 +74,34 @@ local function Normalize(source, defaults)
     return result
 end
 
-function addon.Settings()
-    if not ns.settings then
-        local saved = ns.Table(_G.EllesmereUIExtendQuestTrackerDB) or {}
-        local oldStatuses = ns.Table(saved.statuses)
-        ns.settings = Normalize(saved, ns.Defaults)
-        -- Preserve existing opt-outs when old status toggles become None choices.
-        for kind, enabled in pairs(oldStatuses or {}) do
-            if (kind == "progress" or kind == "ready") and ns.Boolean(enabled) == false then
-                ns.settings.statusSounds[kind] = "none"
-            end
-        end
-        if not ({ auto = true, retail = true, classic = true })[ns.settings.wowheadDatabase] then
-            ns.settings.wowheadDatabase = "auto"
-        end
-        if ns.settings.toastTextAlign ~= "left" and ns.settings.toastTextAlign ~= "center"
-            and ns.settings.toastTextAlign ~= "right" then ns.settings.toastTextAlign = "left" end
-        for kind, key in pairs(ns.settings.statusSounds) do
-            if key ~= "none" and not (ns.SoundNames and ns.SoundNames[key]) then
-                ns.settings.statusSounds[kind] = ns.Defaults.statusSounds[kind]
-            end
-        end
-        if not ({ Master = true, SFX = true, Music = true, Ambience = true, Dialog = true })[ns.settings.soundChannel] then
-            ns.settings.soundChannel = "Master"
-        end
-        local vis = ns.settings.itemVisibility
-        if vis.visibilityMatch ~= "all" and vis.visibilityMatch ~= "any" then vis.visibilityMatch = "all" end
-        if not ({ always = true, never = true, mouseover = true, in_combat = true, out_of_combat = true,
-            in_raid = true, in_party = true, solo = true, show_dragonriding = true, show_not_dragonriding = true })[vis.visibility] then
-            vis.visibility = "never"
-        end
-        local border = ns.settings.itemBorderTexture
-        if #border == 0 or #border > 256 or border:find("%c") then ns.settings.itemBorderTexture = "none" end
-        _G.EllesmereUIExtendQuestTrackerDB = ns.settings
+local function NormalizeSettings(saved)
+    local settings = Normalize(saved, ns.Defaults)
+    if not ({ auto = true, retail = true, classic = true })[settings.wowheadDatabase] then
+        settings.wowheadDatabase = "auto"
     end
+    if settings.toastTextAlign ~= "left" and settings.toastTextAlign ~= "center"
+        and settings.toastTextAlign ~= "right" then settings.toastTextAlign = "left" end
+    for kind, key in pairs(settings.statusSounds) do
+        if key ~= "none" and not (ns.SoundNames and ns.SoundNames[key]) then
+            settings.statusSounds[kind] = ns.Defaults.statusSounds[kind]
+        end
+    end
+    if not ({ Master = true, SFX = true, Music = true, Ambience = true, Dialog = true })[settings.soundChannel] then
+        settings.soundChannel = "Master"
+    end
+    local vis = settings.itemVisibility
+    if vis.visibilityMatch ~= "all" and vis.visibilityMatch ~= "any" then vis.visibilityMatch = "all" end
+    if not ({ always = true, never = true, mouseover = true, in_combat = true, out_of_combat = true,
+        in_raid = true, in_party = true, solo = true, show_dragonriding = true, show_not_dragonriding = true })[vis.visibility] then
+        vis.visibility = "never"
+    end
+    local border = settings.itemBorderTexture
+    if #border == 0 or #border > 256 or border:find("%c") then settings.itemBorderTexture = "none" end
+    return settings
+end
+
+function addon.Settings()
+    ns.settings = core.GetSettings("questTracker")
     return ns.settings
 end
 
@@ -145,11 +140,11 @@ function addon.Refresh()
 end
 
 function addon.Reset()
-    _G.EllesmereUIExtendQuestTrackerDB = nil
-    ns.settings = nil
-    addon.Settings()
-    addon.Refresh()
+    return core.ResetFeature("questTracker")
 end
+
+core.RegisterFeature("questTracker", { defaults = ns.Defaults, normalize = NormalizeSettings,
+    refresh = function() addon.Settings(); addon.Refresh() end })
 
 function addon.Capabilities()
     return { menus = ns.HasMenus(), questLog = ns.HasQuestLog(), objectives = ns.HasObjectives(), questItem = ns.HasQuestItems()
@@ -222,6 +217,6 @@ SlashCmdList.ELLESMEREUIEXTENDQUESTTRACKER = function(message)
         end
         ns.Print("Display-only filtering and native collapse features are omitted: no verified taint-safe integration.")
     elseif not ns.InCombat() and EllesmereUI and type(EllesmereUI.OpenPlugin) == "function" then
-        EllesmereUI.OpenPlugin(addonName)
+        EllesmereUI.OpenPlugin(core.PluginID, "QuestTracker")
     end
 end

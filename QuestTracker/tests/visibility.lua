@@ -1,6 +1,6 @@
 -- Read-only integration with the actual EUI shared visibility compiler.
 -- Set EUI_TEST_ROOT to the upstream checkout. No WoW rendering is simulated.
-local root = (os.getenv and os.getenv("EUI_TEST_ROOT")) or "../jrosco-EllesmereUI"
+local root = (os.getenv and os.getenv("EUI_TEST_ROOT")) or "../EllesmereUI"
 EllesmereUI = {}
 local inRaid, inParty, inInstance, hovering = false, false, false, false
 function IsInRaid() return inRaid end

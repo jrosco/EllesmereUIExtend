@@ -51,10 +51,10 @@ local oldName, oldSize = rows["Rule name"].set, rows["Nameplate size (%)"].set
 rows["Delete Rule"].click()
 local deletePopup = assert(f.GetConfirm())
 local before = Copy(api.GetRules())
-rows["Enable rule styling"].set(false); f.Flush()
+rows["Enable Nameplate styling"].set(false); f.Flush()
 Locks(true, "global off")
 Check(rows["Edit rule"].disabled() and rows["Rule enabled"].disabled(), "global off locks selector and individual enable")
-Check(not rows["Enable rule styling"].disabled, "global toggle must remain usable")
+Check(not rows["Enable Nameplate styling"].disabled, "global toggle must remain usable")
 for _, name in ipairs(actions) do
     Check(rows[name].button.alpha == 0.3 and rows[name].button.mouseEnabled == false, "global off action " .. name)
     rows[name].click()
@@ -73,7 +73,7 @@ local explained = false
 for _, frame in ipairs(f.frames) do
     if frame.allPoints == rows["Unit type"].button and frame.shown and frame.scripts.OnEnter then
         frame.scripts.OnEnter()
-        explained = tooltip and tooltip:find("Enable rule styling", 1, true) ~= nil
+        explained = tooltip and tooltip:find("Enable Nameplate styling", 1, true) ~= nil
     end
 end
 EllesmereUI.ShowWidgetTooltip = previousTooltip
@@ -81,7 +81,7 @@ Check(explained, "locked native dropdown overlay must explain the global lock on
 Same(api.GetRules(), before, "global off must preserve all rule data and block stale callbacks")
 Check(api.GetSettings().selectedRule == 1, "global off keeps selection")
 
-rows["Enable rule styling"].set(true); f.Flush()
+rows["Enable Nameplate styling"].set(true); f.Flush()
 Check(not rows["Edit rule"].disabled() and not rows["Rule enabled"].disabled(), "global on restores selector and rule toggle")
 Locks(false, "global on")
 rows["Override health bar"].set(false)
@@ -118,8 +118,8 @@ rows["Edit rule"].set("2")
 Check(not rows["Rule name"].disabled(), "selecting an enabled rule unlocks its editor")
 oldName("Old disabled input")
 Check(first.name ~= "Old disabled input" and second.name == "Other rule", "stale disabled-rule name callback cannot change another rule")
-rows["Enable rule styling"].set(false)
-rows["Enable rule styling"].set(true)
+rows["Enable Nameplate styling"].set(false)
+rows["Enable Nameplate styling"].set(true)
 Check(first.enabled == false and second.enabled == true, "global toggle preserves individual disabled flags")
 rows["Edit rule"].set("1")
 rows["Add Rule"].click()

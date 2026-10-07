@@ -1,0 +1,27 @@
+package-as: EllesmereUIExtendQuestTracker
+
+move-folders:
+  EllesmereUIExtendQuestTracker/Core: EllesmereUIExtendQuestTracker/QuestTracker/Shared
+  EllesmereUIExtendQuestTracker/QuestTracker: EllesmereUIExtendQuestTracker
+
+ignore:
+  - .github
+  - .gitignore
+  - .pkgmeta-nameplates
+  - .pkgmeta-questtracker
+  - AGENTS.md
+  - README.md
+  - TESTING.md
+  - Nameplates
+  - tools
+  - docs
+  - dist
+  - Core/tests
+  - QuestTracker/tests
+
+manual-changelog:
+  filename: docs/QUESTTRACKER-CHANGELOG.md
+  markup-type: markdown
+
+required-dependencies:
+  - ellesmereui
