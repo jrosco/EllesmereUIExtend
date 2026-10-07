@@ -62,6 +62,7 @@ EllesmereUIExtendNameplates = { GetSettings = function() return db end, Refresh 
 local namespace = {}
 SlashCmdList = {}
 assert(loadfile("Core/Core.lua"))("EllesmereUIExtend")
+assert(loadfile("Core/Sync.lua"))("EllesmereUIExtend")
 assert(loadfile("Core/Options.lua"))("EllesmereUIExtend")
 assert(loadfile("Nameplates/Helpers.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/Scaling.lua"))("EllesmereUIExtendNameplates", namespace)

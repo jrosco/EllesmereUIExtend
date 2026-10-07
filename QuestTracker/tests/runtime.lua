@@ -229,6 +229,7 @@ EllesmereUI = {
 }
 local files = { "Compatibility", "QuestTracker", "Wowhead", "Objectives", "NotificationOutput", "Notifications", "ItemVisibility", "QuestItem", "Preview", "Options" }
 assert(loadfile("Core/Core.lua"))("EllesmereUIExtend")
+assert(loadfile("Core/Sync.lua"))("EllesmereUIExtend")
 assert(loadfile("Core/Options.lua"))("EllesmereUIExtend")
 for _, file in ipairs(files) do assert(loadfile("QuestTracker/" .. file .. ".lua"))("EllesmereUIExtendQuestTracker", ns) end
 local addon = EllesmereUIExtendQuestTracker

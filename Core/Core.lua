@@ -11,8 +11,8 @@ local core = { PluginID = "EllesmereUIExtend", MaxProfiles = 100, APIVersion = 1
 _G.EllesmereUIExtend = core
 local features, modules = {}, {}
 local store, activeName, character
-local owners, loadedOwners = {}, {}
-local revision, selectedOwner = 0, nil
+local owners = {}
+local persistence
 -- This is an in-memory root, not a SavedVariable. Old standalone-core data
 -- is deliberately not imported into the embedded architecture.
 _G.EllesmereUIExtendDB = nil
@@ -80,6 +80,11 @@ local function Store()
     return saved.profiles[selected]
 end
 
+function core.InitializePersistence(factory)
+    persistence = factory(core, function() Store(); return store end, owners, features, addonName)
+    core.InitializePersistence = nil
+end
+
 function core.RegisterFeature(key, spec)
     if type(key) ~= "string" or not key:match("^%a[%w_]*$") or features[key]
         or type(spec) ~= "table" or type(spec.defaults) ~= "table" then return false end
@@ -121,6 +126,7 @@ end
 
 local function Manage()
     Store()
+    if persistence then persistence.Ensure() end
     if not character then return false, "The character name and realm are not available yet." end
     if EllesmereUI and type(EllesmereUI.IsUnlockModeActive) == "function" then
         local ok, editing = pcall(EllesmereUI.IsUnlockModeActive, EllesmereUI)
@@ -149,6 +155,7 @@ function core.SelectProfile(name)
         return false, "That profile does not exist."
     end
     store.characterProfiles[character] = name
+    if persistence then persistence.Select(character, name) end
     Changed()
     return true
 end
@@ -166,6 +173,7 @@ function core.CreateProfile(name)
     if count >= core.MaxProfiles then return false, "You can have up to 100 profiles." end
     store.profiles[name] = {}
     store.characterProfiles[character] = name
+    if persistence then persistence.Create(name); persistence.Select(character, name) end
     Changed()
     return true
 end
@@ -179,6 +187,7 @@ function core.RenameProfile(name)
     if name == activeName then return true end
     local old = activeName
     store.profiles[name], store.profiles[old] = store.profiles[old], nil
+    if persistence then persistence.Rename(old, name) end
     for key, assigned in pairs(store.characterProfiles) do
         if assigned == old then store.characterProfiles[key] = name end
     end
@@ -195,6 +204,7 @@ function core.DeleteProfile(expectedName)
     if activeName == "Default" then return false, "Default cannot be deleted." end
     local old = activeName
     store.profiles[old] = nil
+    if persistence then persistence.Delete(old) end
     for key, assigned in pairs(store.characterProfiles) do
         if assigned == old then store.characterProfiles[key] = "Default" end
     end
@@ -235,21 +245,7 @@ events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_LOGOUT")
 events:SetScript("OnEvent", function(_, event, name)
     if event == "ADDON_LOADED" and owners[name] then
-        loadedOwners[name] = true
-        local snapshot = _G[owners[name]]
-        if type(snapshot) == "table" and snapshot.format == 1 and type(snapshot.data) == "table"
-            and type(snapshot.revision) == "number" and snapshot.revision >= 0
-            and snapshot.revision < math.huge and snapshot.revision % 1 == 0 then
-            -- Whole-root selection prevents a stale disabled/reinstalled addon
-            -- from resurrecting deleted profiles. Equal revisions normally
-            -- contain identical data; use a stable owner tie-break regardless
-            -- of addon loading order.
-            if not selectedOwner or snapshot.revision > revision
-                or (snapshot.revision == revision and name < selectedOwner) then
-                revision, selectedOwner = snapshot.revision, name
-                _G.EllesmereUIExtendDB = Copy(snapshot.data)
-            end
-        end
+        if persistence then persistence.Load(name) end
         Store()
     end
     if event == "PLAYER_LOGIN" then
@@ -257,10 +253,6 @@ events:SetScript("OnEvent", function(_, event, name)
         if core.RegisterOptions then core.RegisterOptions() end
     end
     if event == "PLAYER_LOGOUT" then
-        Store()
-        revision = revision + 1
-        for owner in pairs(loadedOwners) do
-            _G[owners[owner]] = { format = 1, revision = revision, data = Copy(store) }
-        end
+        if persistence then persistence.Save() end
     end
 end)

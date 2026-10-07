@@ -1,6 +1,8 @@
 -- Embedded copies, independent SavedVariables and uninstall/reinstall sessions.
 SlashCmdList = {}
 local frames, registrations, checks = {}, 0, 0
+local clock = 1000
+function GetServerTime() return clock end
 function UnitFullName() return "Player", "Realm" end
 function CreateFrame()
     local frame = { events = {}, scripts = {} }
@@ -22,6 +24,7 @@ local function Event(event, name)
 end
 local owners = { nameplates = "EllesmereUIExtendNameplates", questTracker = "EllesmereUIExtendQuestTracker" }
 local function Start(order, snapshots)
+    clock = clock + 10
     frames, registrations = {}, 0
     EllesmereUIExtend = nil
     EllesmereUIExtendDB = { oldStandalone = true }
@@ -30,6 +33,7 @@ local function Start(order, snapshots)
     for _, key in ipairs(order) do
         local owner = owners[key]
         assert(loadfile("Core/Core.lua"))(owner)
+        assert(loadfile("Core/Sync.lua"))(owner)
         assert(loadfile("Core/Options.lua"))(owner)
         if first then Check(first == EllesmereUIExtend, "embedded copies share one runtime") end
         first = EllesmereUIExtend
@@ -97,4 +101,85 @@ for _, forever in ipairs({ false, true }) do
     local snapshot = Save(core).nameplates
     Check(snapshot.revision == 1, "bad snapshot does not poison saved revision")
 end
+-- A single counter for the whole root used to discard one of these edits.
+for _, reverse in ipairs({ false, true }) do
+    local order = reverse and { "questTracker", "nameplates" } or { "nameplates", "questTracker" }
+    local core = Start({ "nameplates", "questTracker" })
+    Check(core.CreateProfile("Shared"), "fork base profile")
+    core.GetSettings("nameplates").value = 1
+    core.GetSettings("questTracker").value = 2
+    local base = Save(core)
+    core = Start({ "nameplates" }, { nameplates = base.nameplates })
+    core.GetSettings("nameplates").value = 101
+    Check(core.RenameProfile("Renamed"), "rename preserves stable profile identity")
+    local np = Save(core)
+    core = Start({ "questTracker" }, { questTracker = base.questTracker })
+    core.GetSettings("questTracker").value = 202
+    local qt = Save(core)
+    for _ = 1, 3 do
+        core = Start({ "questTracker" }, { questTracker = qt.questTracker })
+        qt = Save(core)
+    end
+    Check(qt.questTracker.revision > np.nameplates.revision, "unchanged stale sessions can have higher diagnostic revisions")
+    core = Start(order, { nameplates = np.nameplates, questTracker = qt.questTracker })
+    Check(core.GetProfileInfo().active == "Renamed" and EllesmereUIExtendDB.profiles.Shared == nil,
+        "rename is shared even when other feature edited stale name")
+    Check(core.GetSettings("nameplates").value == 101 and core.GetSettings("questTracker").value == 202,
+        "independent feature edits survive even when stale snapshot has more sessions")
+    local combined = Save(core)
+    core = Start(order, combined)
+    Check(core.GetSettings("nameplates").value == 101 and core.GetSettings("questTracker").value == 202,
+        "merged edits survive another reload")
+
+    core = Start({ "nameplates" }, { nameplates = combined.nameplates })
+    Check(core.DeleteProfile("Renamed"), "delete named fork profile")
+    local deleted = Save(core)
+    core = Start({ "questTracker" }, { questTracker = combined.questTracker })
+    core.GetSettings("questTracker").value = 303
+    local laterEdit = Save(core)
+    core = Start(order, { nameplates = deleted.nameplates, questTracker = laterEdit.questTracker })
+    Check(EllesmereUIExtendDB.profiles.Renamed == nil and core.GetProfileInfo().active == "Default",
+        "even a later stale feature edit cannot resurrect an explicitly deleted profile")
+    core = Start({ "questTracker" }, { questTracker = combined.questTracker })
+    Check(core.RenameProfile("Stale rename"), "offline stale copy can rename before learning of deletion")
+    local staleRename = Save(core)
+    core = Start(order, { nameplates = deleted.nameplates, questTracker = staleRename.questTracker })
+    Check(EllesmereUIExtendDB.profiles["Stale rename"] == nil and core.GetProfileInfo().active == "Default",
+        "deletion wins even over a later stale rename")
+    Check(core.CreateProfile("Renamed"), "recreating deleted name gets a new identity")
+    Check(core.GetSettings("questTracker").value == 0, "recreated profile cannot inherit deleted-generation settings")
+
+    local invalid = { format = 1, revision = 999, data = {} }
+    core = Start(order, { nameplates = combined.nameplates, questTracker = invalid })
+    Check(core.GetSettings("nameplates").value == 101, "empty high-revision snapshot cannot replace valid profiles")
+    invalid = core.Copy(combined.questTracker)
+    invalid.sync.profiles.Default.stamp.sequence = math.huge
+    core = Start(order, { nameplates = combined.nameplates, questTracker = invalid })
+    Check(core.GetSettings("questTracker").value == 202, "invalid sync metadata is rejected before any partial merge")
+end
+
+local core = Start({ "nameplates", "questTracker" })
+local base = Save(core)
+core = Start({ "nameplates" }, { nameplates = base.nameplates })
+Check(core.CreateProfile("Same name"), "independent Nameplates profile")
+core.GetSettings("nameplates").value = 111
+local np = Save(core)
+core = Start({ "questTracker" }, { questTracker = base.questTracker })
+Check(core.CreateProfile("Same name"), "independent QuestTracker profile")
+core.GetSettings("questTracker").value = 222
+local qt = Save(core)
+for _, order in ipairs({ { "nameplates", "questTracker" }, { "questTracker", "nameplates" } }) do
+    core = Start(order, { nameplates = np.nameplates, questTracker = qt.questTracker })
+    local foundNP, foundQT = false, false
+    for _, profile in pairs(EllesmereUIExtendDB.profiles) do
+        if profile.nameplates and profile.nameplates.value == 111 then foundNP = true end
+        if profile.questTracker and profile.questTracker.value == 222 then foundQT = true end
+    end
+    Check(foundNP and foundQT and EllesmereUIExtendDB.profiles["Same name (2)"],
+        "same-name independent creations are retained with deterministic suffix")
+end
+GetServerTime = function() error("unavailable clock") end
+core = Start({ "nameplates" }, { nameplates = np.nameplates })
+Check(core.RenameProfile("Clock fallback"), "unavailable server clock uses logical stamp fallback")
+Check(Save(core).nameplates.sync ~= nil, "clock fallback still persists sync metadata")
 print("PASS: " .. checks .. " embedded singleton, load orders, profile snapshots, reload, uninstall and stale reinstall checks")

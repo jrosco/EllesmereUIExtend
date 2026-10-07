@@ -10,6 +10,7 @@
 ## IconTexture: Interface\AddOns\EllesmereUI\media\eg-logo.tga
 
 Shared/Core.lua
+Shared/Sync.lua
 Shared/Options.lua
 Helpers.lua
 Nameplates.lua

@@ -244,6 +244,7 @@ local function Settings(name, scale, r)
 end
 local namespace = {}
 assert(loadfile("Core/Core.lua"))("EllesmereUIExtend")
+assert(loadfile("Core/Sync.lua"))("EllesmereUIExtend")
 assert(loadfile("Core/Options.lua"))("EllesmereUIExtend")
 assert(loadfile("Nameplates/Helpers.lua"))("EllesmereUIExtendNameplates", namespace)
 local borderAPI = assert(loadfile("Nameplates/tests/border-mocks.lua"))()

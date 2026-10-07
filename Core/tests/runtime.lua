@@ -59,6 +59,7 @@ local function Load(which, forever)
     EUI_CLIENT_FOREVER = forever
     if which ~= "quest" then
         assert(loadfile("Core/Core.lua"))("EllesmereUIExtendNameplates")
+        assert(loadfile("Core/Sync.lua"))("EllesmereUIExtendNameplates")
         assert(loadfile("Core/Options.lua"))("EllesmereUIExtendNameplates")
         local ns = {}
         assert(loadfile("Nameplates/Helpers.lua"))("EllesmereUIExtendNameplates", ns)
@@ -67,6 +68,7 @@ local function Load(which, forever)
     end
     if which ~= "nameplates" then
         assert(loadfile("Core/Core.lua"))("EllesmereUIExtendQuestTracker")
+        assert(loadfile("Core/Sync.lua"))("EllesmereUIExtendQuestTracker")
         assert(loadfile("Core/Options.lua"))("EllesmereUIExtendQuestTracker")
         local ns = {}
         assert(loadfile("QuestTracker/Compatibility.lua"))("EllesmereUIExtendQuestTracker", ns)

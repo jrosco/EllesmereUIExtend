@@ -95,6 +95,7 @@ EllesmereUI = {
     RegisterWidgetRefresh = Noop,
 }
 assert(loadfile("Core/Core.lua"))("EllesmereUIExtend")
+assert(loadfile("Core/Sync.lua"))("EllesmereUIExtend")
 assert(loadfile("Core/Options.lua"))("EllesmereUIExtend")
 for _, file in ipairs({ "Compatibility", "QuestTracker", "NotificationOutput", "Notifications", "Options" }) do
     assert(loadfile("QuestTracker/" .. file .. ".lua"))("EllesmereUIExtendQuestTracker", ns)

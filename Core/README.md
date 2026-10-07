@@ -1,10 +1,10 @@
 # EllesmereUI Extend Core
 
-The lightweight shared profile manager and EUI settings hub for independently installed extensions. Source lives in `Core/`; `Core.lua` and `Options.lua` are embedded under each feature's `Shared/` folder. There is no separately installed Core addon or Core TOC. Supports Retail and WoW Forever with feature-detected character identity and editor APIs.
+The lightweight shared profile manager and EUI settings hub for independently installed extensions. Source lives in `Core/`; `Core.lua`, `Sync.lua` and `Options.lua` are embedded under each feature's `Shared/` folder. There is no separately installed Core addon or Core TOC. Supports Retail and WoW Forever with feature-detected character identity and editor APIs.
 
 ## Installation and profiles
 
-Each feature ZIP contains only its own addon folder, including `Shared/Core.lua` and `Shared/Options.lua` before feature code in its TOC. Installing or uninstalling either feature cannot remove the other's embedded core. No Nameplates/QuestTracker cross-dependency exists. Use packaged ZIPs; for source installs copy the two shared Lua files into `Shared/` inside each installed feature folder.
+Each feature ZIP contains only its own addon folder, loading `Shared/Core.lua`, `Shared/Sync.lua` and `Shared/Options.lua` in that order before feature code. Installing or uninstalling either feature cannot remove the other's embedded core. No Nameplates/QuestTracker cross-dependency exists. Use packaged ZIPs; for source installs copy the three shared Lua files into `Shared/` inside each installed feature folder.
 
 Open **Extend > Profiles**, or `/eextend`. EUI reserves sidebar labels beginning with Ellesmere/EUI, so the shared section is labeled **Extend** while the addon identity remains `EllesmereUIExtend`. The section shows only installed/enabled feature modules. The core registers the complete section once at `PLAYER_LOGIN`, after ordinary startup addons have supplied their modules. These feature addons must remain non-load-on-demand; late module registration is rejected because the inspected EUI API cannot append plugin modules.
 
@@ -34,9 +34,13 @@ This is separate from EUI's own profile system and full-profile exports. **The e
 
 The first embedded copy creates the runtime with stable plugin ID `EllesmereUIExtend`. Subsequent copies register their owner and reuse it; shared Options code and the `/eextend` command initialize once. Feature-specific modules register before `PLAYER_LOGIN`, when all startup addons have loaded. Keep embedded APIs backward compatible when releasing features independently.
 
-Each feature declares its **own** account-wide SavedVariable: `EllesmereUIExtendNameplatesProfiles` or `EllesmereUIExtendQuestTrackerProfiles`. Each stores `{ format = 1, revision = n, data = <full shared root> }`. Its `ADDON_LOADED` event reads that owner's snapshot after WoW restores it. The highest valid revision wins for the **whole root**, with addon-name ordering as a deterministic tie-break. No merging of stale feature sections: that could resurrect deleted profiles or assignments. Feature settings rebind to the selected root and refresh at login.
+Each feature declares its **own** account-wide SavedVariable: `EllesmereUIExtendNameplatesProfiles` or `EllesmereUIExtendQuestTrackerProfiles`. Each stores `{ format = 1, revision = n, data = <full shared root>, sync = <change metadata> }`. `Core/Sync.lua` validates snapshots before reading them at `ADDON_LOADED`; empty/malformed snapshots cannot replace valid profiles. Feature settings rebind to the merged root and refresh at login.
 
-On `PLAYER_LOGOUT`, the runtime advances the revision and writes independent, synchronized full snapshots for every loaded owner. A single-addon session preserves absent feature sections and advances its own snapshot. When a disabled/uninstalled addon returns with an older file, the newer survivor wins in either load order. If an addon manager removes the uninstalled feature's SavedVariables too, the remaining feature still has a complete snapshot. Removing both features' saved data loses profiles; addon files alone are not settings backups.
+Profiles have stable internal identities. Renaming preserves feature settings edited under the old name; independently edited feature sections merge instead of choosing one whole snapshot. Deletions retain tombstones, so a stale edit cannot restore a deleted profile. Recreating its name creates a new identity. Independently created profiles with the same name are both retained, adding a numeric suffix to the older conflicting name.
+
+Change stamps use a readable, feature-detected `GetServerTime()`, a logical sequence and an owner tie-break. Missing/throwing/restricted clocks fall back to logical ordering; simultaneous conflicting shared edits resolve deterministically. Session revisions are diagnostic counters, not merge authority. Current embedded snapshots without sync metadata acquire it on save; standalone-core and legacy databases remain untouched. Previously overwritten edits cannot be recovered. Update both installed extensions: older embedded builds do not understand the synchronization metadata.
+
+On `PLAYER_LOGOUT`, the runtime writes independent, synchronized full snapshots for every loaded owner. Only changed, loaded feature sections receive new stamps; absent sections retain theirs. If an addon manager removes the uninstalled feature's SavedVariables too, the remaining feature still has a complete snapshot. Removing both features' saved data loses profiles; addon files alone are not settings backups.
 
 ## Extension API
 

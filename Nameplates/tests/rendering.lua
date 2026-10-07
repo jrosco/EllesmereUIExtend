@@ -78,6 +78,7 @@ local LoadUpstream = assert(loadfile("Nameplates/tests/upstream.lua"))()
 LoadUpstream("EllesmereUINameplates/EllesmereUINameplates_CastOverlay.lua")("Nameplates", NP)
 local namespace = {}
 assert(loadfile("Core/Core.lua"))("EllesmereUIExtend")
+assert(loadfile("Core/Sync.lua"))("EllesmereUIExtend")
 assert(loadfile("Nameplates/Helpers.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/Nameplates.lua"))("EllesmereUIExtendNameplates", namespace)
 local api = EllesmereUIExtendNameplates
