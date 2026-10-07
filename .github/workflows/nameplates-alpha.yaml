@@ -1,0 +1,40 @@
+name: Nameplates alpha release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.event.release.prerelease && startsWith(github.event.release.tag_name, 'nameplates-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prepare Forever alpha
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          CF_PROJECT_ID: ${{ vars.CURSEFORGE_NAMEPLATES_PROJECT_ID || '0' }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^nameplates-v([0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+)$ ]] || exit 1
+          [[ "$CF_PROJECT_ID" =~ ^[0-9]+$ ]] || exit 1
+          version="${RELEASE_TAG#nameplates-v}"
+          sed -i -E "s/^## Version:.*/## Version: $version/; s/^## Interface:.*/## Interface: 16001/" \
+            Core/EllesmereUIExtend.toc Nameplates/EllesmereUIExtendNameplates.toc
+          printf '%s\n\n' 'Alpha: tested on WoW Forever 1.60.1 only; Retail is not tested. Includes the shared Extend core. Requires EllesmereUI and EllesmereUINameplates.' > docs/ALPHA-CHANGELOG.md
+          jq -r '.release.body // ""' "$GITHUB_EVENT_PATH" >> docs/ALPHA-CHANGELOG.md
+
+      - name: Package and publish
+        uses: BigWigsMods/packager@e50a250f8705041e40f2fa1ddcb280a686d65aa0
+        with:
+          pandoc: 'false'
+          args: -m .pkgmeta-nameplates -g 1.60.1 -p ${{ vars.CURSEFORGE_NAMEPLATES_PROJECT_ID || '0' }} -n "{package-name}-${{ github.event.release.tag_name }}:{project-version} (Forever)"
+        env:
+          GH_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}

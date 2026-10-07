@@ -1,0 +1,25 @@
+package-as: EllesmereUIExtendNameplates
+
+move-folders:
+  EllesmereUIExtendNameplates/Nameplates: EllesmereUIExtendNameplates
+  EllesmereUIExtendNameplates/Core: EllesmereUIExtend
+
+ignore:
+  - .github
+  - .gitignore
+  - .pkgmeta-nameplates
+  - AGENTS.md
+  - README.md
+  - QuestTracker
+  - tools
+  - docs
+  - dist
+  - Core/tests
+  - Nameplates/tests
+
+manual-changelog:
+  filename: docs/ALPHA-CHANGELOG.md
+  markup-type: markdown
+
+required-dependencies:
+  - ellesmereui
