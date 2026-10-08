@@ -9,6 +9,40 @@ local defaults = {
 }
 EllesmereUIExtendNameplates.CastStyleDefaults = defaults
 
+local function IsSecret(value)
+    return issecretvalue and issecretvalue(value)
+end
+
+local function ReanchorSpark(spark, staleFills, fill)
+    if not spark or not spark.GetNumPoints or not spark.GetPoint or not spark.SetPoint then return false end
+    if spark.IsAnchoringRestricted then
+        local ok, restricted = pcall(spark.IsAnchoringRestricted, spark)
+        if not ok or IsSecret(restricted) or restricted then return false end
+    end
+    local ok, count = pcall(spark.GetNumPoints, spark)
+    if not ok or IsSecret(count) or type(count) ~= "number" then return false end
+    if count < 0 or count == math.huge or count ~= math.floor(count) then return false end
+    local anchors = {}
+    for i = 1, count do
+        local readable, point, relative, relativePoint, x, y = pcall(spark.GetPoint, spark, i)
+        -- pcall catches restricted getters, but does not make their results readable.
+        -- Check every component before inspecting it or using relative as a key.
+        if not readable or IsSecret(point) or IsSecret(relative) or IsSecret(relativePoint)
+            or IsSecret(x) or IsSecret(y) then return false end
+        if type(point) ~= "string" or type(relativePoint) ~= "string"
+            or type(x) ~= "number" or type(y) ~= "number" then return false end
+        if relative and staleFills[relative] and relative ~= fill then
+            anchors[#anchors + 1] = { point, fill, relativePoint, x, y }
+        end
+    end
+    -- SetPoint replaces the named point: never destructively clear native anchors.
+    -- Read the entire snapshot first, and retry from fresh engine state on failure.
+    for _, anchor in ipairs(anchors) do
+        if not pcall(spark.SetPoint, spark, unpack(anchor)) then return false end
+    end
+    return true
+end
+
 local function PaintColor(plate, state, texture, entry)
     local colors = state.castColors
     local override = colors and next(colors) and not plate._interrupted
@@ -161,17 +195,12 @@ function addon.ApplyCastStyle(plate, style, conditions, castColors)
         -- EUI may replace the fill before our texture hook runs. Track the prior
         -- object as well so its spark/overlay anchors do not stay on a stale fill.
         if overlay then overlay:SetAllPoints(fill) end
-        if plate.castSpark then
-            local anchors = {}
-            for i = 1, plate.castSpark:GetNumPoints() do
-                anchors[i] = { plate.castSpark:GetPoint(i) }
-            end
-            plate.castSpark:ClearAllPoints()
-            for _, anchor in ipairs(anchors) do
-                if anchor[2] == previousFill or anchor[2] == engineFill then anchor[2] = fill end
-                plate.castSpark:SetPoint(unpack(anchor))
-            end
-        end
+        state.sparkFills = state.sparkFills or setmetatable({}, { __mode = "k" })
+        state.sparkFills[previousFill] = true
+        state.sparkFills[engineFill] = true
+    end
+    if state.sparkFills and ReanchorSpark(plate.castSpark, state.sparkFills, fill) then
+        state.sparkFills = nil
     end
     state.fill = fill
     if fillEntry then PaintColor(plate, state, fill, fillEntry) end
