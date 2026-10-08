@@ -16,6 +16,7 @@ For source installs, copy `Nameplates/` into that addon folder and put `Core/Cor
 - Choices within a condition use **OR**; separate condition groups use **AND**. Empty checklists mean **Any**, not a restrictive filter. Conditions include unit type, reaction, classification, target state, player combat, instance type, casts, spell school, threat and quest objectives.
 - **Not current target** requires a selected target; **No target selected** is separate. Select both for a combined non-target rule. Combat/instance filters describe **your character**, not the nameplate unit or group type.
 - Threat filters describe the **aggro holder**: Tank threat, Non-tank threat and Threat on me. A temporary spell target is not assumed to hold aggro. School-specific rules require known school metadata; quest objectives use EUI's cached detector and instance setting.
+- Automatic spell-school discovery requires a readable client combat-log provider and is not promised on Retail. Missing/restricted APIs leave school metadata unknown; integrations may seed readable IDs through `RegisterSpellSchool`. Selected schools cannot match unknown data; empty/Any remains unrestricted.
 - Unsupported/restricted information cannot satisfy a selected filter. Any remains unrestricted. Forever gates Arena/Scenario/Delve choices; imported choices remain saved.
 
 **Enable Nameplate styling** is the master switch. Turning it off restores EUI appearance and locks the editor without deleting rules. A disabled rule locks its editing/actions, but selection, Add Rule and Rule enabled remain available while styling is on. Tooltips explain requirements and locks.
@@ -30,7 +31,7 @@ For source installs, copy `Nameplates/` into that addon folder and put `Core/Cor
 | Text | Override content and/or colors in EUI's health/nameplate and cast slots. Use EUI setting preserves content; None hides it. Fonts/positions remain EUI-owned; unavailable health/time/target data stays blank. |
 | Target arrows | EUI artwork or a selected style. Arrows remain **current-target indicators**, never arrows on arbitrary matched units. Color/size follow EUI; arrows use Other elements scaling. |
 
-The pinned **Style preview** displays the selected rule's saved appearance without evaluating conditions. Health, repeating casts/timers, text, glows and arrows update immediately; hidden previews stop animating. Overrides off, unmatched rules, disabled styling and recycled plates restore the **latest EUI-authored state**, not an initial snapshot.
+The pinned **Style preview** displays the selected rule's saved appearance without evaluating conditions. Health, repeating casts/timers, text, glows and arrows update immediately; hidden previews stop animating. Overrides off, unmatched rules, disabled styling and recycled plates restore the **latest EUI-authored state**, not an initial snapshot. If native cast-spark anchors are restricted, texture styling continues while spark retargeting waits for a later refresh with readable anchors; native anchors are never cleared or guessed.
 
 ### Cast-color states
 
