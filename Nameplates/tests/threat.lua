@@ -121,7 +121,7 @@ held.player = true
 roles.player = "TANK"
 local roleGetter = EllesmereUI.UnitEffectiveRole
 EllesmereUI.UnitEffectiveRole = nil
-Match("tank", true, "assigned-role fallback and scalar condition")
+Match({ tank = true }, true, "assigned-role fallback and selected condition")
 EllesmereUI.UnitEffectiveRole = roleGetter
 local detailed = UnitDetailedThreatSituation
 UnitDetailedThreatSituation = nil
@@ -133,7 +133,7 @@ Match({ me = true }, true, "only-me matching")
 Check(roleCalls == 0 and rosterCalls == 0, "only-me must not perform role/roster scans")
 Reset()
 Match({}, true, "empty threat means Any")
-Match("any", true, "scalar Any remains unrestricted")
+Match({}, true, "empty Any remains unrestricted")
 Check(#detailCalls == 0 and roleCalls == 0 and rosterCalls == 0, "Any must not query threat")
 rule.conditions.threat = { tank = true }
 rule.enabled = false

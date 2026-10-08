@@ -238,7 +238,7 @@ local function Near(actual, expected, label)
 end
 local function Settings(name, scale, r)
     return { profiles = { Default = { nameplates = { enabled = true, selectedRule = 1, rules = {
-        { name = name, enabled = true, conditions = { target = "yes" },
+        { name = name, enabled = true, conditions = { target = { yes = true } },
           style = { scale = scale, borderSize = 0, healthColor = { r = r, g = 0.3, b = 0.4 } } },
     } } } } }
 end
@@ -296,7 +296,7 @@ Fire("ADDON_LOADED", "EllesmereUIExtendNameplates")
 assert(api.GetSettings() == EllesmereUIExtendDB.profiles.Default.nameplates)
 assert(type(api.GetRules()[1].conditions.target) == "table"
     and api.GetRules()[1].conditions.target.yes == true,
-    "legacy scalar target condition was not migrated to a selection set")
+    "target selection set was not preserved")
 assert(type(api.GetRules()[1].conditions.unitType) == "table"
     and next(api.GetRules()[1].conditions.unitType) == nil,
     "missing condition should normalize to an empty (Any) selection")
@@ -701,13 +701,10 @@ local invalidConditionOK = api.ImportRuleSet(ruleCode)
 assert(not invalidConditionOK and api.GetRules() == currentRules,
     "import accepted an unknown multi-select condition")
 wirePayload.rules[1].conditions.unitType = exportedUnitType
-wirePayload.rules[1].conditions.unitType = "npc"
 wirePayload.version = 1
 local legacyRuleCode = "!EUI_NPEX_RULES1!" .. ruleCode:sub(18)
-local legacyConditionOK, legacyConditionError = api.ImportRuleSet(legacyRuleCode)
-assert(legacyConditionOK, legacyConditionError)
-assert(api.GetRules()[1].conditions.unitType.npc == true,
-    "legacy scalar import was not normalized to a selection set")
+assert(not api.ImportRuleSet(legacyRuleCode) and api.GetRules() == currentRules,
+    "unsupported v1 import must leave live rules untouched")
 wirePayload.version = 2
 wirePayload.rules[1].conditions.unitType = exportedUnitType
 assert(api.ImportRuleSet(ruleCode), "could not restore the exported multi-select rule")
@@ -1079,11 +1076,11 @@ assert(not castBorder.shown, "pool release hides cast border")
 plate.unit = "nameplate1"
 api.Refresh(); Flush()
 assert(castBorder.shown)
-api.GetRules()[1].conditions.target = "no"
+api.GetRules()[1].conditions.target = { no = true }
 api.Refresh(); Flush()
 assert(not castBorder.shown, "unmatching restores cast")
 assert(plate.cast:GetStatusBarTexture():GetTexture() == "new-engine-texture")
-api.GetRules()[1].conditions.target = "yes"
+api.GetRules()[1].conditions.target = { yes = true }
 api.Refresh(); Flush()
 api.GetSettings().enabled = false
 api.Refresh(); Flush()

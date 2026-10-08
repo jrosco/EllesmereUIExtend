@@ -725,14 +725,7 @@ local function BuildStylePage(parent, yOffset)
                 set = function(value)
                     if CogLocked() then return end
                     local selection = rule.style.scaleElements or {}
-                    -- Keep Text independent when changing Other, and persist
-                    -- explicit Text-on beside Other-off across legacy migration.
-                    if key == "other" and not value and selection.text == nil then selection.text = true end
-                    if value then
-                        if key == "text" and selection.other == false then selection[key] = true else selection[key] = nil end
-                    else
-                        selection[key] = false
-                    end
+                    if value then selection[key] = nil else selection[key] = false end
                     rule.style.scaleElements = next(selection) and selection or nil
                     Changed()
                 end,

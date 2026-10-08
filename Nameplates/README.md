@@ -13,14 +13,12 @@ For source installs, copy `Nameplates/` into that addon folder and put `Core/Cor
 ## Rules and matching
 
 - Four enabled starters: **Elite Enemies**, **Enemy Casting**, **Current Target**, **Non Target**. Add/copy/reorder up to 100 rules; the first enabled matching rule controls ordinary appearance. New rules target the current target; copies follow their source.
-- Choices within a condition use **OR**; separate condition groups use **AND**. Empty checklists mean **Any**, not a restrictive filter. Conditions include unit type, reaction, classification, target state, player combat, instance type, casts, threat and quest objectives.
+- Choices within a condition use **OR**; separate condition groups use **AND**. Empty checklists mean **Any**, not a restrictive filter. Conditions include unit type, reaction, classification, target state, player combat, instance type, casts, threat and quest objectives. Checklist conditions use selection tables, not scalar strings.
 - **Not current target** requires a selected target; **No target selected** is separate. Select both for a combined non-target rule. Combat/instance filters describe **your character**, not the nameplate unit or group type.
 - Threat filters describe the **aggro holder**: Tank threat, Non-tank threat and Threat on me. A temporary spell target is not assumed to hold aggro. Quest objectives use EUI's cached detector and instance setting.
 - Unsupported/restricted information cannot satisfy a selected filter. Any remains unrestricted. Forever gates Arena/Scenario/Delve choices; imported choices remain saved.
 
 **Enable Nameplate styling** is the master switch. Turning it off restores EUI appearance and locks the editor without deleting rules. A disabled rule locks its editing/actions, but selection, Add Rule and Rule enabled remain available while styling is on. Tooltips explain requirements and locks.
-
-Spell-school conditions have been removed on both clients. Loading/importing a rule with a selected school removes that field and disables the rule for review, preserving its name, styles and other conditions. Empty/Any school fields are removed without disabling the rule. Review the remaining conditions before re-enabling an affected rule; it can then match more broadly. Newly exported rule sets omit the retired field.
 
 ## Appearance
 
@@ -46,7 +44,7 @@ State checkboxes require EUI or Classic WoW UI nameplate style; Blizzard/WoW For
 
 **Extend > Profiles** or `/eextend` manages character-assigned profiles shared with other installed extensions. **Reset Nameplate** resets only this feature's active section. Persistence, independent edits and uninstall behavior are described in [Core](../Core/README.md); old standalone/legacy databases remain untouched.
 
-**Sharing > Export/Import Rule Set** copies rules only. Import replaces the active profile's rules and selects the first; it does not change assignments or the global enable toggle. Wire identifiers remain `!EUI_NPEX_RULES2!`, with `!EUI_NPEX_RULES1!` imports supported, separate from EUI full-profile exports.
+**Sharing > Export/Import Rule Set** copies rules only. Import replaces the active profile's rules and selects the first; it does not change assignments or the global enable toggle. Only current `!EUI_NPEX_RULES2!` codes are supported, separate from EUI full-profile exports; older development formats are not converted.
 
 - `/enp` or `/extendnameplates`: diagnostics and style reapplication for a visible enemy target; does **not** open settings.
 - `/enp cast`: target cast details and winning rules per cast-color state, without requiring a visible plate. Secret states may report unknown while native rendering still works.

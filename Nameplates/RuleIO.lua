@@ -2,7 +2,6 @@ local _, addon = ...
 local api = _G.EllesmereUIExtendNameplates
 if not api then return end
 
-local LEGACY_PREFIX = "!EUI_NPEX_RULES1!"
 local PREFIX = "!EUI_NPEX_RULES2!"
 local FORMAT = "EllesmereUINameplateExtrasRules" -- stable wire format: pre-rename codes remain compatible
 local VERSION = 2
@@ -136,9 +135,6 @@ function api.ExportRuleSet()
         local ok, reason = ValidateRule(rule, index)
         if not ok then return nil, reason end
     end
-    -- Serialize a normalized snapshot, never retired fields or mutations to live rules.
-    rules = Copy(rules)
-    for _, rule in ipairs(rules) do api.NormalizeRuleConditions(rule) end
     local payload = { format = FORMAT, version = VERSION, rules = rules }
     local ok, serialized = pcall(serializer.Serialize, payload)
     if not ok or type(serialized) ~= "string" then return nil, "Could not serialize the rule set." end
@@ -154,25 +150,19 @@ end
 function api.ImportRuleSet(code)
     if type(code) ~= "string" then return false, "Paste an Extend Nameplates rule-set code." end
     code = code:gsub("^%s+", ""):gsub("%s+$", ""):gsub("%s+", "")
-    local codePrefix, expectedVersion
-    if code:sub(1, #PREFIX) == PREFIX then
-        codePrefix, expectedVersion = PREFIX, VERSION
-    elseif code:sub(1, #LEGACY_PREFIX) == LEGACY_PREFIX then
-        codePrefix, expectedVersion = LEGACY_PREFIX, 1
-    end
-    if not codePrefix or #code < #codePrefix + 1 or #code > MAX_CODE_LENGTH then
+    if code:sub(1, #PREFIX) ~= PREFIX or #code < #PREFIX + 1 or #code > MAX_CODE_LENGTH then
         return false, "This is not a valid Extend Nameplates rule-set code."
     end
     local serializer, lib, err = GetCodec()
     if not serializer then return false, err end
-    local ok, decoded = pcall(lib.DecodeForPrint, lib, code:sub(#codePrefix + 1))
+    local ok, decoded = pcall(lib.DecodeForPrint, lib, code:sub(#PREFIX + 1))
     if not ok or type(decoded) ~= "string" then return false, "Could not decode the rule-set code." end
     local decompressedOK, serialized = pcall(lib.DecompressDeflate, lib, decoded)
     if not decompressedOK or type(serialized) ~= "string" or #serialized > MAX_DATA_LENGTH then
         return false, "The rule-set code is invalid or too large."
     end
     local deserializeOK, payload = pcall(serializer.Deserialize, serialized)
-    if not deserializeOK or type(payload) ~= "table" or payload.format ~= FORMAT or payload.version ~= expectedVersion then
+    if not deserializeOK or type(payload) ~= "table" or payload.format ~= FORMAT or payload.version ~= VERSION then
         return false, "The rule-set code is damaged or from an unsupported version."
     end
     local rules = payload.rules

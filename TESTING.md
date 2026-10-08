@@ -59,7 +59,7 @@ Paths below are relative to each addon's `tests/` directory.
 
 | Suites | Coverage |
 | --- | --- |
-| `runtime.lua`, `traits.lua`, `schema.lua`, `helpers.lua`, `rename.lua` | Matching/restoration, deep copies, target reload/profile switches, condition validation, v1/v2 sharing, custom predicates, retired-condition removal/disable safety and no legacy aliases/migration. |
+| `runtime.lua`, `traits.lua`, `schema.lua`, `helpers.lua`, `rename.lua` | Matching/restoration, deep copies, target reload/profile switches, condition validation, v2 sharing, unsupported-format rejection, custom predicates and no legacy aliases/migration. |
 | `predicate-snapshot.lua`, `style-capability.lua`, `cast-appearances.lua`, `cast-colors.lua`, `cooldown-transitions.lua` | Per-refresh consistency, style gates, implicit Casting versus per-state colors, restricted flags and targeted cooldown transitions. |
 | `cast-anchor-restrictions.lua` | Restricted/secret native spark geometry, non-destructive reanchoring, fresh-state retries, texture restoration and missing-API fallbacks. |
 | `root-secret-values.lua` | Root getter/setter failures, native secret values, scaling suspension/recovery, latest-value restoration, pool reset and Forever fallback. |
@@ -94,7 +94,7 @@ Mocks do not reproduce Retail's secret-value VM, native rendering/menu/mover eng
 ### Nameplates
 
 - Exercise rule priority, OR/AND/Any, target changes/clearing, aggro roles, player combat and instance transitions. Check unsupported saved/imported filters and unknown data.
-- Load/import rules containing the retired spell-school field: selected-school rules must be disabled with other settings preserved; empty/Any fields must not disable rules. Review and re-enable an affected rule, then reload and export/import it; the retired field must stay absent. Confirm no school control/search result remains and `/enp cast` still works.
+- Confirm current v2 rule sets roundtrip, while v1 codes and scalar checklist selections are rejected without replacing live rules. Text and Other scaling must remain independent. Confirm no school control/search result remains and `/enp cast` still works.
 - Test cast/channel/empowered states, interrupt cooldown transitions, supported/unsupported styles and reload requirements. Preserve native interrupted effects and friendly behavior.
 - Inspect textures, stock art, Solid/textured borders, Pixel/Shine glows, opacity, text/time/health formatting and current-target arrows. Verify native Important Cast Glow returns when overrides stop.
 - Test every scaling category, EUI target/cast animations, lifted casts, aura/pool transfers, retargeting and recycling. Disabled/unmatched overrides must restore the latest EUI state.

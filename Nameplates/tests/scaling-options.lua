@@ -10,7 +10,7 @@ Check(#Cog().rows == 6, "scale all and five component toggles")
 local labels = { ["Scale all"] = true, ["Health bar"] = true, ["Cast bar"] = true,
     ["Class resources"] = true, ["Text"] = true, ["Other elements"] = true }
 for _, row in ipairs(Cog().rows) do Check(labels[row.label], "only requested category: " .. row.label) end
-Check(all.get(), "old rules default to scale all")
+Check(all.get(), "missing selection defaults to scale all")
 for _, row in ipairs(Cog().rows) do Check(row.get(), "default enabled " .. row.label) end
 local cast
 for _, row in ipairs(Cog().rows) do if row.label == "Cast bar" then cast = row end end
@@ -18,7 +18,7 @@ cast.set(false); f.Flush()
 Check(first.style.scaleElements.castBar == false and not all.get(), "individual opt-out stored")
 local code = assert(api.ExportRuleSet())
 all.set(true); f.Flush()
-Check(first.style.scaleElements == nil and all.get(), "scale all uses backward-compatible default")
+Check(first.style.scaleElements == nil and all.get(), "scale all uses the default")
 Check(api.ImportRuleSet(code), "selective scaling imports")
 first = api.GetRules()[1]
 EllesmereUI:RefreshPage()
@@ -30,17 +30,17 @@ for _, row in ipairs(Cog().rows) do
     if row.label == "Other elements" then otherToggle = row end
 end
 otherToggle.set(false); f.Flush()
-Check(text.get() and first.style.scaleElements.text == true, "turning Other off preserves independently enabled Text")
+Check(text.get() and first.style.scaleElements.text == nil, "turning Other off preserves independently enabled Text")
 api.NormalizeScaleElements(first.style.scaleElements)
-Check(text.get(), "explicit Text-on survives profile normalization beside Other-off")
+Check(text.get(), "default Text-on survives profile normalization beside Other-off")
 text.set(false); f.Flush()
 otherToggle.set(true); f.Flush()
 Check(not text.get() and otherToggle.get(), "turning Other on preserves independently disabled Text")
 otherToggle.set(false); text.set(true); f.Flush()
-Check(first.style.scaleElements.text == true and first.style.scaleElements.other == false,
-    "enabling Text independently persists explicit true")
+Check(first.style.scaleElements.text == nil and first.style.scaleElements.other == false,
+    "enabling Text independently uses its default")
 local textCode = assert(api.ExportRuleSet())
-Check(api.ImportRuleSet(textCode) and api.GetRules()[1].style.scaleElements.text == true
+Check(api.ImportRuleSet(textCode) and api.GetRules()[1].style.scaleElements.text == nil
     and api.GetRules()[1].style.scaleElements.other == false, "Text-on Other-off sharing roundtrip")
 first = api.GetRules()[1]
 EllesmereUI:RefreshPage()
@@ -89,24 +89,20 @@ Check(not imported and reason:find("scale-elements", 1, true) and api.GetRules()
 current.style.scaleElements = nil
 code = assert(api.ExportRuleSet())
 Check(api.ImportRuleSet(code) and api.IsScaleElementEnabled(api.GetRules()[1].style, "castBar"),
-    "legacy missing selection roundtrips as scale all")
+     "missing selection roundtrips as scale all")
 for _, other in ipairs({ true, false }) do
     payload = deserialize(code:sub(18))
     payload.rules[1].style.scaleElements = { healthBar = false, buffs = false, debuffs = true, cc = false, other = other }
-    Check(api.ImportRuleSet("!EUI_NPEX_RULES2!" .. serialize(payload)), "legacy aura-toggle code remains importable")
-    local selection = api.GetRules()[1].style.scaleElements
-    Check(selection.healthBar == false and selection.other == other and selection.buffs == nil
-        and selection.debuffs == nil and selection.cc == nil, "import keeps Other choice and removes retired aura toggles")
-    Check(api.IsScaleElementEnabled(api.GetRules()[1].style, "text") == other,
-        "older imported Text inherits the prior Other choice")
-    local exported = deserialize(assert(api.ExportRuleSet()):sub(18)).rules[1].style.scaleElements
-    Check(exported.other == other and exported.buffs == nil and exported.debuffs == nil and exported.cc == nil,
-        "new export contains no retired aura toggles")
+    local before = api.GetRules()
+    Check(not api.ImportRuleSet("!EUI_NPEX_RULES2!" .. serialize(payload)) and api.GetRules() == before,
+        "unsupported aura-toggle imports rejected without changing live rules")
 end
 payload = deserialize(code:sub(18))
-payload.rules[1].style.scaleElements = { buffs = false, debuffs = false, cc = false }
-Check(api.ImportRuleSet("!EUI_NPEX_RULES2!" .. serialize(payload)) and api.GetRules()[1].style.scaleElements == nil,
-    "legacy aura-only opt-outs now use default Other selection")
+payload.rules[1].style.scaleElements = { other = false }
+Check(api.ImportRuleSet("!EUI_NPEX_RULES2!" .. serialize(payload))
+    and api.IsScaleElementEnabled(api.GetRules()[1].style, "text"),
+    "missing Text uses its own enabled default independently of Other")
+api.GetRules()[1].style.scaleElements = nil
 EllesmereUI:RefreshPage()
 stale = Cog()
 local oldRule = api.GetRules()[1]

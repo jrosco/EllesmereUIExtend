@@ -61,7 +61,6 @@ core.InitializePersistence(function(core, Root, owners, features, owner)
             if type(name) ~= "string" or name == "" or type(profile) ~= "table" then return false end
             for key in pairs(profile) do if type(key) ~= "string" then return false end end
         end
-        if snapshot.sync == nil then return true end
         local sync = snapshot.sync
         if type(sync) ~= "table" or sync.version ~= 1 or type(sync.profiles) ~= "table"
             or type(sync.assignments) ~= "table" or type(sync.features) ~= "table" then return false end
@@ -92,32 +91,6 @@ core.InitializePersistence(function(core, Root, owners, features, owner)
             end
         end
         return true
-    end
-    local function Metadata(snapshot, source)
-        if snapshot.sync then return snapshot.sync end
-        -- Additive metadata for current embedded snapshots without sync fields;
-        -- never read standalone-core or legacy addon SavedVariables.
-        local sync = { version = 1, profiles = {}, assignments = {}, features = {} }
-        local stamp = { at = 0, sequence = snapshot.revision, owner = source }
-        for name, profile in pairs(snapshot.data.profiles) do
-            if type(name) == "string" and name ~= "" and type(profile) == "table" then
-                local id = name == "Default" and "Default" or "profile:" .. name
-                sync.profiles[id] = { name = name, deleted = false, stamp = stamp }
-                sync.features[id] = {}
-                for key in pairs(profile) do
-                    -- A feature's own file is authoritative for pre-sync data.
-                    local own = (key == "nameplates" and source == "EllesmereUIExtendNameplates")
-                        or (key == "questTracker" and source == "EllesmereUIExtendQuestTracker")
-                    sync.features[id][key] = own and stamp or { at = 0, sequence = 0, owner = source }
-                end
-            end
-        end
-        for character, name in pairs(snapshot.data.characterProfiles) do
-            if type(character) == "string" and type(name) == "string" then
-                sync.assignments[character] = { id = name == "Default" and "Default" or "profile:" .. name, stamp = stamp }
-            end
-        end
-        return sync
     end
     local function Rebuild()
         local root = { profiles = {}, characterProfiles = {} }
@@ -152,7 +125,7 @@ core.InitializePersistence(function(core, Root, owners, features, owner)
         local snapshot = _G[owners[name]]
         if not Valid(snapshot) then return end
         revision = math.max(revision, snapshot.revision)
-        local sync = Metadata(snapshot, name)
+        local sync = snapshot.sync
         for id, record in pairs(sync.profiles) do
             Observe(record.stamp)
             local current = records[id]

@@ -66,9 +66,7 @@ local MAX_PROFILES = core.MaxProfiles
 
 local function NormalizeMultiCondition(value, allowed)
     local selected = {}
-    if type(value) == "string" then
-        if value ~= "any" and allowed[value] then selected[value] = true end
-    elseif type(value) == "table" then
+    if type(value) == "table" then
         for key, enabled in pairs(value) do
             if enabled == true and allowed[key] then selected[key] = true end
         end
@@ -78,16 +76,6 @@ end
 
 local function NormalizeRuleConditions(rule)
     if type(rule.conditions) ~= "table" then rule.conditions = {} end
-    -- Retire this built-in filter without silently broadening enabled rules.
-    local retired = rule.conditions.spellSchool
-    if type(retired) == "string" and retired ~= "any" then
-        rule.enabled = false
-    elseif type(retired) == "table" then
-        for choice, selected in pairs(retired) do
-            if choice ~= "any" and selected == true then rule.enabled = false; break end
-        end
-    end
-    rule.conditions.spellSchool = nil
     -- Selection sets are atomic: empty/missing means Any, never starter-rule values.
     for key, allowed in pairs(MULTI_CONDITION_VALUES) do
         rule.conditions[key] = NormalizeMultiCondition(rule.conditions[key], allowed)
@@ -107,7 +95,7 @@ local function ValidateRuleConditions(conditions)
     for key, allowed in pairs(MULTI_CONDITION_VALUES) do
         local value = conditions[key]
         if value ~= nil then
-            local valid = type(value) == "string" and (value == "any" or allowed[value])
+            local valid = false
             if type(value) == "table" then
                 valid = true
                 for choice, selected in pairs(value) do
@@ -411,8 +399,7 @@ local function GetTraits(unit, checkQuestObjective, checkThreat, checkThreatRole
 end
 
 local function AnySelectionMatches(selection, predicate)
-    if selection == nil or selection == "any" then return true end
-    if type(selection) == "string" then return predicate(selection) end
+    if selection == nil then return true end
     if type(selection) ~= "table" then return false end
     local hasSelection = false
     for value, enabled in pairs(selection) do
@@ -425,7 +412,6 @@ local function AnySelectionMatches(selection, predicate)
 end
 
 local function HasSelection(selection)
-    if type(selection) == "string" then return selection ~= "any" end
     if type(selection) == "table" then
         for _, enabled in pairs(selection) do
             if enabled == true then return true end

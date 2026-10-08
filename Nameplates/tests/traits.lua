@@ -125,8 +125,8 @@ api.GetRules()[1].conditions.castState = { interruptible = true }
 api.GetRules()[1].style = { castEnabled = true, castColorEnabled = true }
 Equal(namespace.FindRule("nameplate1"), api.GetRules()[1], "secret Interruptible implies Casting for appearance effects")
 Equal(namespace.FindCastColorOverrides("nameplate1").interruptible ~= nil, true, "Interruptible supplies a secret-safe color candidate")
-api.GetRules()[1].conditions.castState = "interruptible"
-Equal(namespace.FindCastColorOverrides("nameplate1").interruptible ~= nil, true, "legacy scalar color selection remains supported")
+api.GetRules()[1].conditions.castState = { interruptible = true }
+Equal(namespace.FindCastColorOverrides("nameplate1").interruptible ~= nil, true, "color selection remains supported")
 for _, selection in ipairs({ "casting", "interruptible", "interruptOnCD", "uninterruptible" }) do
     api.GetRules()[1].conditions.castState = { [selection] = true }
     mocks.casting = { "Cast", nil, nil, nil, nil, nil, nil, secret, secret }
