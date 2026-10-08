@@ -185,10 +185,21 @@ local function SafeBool(value)
     return value
 end
 
+local function ReadRootValue(plate, method)
+    if type(plate[method]) ~= "function" then return nil end
+    local ok, value = pcall(plate[method], plate)
+    if ok then return value end
+end
+
+local function ReadableRootValue(value)
+    return not IsSecret(value) and type(value) == "number"
+end
+
 local function GetState(plate)
     local state = states[plate]
     if not state then
-        state = { baseScale = plate:GetScale(), baseAlpha = plate:GetAlpha(), alphaFactor = 1, scaleFactor = 1 }
+        state = { baseScale = ReadRootValue(plate, "GetScale"), baseAlpha = ReadRootValue(plate, "GetAlpha"),
+            alphaFactor = 1, scaleFactor = 1 }
         states[plate] = state
     end
     return state
@@ -641,22 +652,60 @@ local function UpdateCombatLogRegistration()
     end
 end
 
+-- Only recapture a getter while our paint is absent. Secret native writes
+-- replace the old base too; never fall back to a stale readable snapshot.
+local function RootValues(plate, state, suffix)
+    local current = ReadRootValue(plate, "Get" .. suffix)
+    local baseKey, appliedKey = "base" .. suffix, "applied" .. suffix
+    if not state[appliedKey] and not ReadableRootValue(state[baseKey]) and ReadableRootValue(current) then
+        state[baseKey] = current
+    end
+    return state[baseKey], current
+end
+
+local function ApplyRootFactor(plate, state, suffix, factor)
+    local base, current = RootValues(plate, state, suffix)
+    local appliedKey, writingKey = "applied" .. suffix, "writing" .. suffix
+    local readable = ReadableRootValue(base) and ReadableRootValue(current)
+    -- A restricted getter cannot authorize multiplication. If we still own an
+    -- override, remove it using the latest readable native setter argument.
+    local target
+    if readable then
+        target = base * factor
+    elseif state[appliedKey] and ReadableRootValue(base) then
+        target = base
+    else
+        return false
+    end
+    if ReadableRootValue(current) and current == target then
+        state[appliedKey] = readable and factor ~= 1 or nil
+        return readable
+    end
+    state[writingKey] = true
+    local ok = pcall(plate["Set" .. suffix], plate, target)
+    state[writingKey] = nil
+    if ok then state[appliedKey] = readable and factor ~= 1 or nil end
+    return ok and readable
+end
+
+local function RefreshRootCastOverlay(plate)
+    if NP and NP.RefreshCastOverlay then
+        -- EUI's lifted-cast helper also reads effective scale. Its geometry may
+        -- be restricted even when the root setter argument was readable.
+        pcall(NP.RefreshCastOverlay, plate)
+    end
+end
+
 local function SetScaleFactor(plate, state, factor)
     state.scaleFactor = factor
-    local scale = state.baseScale * factor
-    if plate:GetScale() == scale then return end
-    state.writingScale = true
-    plate:SetScale(scale)
-    state.writingScale = nil
-    if NP and NP.RefreshCastOverlay then NP.RefreshCastOverlay(plate) end
+    local ok = ApplyRootFactor(plate, state, "Scale", factor)
+    state.scaleSuspended = not ok
+    if ok then RefreshRootCastOverlay(plate) end
+    return ok
 end
 
 local function ApplyAlpha(plate, state)
-    local alpha = state.baseAlpha * state.alphaFactor
-    if plate:GetAlpha() == alpha then return end
-    state.writingAlpha = true
-    plate:SetAlpha(alpha)
-    state.writingAlpha = nil
+    return ApplyRootFactor(plate, state, "Alpha", state.alphaFactor)
 end
 
 local function ResetStyle(plate, state, released, castColors)
@@ -679,16 +728,20 @@ local function ResetStyle(plate, state, released, castColors)
         end
     end
     state.writingHealth = nil
-    if state.scaleFactor and state.scaleFactor ~= 1 and plate.SetScale then
+    if (state.scaleFactor ~= 1 or state.appliedScale) and plate.SetScale then
         SetScaleFactor(plate, state, 1)
     end
     if refreshResources and NP and NP.RefreshClassPower and not released then NP.RefreshClassPower() end
     -- ClearUnit has already reset the engine's pool state. Do not restore the
     -- departing unit's alpha, including when the engine skipped its alpha setter.
-    if released then state.baseAlpha = 1 end
+    if released and ReadableRootValue(state.baseAlpha) then
+        -- This is EUI's explicit pool-reset contract, not a replacement for an
+        -- unreadable live alpha. A secret native write must remain untouched.
+        state.baseAlpha = 1
+    end
     local hadAlpha = state.alphaFactor ~= 1
     state.alphaFactor = 1
-    if (hadAlpha or released) and plate.SetAlpha then
+    if (hadAlpha or released or state.appliedAlpha) and plate.SetAlpha then
         ApplyAlpha(plate, state)
     end
     state.hadColor, state.hadTexture = nil, nil
@@ -749,9 +802,20 @@ local function ApplyStyle(plate)
     if addon.ApplyTargetArrowStyle then addon.ApplyTargetArrowStyle(plate, style) end
     local scale = math.max(50, math.min(200, tonumber(style.scale) or 100)) / 100
     local opacity = math.max(0, math.min(100, tonumber(style.opacity) or 100)) / 100
-    local rootScale = addon.PrepareScaleSelection and addon.PrepareScaleSelection(plate, scale, style.scaleElements) or scale
-    SetScaleFactor(plate, state, rootScale)
-    if addon.ApplyScaleSelection then addon.ApplyScaleSelection(plate) end
+    local baseScale, currentScale = RootValues(plate, state, "Scale")
+    local canScale = ReadableRootValue(baseScale) and ReadableRootValue(currentScale)
+    if canScale then
+        local rootScale = addon.PrepareScaleSelection and addon.PrepareScaleSelection(plate, scale, style.scaleElements) or scale
+        canScale = SetScaleFactor(plate, state, rootScale)
+    else
+        SetScaleFactor(plate, state, 1)
+    end
+    if canScale then
+        if addon.ApplyScaleSelection then addon.ApplyScaleSelection(plate) end
+    elseif addon.ClearScaleSelection then
+        -- Child compensation must not assume an unapplied root multiplier.
+        addon.ClearScaleSelection(plate)
+    end
     state.alphaFactor = opacity
     if plate.SetAlpha then ApplyAlpha(plate, state) end
     if addon.ApplyCastStyle then addon.ApplyCastStyle(plate, style, rule.conditions, castColors) end
@@ -887,18 +951,32 @@ local function InstallPlateHooks(plate)
     -- Keep EUI's animation values unmodified; multiply only the rendered scale.
     hooksecurefunc(plate, "SetScale", function(self, scale)
         if state.writingScale then return end
+        local wasSuspended = state.scaleSuspended
         state.baseScale = scale
-        if state.scaleFactor ~= 1 then
-            SetScaleFactor(self, state, state.scaleFactor)
-        elseif NP and NP.RefreshCastOverlay then
-            NP.RefreshCastOverlay(self)
+        state.appliedScale = nil
+        if not ReadableRootValue(scale) then
+            state.scaleFactor = 1
+            state.scaleSuspended = true
+            if addon.ClearScaleSelection then pcall(addon.ClearScaleSelection, self) end
+            QueueRefresh()
+            return
         end
+        if state.scaleFactor ~= 1 then
+            if not SetScaleFactor(self, state, state.scaleFactor) then
+                state.scaleFactor = 1
+                if addon.ClearScaleSelection then pcall(addon.ClearScaleSelection, self) end
+            end
+        else
+            RefreshRootCastOverlay(self)
+        end
+        if wasSuspended or state.scaleSuspended then QueueRefresh() end
     end)
     -- Observe actual writes rather than NT_Apply's cache or our multiplied render
     -- value. This also preserves independent writers and works at zero opacity.
     hooksecurefunc(plate, "SetAlpha", function(self, alpha)
         if state.writingAlpha then return end
         state.baseAlpha = alpha
+        state.appliedAlpha = nil
         if state.alphaFactor ~= 1 then ApplyAlpha(self, state) end
     end)
     if type(plate.ClearUnit) == "function" then
