@@ -63,6 +63,7 @@ Paths below are relative to each addon's `tests/` directory.
 | `predicate-snapshot.lua`, `style-capability.lua`, `cast-appearances.lua`, `cast-colors.lua`, `cooldown-transitions.lua` | Per-refresh consistency, style gates, implicit Casting versus per-state colors, restricted flags and targeted cooldown transitions. |
 | `cast-anchor-restrictions.lua` | Restricted/secret native spark geometry, non-destructive reanchoring, fresh-state retries, texture restoration and missing-API fallbacks. |
 | `spell-schools.lua` | Combat-log capability/restriction gates, secret payloads, registration failures, manual seeds, Forever legacy reader and unknown-versus-Any matching. |
+| `root-secret-values.lua` | Root getter/setter failures, native secret values, scaling suspension/recovery, latest-value restoration, pool reset and Forever fallback. |
 | `target-states.lua`, `threat.lua`, `combat-instance.lua`, `context-options.lua` | Target/no-target distinctions, aggro-holder roles, OR/AND/Any semantics, client gates and context-change events. |
 | `scaling.lua`, `scaling-options.lua`, `rendering.lua` | Selective effective scales, native animations/writes, lifted casts, lazy decorations, aura transfers, restoration and sharing. |
 | `border-overrides.lua`, `rule-glows.lua`, `glow-options.lua` | Native borders, stock art, secret alpha forwarding, glow geometry/lifecycle and Important Cast restoration. |

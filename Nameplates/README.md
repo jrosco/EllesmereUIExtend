@@ -31,6 +31,8 @@ For source installs, copy `Nameplates/` into that addon folder and put `Core/Cor
 | Text | Override content and/or colors in EUI's health/nameplate and cast slots. Use EUI setting preserves content; None hides it. Fonts/positions remain EUI-owned; unavailable health/time/target data stays blank. |
 | Target arrows | EUI artwork or a selected style. Arrows remain **current-target indicators**, never arrows on arbitrary matched units. Color/size follow EUI; arrows use Other elements scaling. |
 
+Unreadable root scale values temporarily suspend all scaling categories and release child compensation; unreadable alpha suspends the root opacity multiplier. Saved rules remain unchanged and styling resumes when native values become readable. Latest native secret writes stay native-owned rather than being replaced by older readable snapshots.
+
 The pinned **Style preview** displays the selected rule's saved appearance without evaluating conditions. Health, repeating casts/timers, text, glows and arrows update immediately; hidden previews stop animating. Overrides off, unmatched rules, disabled styling and recycled plates restore the **latest EUI-authored state**, not an initial snapshot. If native cast-spark anchors are restricted, texture styling continues while spark retargeting waits for a later refresh with readable anchors; native anchors are never cleared or guessed.
 
 ### Cast-color states
