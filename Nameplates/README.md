@@ -32,7 +32,11 @@ The pinned **Style preview** displays the selected rule's saved appearance witho
 
 Text rows include inherited EUI slots and explicit rule content, omitting hidden positions. Different slots may show the same content with different colors. Existing content-wide saved colors remain a fallback; turning a slot's color override off keeps EUI coloring for that slot without deleting other colors. Older EUI versions without slot-menu helpers add the first free position and offer Move through the popup's Position dropdown.
 
+Move blocks inherited EUI formats that the rule renderer cannot preserve (combined name/level or health formats, percentages without a sign or with decimals, Forever shortened names, and combined spell/target labels). The menu explains the restriction; choose an explicit rule content option first to intentionally use a supported format. Plain inherited names/health numbers remain movable.
+
 **Override size** enables a 6–30 font-size slider. **Override offsets** enables X/Y sliders from -200 to 200; these replace EUI's configured slot offsets, not add to them. Base anchors, font face/outline, strata, wrapping and dynamic cast/resource spacing remain EUI-owned. Unset fields inherit the destination's EUI settings after a move. Turning overrides off or releasing a rule restores the latest engine-authored layout; unreadable/restricted native geometry is left alone.
+
+If a native layout restoration fails temporarily, later text refreshes retry the unresolved font/anchors without replaying successfully restored anchors or an outdated EUI state.
 
 Each slot popup's **Reset to EUI** button restores that slot's content, color, size and X/Y offsets to EUI's current settings, turning its override toggles off. Other slots and their saved colors remain unchanged. If EUI has no content assigned to the position, its row disappears until added again.
 

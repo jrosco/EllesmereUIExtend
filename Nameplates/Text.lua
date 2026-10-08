@@ -117,6 +117,22 @@ function api.ResolveRuleText(style, slot)
     end
     return choice
 end
+function addon.GetRuleTextMoveBlock(style, slot)
+    local choice = style.textSlots and style.textSlots[slot.key]
+    if choice and choice ~= "eui" then return nil end
+    local tip = "This inherited EUI format cannot be moved without changing its content. Choose an explicit rule content option first."
+    if slot.cast then
+        if slot.key ~= "castTimer" and Setting("castCombineNameTarget", false) == true then return tip end
+        return nil
+    end
+    -- ResolveRuleText normalizes EUI elements for color lookup and previews;
+    -- those categories are not faithful move payloads for composite formats.
+    local native = Setting(slot.key, slot.key == "textSlotTop" and "enemyName" or "none")
+    if native ~= "enemyName" and native ~= "healthNumber" and not healthValues[native] then return tip end
+    if native == "healthPercent" and Setting(slot.key .. "PctDecimal", false) == true then return tip end
+    if EllesmereUI.IS_FOREVER and (native == "enemyName" or native == "name" or native == "targetOfTarget")
+        and Setting(slot.key .. "NameFormat", "full") ~= "full" then return tip end
+end
 local function NativeBindings(plate)
     local np = EllesmereNameplates_NS or {}
     local map = {}
@@ -156,30 +172,38 @@ local function ReadPoints(fs, slot)
     return points
 end
 local function NativeLayout(fs, entry, layout)
-    local previous = entry.layout
     entry.layout = layout and { size = layout.size, x = layout.x, y = layout.y }
     if not entry.layoutHooked then return end
     entry.writing = true
+    local function WriteFont(path, size, flags)
+        local ok, result = pcall(fs.SetFont, fs, path, size, flags)
+        -- SetFont can fail without throwing. An unreadable result is treated
+        -- conservatively as a possible write, never compared with false.
+        return ok and (Secret(result) or result ~= false)
+    end
     if layout and layout.size ~= nil and entry.font then
         local font = entry.font
         if not Secret(font[1]) and type(font[1]) == "string" and not Secret(font[3]) then
-            pcall(fs.SetFont, fs, font[1], layout.size, font[3])
+            if WriteFont(font[1], layout.size, font[3]) then entry.fontOwned = true end
         end
-    elseif previous and previous.size ~= nil and entry.font then
-        pcall(fs.SetFont, fs, unpack(entry.font, 1, 3))
+    elseif entry.fontOwned and entry.font then
+        if WriteFont(unpack(entry.font, 1, 3)) then entry.fontOwned = nil end
     end
-    if (layout and (layout.x ~= nil or layout.y ~= nil)) or (previous and (previous.x ~= nil or previous.y ~= nil)) then
-        for _, point in pairs(entry.points or {}) do
-            local x, y = point[4], point[5]
-            -- Keep EUI's base/dynamic anchor geometry, replacing only its
-            -- configured offsets. Never inspect or do arithmetic on secrets.
-            local readable = not Secret(x) and not Secret(y) and not Secret(point.baseX) and not Secret(point.baseY)
-                and type(x) == "number" and type(y) == "number" and type(point.baseX) == "number" and type(point.baseY) == "number"
-            if readable and layout then
-                if layout.x ~= nil then x = x - point.baseX + layout.x end
-                if layout.y ~= nil then y = y - point.baseY + layout.y end
-            end
-            pcall(fs.SetPoint, fs, point[1], point[2], point[3], x, y)
+    for _, point in pairs(entry.points or {}) do
+        local x, y = point[4], point[5]
+        -- Keep EUI's base/dynamic anchor geometry, replacing only its
+        -- configured offsets. Never inspect or do arithmetic on secrets.
+        local readable = not Secret(x) and not Secret(y) and not Secret(point.baseX) and not Secret(point.baseY)
+            and type(x) == "number" and type(y) == "number" and type(point.baseX) == "number" and type(point.baseY) == "number"
+        local override = readable and layout and (layout.x ~= nil or layout.y ~= nil)
+        if override then
+            if layout.x ~= nil then x = x - point.baseX + layout.x end
+            if layout.y ~= nil then y = y - point.baseY + layout.y end
+        end
+        if override or point.owned then
+            -- Keep restoration debt per anchor until its write succeeds. A
+            -- partial failure must not strand other anchors after release.
+            if pcall(fs.SetPoint, fs, point[1], point[2], point[3], x, y) then point.owned = override and true or nil end
         end
     end
     entry.writing = nil
@@ -200,12 +224,14 @@ local function WatchLayout(fs, entry, slot, plate)
     hooksecurefunc(fs, "SetFont", function(_, path, size, flags)
         if entry.writing then return end
         entry.font = { path, size, flags }
+        entry.fontOwned = nil
         NativeLayout(fs, entry, entry.layout)
     end)
     if fs.SetFontHeight then
         hooksecurefunc(fs, "SetFontHeight", function(_, size)
             if entry.writing or not entry.font then return end
             entry.font[2] = size
+            entry.fontOwned = nil
             NativeLayout(fs, entry, entry.layout)
         end)
     end

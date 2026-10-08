@@ -953,6 +953,7 @@ local function BuildStylePage(parent, yOffset)
         if TextOff() or not Assigned(slot) or not destination then return true end
         if destination.cast ~= slot.cast then return "Health and cast text use separate slot groups." end
         if key ~= slot.key and Assigned(destination) then return "This text position is already used." end
+        if key ~= slot.key then return private.GetRuleTextMoveBlock(rule.style, slot) end
     end
     local function Move(slot, key)
         if MoveBlocked(slot, key) or key == slot.key then return end
