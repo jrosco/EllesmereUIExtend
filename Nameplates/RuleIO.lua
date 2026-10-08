@@ -136,6 +136,9 @@ function api.ExportRuleSet()
         local ok, reason = ValidateRule(rule, index)
         if not ok then return nil, reason end
     end
+    -- Serialize a normalized snapshot, never retired fields or mutations to live rules.
+    rules = Copy(rules)
+    for _, rule in ipairs(rules) do api.NormalizeRuleConditions(rule) end
     local payload = { format = FORMAT, version = VERSION, rules = rules }
     local ok, serialized = pcall(serializer.Serialize, payload)
     if not ok or type(serialized) ~= "string" then return nil, "Could not serialize the rule set." end

@@ -73,7 +73,6 @@ local choices = {
     playerCombat = { "inCombat", "outOfCombat" },
     instanceType = { "world", "dungeon", "raid", "battleground", "arena", "scenario", "delve" },
     castState = { "none", "casting", "channel", "empowered", "interruptible", "interruptOnCD", "uninterruptible" },
-    spellSchool = { "physical", "holy", "fire", "nature", "frost", "shadow", "arcane", "mixed" },
 }
 local function ExpectedConditions(key, value)
     local result = { questObjective = "any" }
@@ -195,4 +194,84 @@ assert(api.GetRules()[1].conditions.castState.casting == nil, "import must not e
 assert(api.ExportRuleSet() == code)
 assert(payload.rules[1].conditions.castState.interruptible and payload.rules[1].conditions.castState.casting == nil,
     "export exposed implicit cast selection")
+
+-- Retired built-in conditions must not silently broaden enabled saved/imported rules.
+local retiredChecks = 0
+local function RetiredCheck(ok, label)
+    retiredChecks = retiredChecks + 1
+    assert(ok, label)
+end
+for _, selection in ipairs({
+    { value = "fire", disabled = true },
+    { value = { fire = true, frost = true }, disabled = true },
+    { value = { fire = false, frost = true }, disabled = true },
+    { value = "unknown", disabled = true },
+    { value = "any", disabled = false },
+    { value = {}, disabled = false },
+    { value = { fire = false }, disabled = false },
+    { value = { any = true }, disabled = false },
+    { disabled = false },
+}) do
+    for _, enabled in ipairs({ true, false }) do
+        local original = { name = "Retired condition", enabled = enabled,
+            conditions = { spellSchool = Copy(selection.value), target = { yes = true },
+                castState = { channel = true }, extensionData = Copy(custom) },
+            style = { scale = 150, opacity = 25 } }
+        local rule = Copy(original)
+        api.NormalizeRuleConditions(rule)
+        local expectedEnabled = enabled and not selection.disabled
+        RetiredCheck(rule.enabled == expectedEnabled and rule.conditions.spellSchool == nil,
+            "normalization removes retired selection and preserves/disables enabled state")
+        Same(rule.conditions.target, original.conditions.target, "retirement preserves target")
+        Same(rule.conditions.castState, original.conditions.castState, "retirement preserves cast kind")
+        Same(rule.conditions.extensionData, custom, "retirement preserves custom condition")
+        Same(rule.style, original.style, "retirement preserves appearance")
+        rule.enabled = true
+        api.NormalizeRuleConditions(rule)
+        RetiredCheck(rule.enabled, "reviewed/re-enabled rule stays enabled after repeated normalization")
+        for version = 1, 2 do
+            payload = { format = "EllesmereUINameplateExtrasRules", version = version, rules = { Copy(original) } }
+            RetiredCheck(api.ImportRuleSet("!EUI_NPEX_RULES" .. version .. "!schema"), "retired field import accepted")
+            local imported = api.GetRules()[1]
+            RetiredCheck(imported.enabled == expectedEnabled and imported.conditions.spellSchool == nil,
+                "import removes retired field without silently broadening enabled rules")
+            Same(imported.style, original.style, "retired import preserves appearance")
+            RetiredCheck(api.ExportRuleSet() ~= nil and payload.rules[1].conditions.spellSchool == nil,
+                "re-export omits retired field")
+        end
+    end
+end
+
+-- Export normalizes a copy, preserving live rules and extension-owned data.
+local live = api.GetRules()[1]
+live.enabled, live.conditions.spellSchool = true, { fire = true }
+RetiredCheck(api.ExportRuleSet() ~= nil, "export accepts a safe retired field")
+RetiredCheck(payload.rules[1].enabled == false and payload.rules[1].conditions.spellSchool == nil,
+    "export snapshot disables affected rule and removes retired field")
+RetiredCheck(live.enabled and live.conditions.spellSchool.fire, "export does not mutate live rules")
+Same(payload.rules[1].conditions.extensionData, custom, "retired export preserves custom data")
+
+-- Reload and accessing another profile apply the same retirement to saved sections.
+local questSettings = { customQuestSetting = "preserve" }
+EllesmereUIExtendDB = { profiles = {
+    Default = { nameplates = { rules = { Copy(live) } }, questTracker = Copy(questSettings) },
+    Other = { nameplates = { rules = { Copy(live) } } },
+} }
+api = LoadRuntime()
+LoadRuleIO()
+RetiredCheck(api.GetRules()[1].enabled == false and api.GetRules()[1].conditions.spellSchool == nil,
+    "saved active section disables affected rule during load")
+Same(EllesmereUIExtendDB.profiles.Default.questTracker, questSettings, "retirement leaves other feature untouched")
+RetiredCheck(api.SelectProfile("Other"), "other profile selects")
+RetiredCheck(api.GetRules()[1].enabled == false and api.GetRules()[1].conditions.spellSchool == nil,
+    "saved inactive section retires its filter when accessed")
+api.GetRules()[1].enabled = true
+EllesmereUIExtendDB = Copy(EllesmereUIExtendDB)
+api = LoadRuntime()
+RetiredCheck(api.GetRules()[1].enabled, "re-enabled cleaned saved rule survives reload")
+for _, starter in ipairs(api.DefaultRules) do
+    RetiredCheck(starter.conditions.spellSchool == nil, "new default rules omit retired field")
+end
+RetiredCheck(api.RegisterSpellSchool == nil, "retired public API absent")
 print("PASS: schema target reload/switch regressions, " .. cases .. " v1/v2 import cases, validation, custom conditions")
+print("PASS: " .. retiredChecks .. " retired-condition load/import/export and disabled-rule checks")

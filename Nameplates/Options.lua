@@ -57,10 +57,6 @@ local CONDITION_TIPS = {
         interruptOnCD = "Cast color when your interrupt is on cooldown. Other appearance settings apply to all active casts.",
         uninterruptible = "Cast color for spells that cannot be interrupted. Other appearance settings apply to all active casts.",
     },
-    spellSchool = {
-        physical = "Physical spells.", holy = "Holy spells.", fire = "Fire spells.", nature = "Nature spells.",
-        frost = "Frost spells.", shadow = "Shadow spells.", arcane = "Arcane spells.", mixed = "Spells with more than one school.",
-    },
 }
 local ACTION_TIPS = {
     ["Add Rule"] = "Add a current-target rule at the top of the list.",
@@ -74,8 +70,6 @@ local CAST_STATES = {
     empowered = "Empowered cast", interruptible = "Interruptible cast", interruptOnCD = "Interrupt on CD", uninterruptible = "Uninterruptible cast",
 }
 local CAST_ORDER = { "any", "none", "casting", "channel", "empowered", "interruptible", "interruptOnCD", "uninterruptible" }
-local SCHOOLS = { any = "Any spell school", physical = "Physical", holy = "Holy", fire = "Fire", nature = "Nature", frost = "Frost", shadow = "Shadow", arcane = "Arcane", mixed = "Mixed" }
-local SCHOOL_ORDER = { "any", "physical", "holy", "fire", "nature", "frost", "shadow", "arcane", "mixed" }
 
 local CUSTOM_CAST_STATES = { interruptible = true, interruptOnCD = true, uninterruptible = true }
 local CUSTOM_CAST_STYLE_TIP = "Enable EUI or Classic WoW UI nameplate style and reload the UI to use this cast-color state."
@@ -205,7 +199,7 @@ local function NewRule(index)
     return {
         name = "Custom Rule " .. index,
         enabled = true,
-        conditions = { unitType = {}, reaction = {}, classification = {}, target = { yes = true }, castState = {}, spellSchool = {} },
+        conditions = { unitType = {}, reaction = {}, classification = {}, target = { yes = true }, castState = {} },
         style = { healthColorEnabled = true, healthColor = { r = 1, g = 0.72, b = 0.15 }, scale = 100, opacity = 100, borderSize = 2, borderColor = { r = 1, g = 0.72, b = 0.15 }, texture = "eui" },
     }
 end
@@ -646,14 +640,12 @@ local function BuildStylePage(parent, yOffset)
             "Choose unit ranks, such as elite, rare or boss."),
         ConditionMultiDropdown("Target state", "target", TARGETS, TARGET_ORDER,
             "Choose whether units are your target, other units, or shown while you have no target."),
-        ConditionMultiDropdown("Cast state", "castState", CAST_STATES, CAST_ORDER,
-            "Choose cast types or cast-color states. Color-state choices apply other styling to all active casts."),
-        ConditionMultiDropdown("Spell school", "spellSchool", SCHOOLS, SCHOOL_ORDER,
-            "Choose spell schools for active casts. Unknown schools cannot match until a cast start is observed."),
         ConditionMultiDropdown("Player combat state", "playerCombat", PLAYER_COMBAT, PLAYER_COMBAT_ORDER,
             "Choose your character's combat state, not the unit's."),
         ConditionMultiDropdown("Instance Type", "instanceType", INSTANCES, INSTANCE_ORDER,
             "Choose where your character is, not your group type. Arena, scenario and delve are unavailable on Forever."),
+        ConditionMultiDropdown("Cast state", "castState", CAST_STATES, CAST_ORDER,
+            "Choose cast types or cast-color states. Color-state choices apply other styling to all active casts."),
     }
     for index = 1, #conditions, 2 do
         local left, right = conditions[index], conditions[index + 1]

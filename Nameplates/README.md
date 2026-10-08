@@ -13,13 +13,14 @@ For source installs, copy `Nameplates/` into that addon folder and put `Core/Cor
 ## Rules and matching
 
 - Four enabled starters: **Elite Enemies**, **Enemy Casting**, **Current Target**, **Non Target**. Add/copy/reorder up to 100 rules; the first enabled matching rule controls ordinary appearance. New rules target the current target; copies follow their source.
-- Choices within a condition use **OR**; separate condition groups use **AND**. Empty checklists mean **Any**, not a restrictive filter. Conditions include unit type, reaction, classification, target state, player combat, instance type, casts, spell school, threat and quest objectives.
+- Choices within a condition use **OR**; separate condition groups use **AND**. Empty checklists mean **Any**, not a restrictive filter. Conditions include unit type, reaction, classification, target state, player combat, instance type, casts, threat and quest objectives.
 - **Not current target** requires a selected target; **No target selected** is separate. Select both for a combined non-target rule. Combat/instance filters describe **your character**, not the nameplate unit or group type.
-- Threat filters describe the **aggro holder**: Tank threat, Non-tank threat and Threat on me. A temporary spell target is not assumed to hold aggro. School-specific rules require known school metadata; quest objectives use EUI's cached detector and instance setting.
-- Automatic spell-school discovery requires a readable client combat-log provider and is not promised on Retail. Missing/restricted APIs leave school metadata unknown; integrations may seed readable IDs through `RegisterSpellSchool`. Selected schools cannot match unknown data; empty/Any remains unrestricted.
+- Threat filters describe the **aggro holder**: Tank threat, Non-tank threat and Threat on me. A temporary spell target is not assumed to hold aggro. Quest objectives use EUI's cached detector and instance setting.
 - Unsupported/restricted information cannot satisfy a selected filter. Any remains unrestricted. Forever gates Arena/Scenario/Delve choices; imported choices remain saved.
 
 **Enable Nameplate styling** is the master switch. Turning it off restores EUI appearance and locks the editor without deleting rules. A disabled rule locks its editing/actions, but selection, Add Rule and Rule enabled remain available while styling is on. Tooltips explain requirements and locks.
+
+Spell-school conditions have been removed on both clients. Loading/importing a rule with a selected school removes that field and disables the rule for review, preserving its name, styles and other conditions. Empty/Any school fields are removed without disabling the rule. Review the remaining conditions before re-enabling an affected rule; it can then match more broadly. Newly exported rule sets omit the retired field.
 
 ## Appearance
 
@@ -52,7 +53,7 @@ State checkboxes require EUI or Classic WoW UI nameplate style; Blizzard/WoW For
 
 ## Integration notes
 
-Public API: `EllesmereUIExtendNameplates`. `GetSettings()`, `GetRules()` and `Refresh()` expose current state; call Refresh after programmatic rule edits. `RegisterCondition(key, predicate)` receives `(unitToken, traits, expectedValue, rule)`; `RegisterSpellSchool(spellID, school)` seeds metadata. `SupportsCastColorStates()` reports the shared editor/runtime capability.
+Public API: `EllesmereUIExtendNameplates`. `GetSettings()`, `GetRules()` and `Refresh()` expose current state; call Refresh after programmatic rule edits. `RegisterCondition(key, predicate)` receives `(unitToken, traits, expectedValue, rule)`. `SupportsCastColorStates()` reports the shared editor/runtime capability.
 
 `Helpers.lua` provides private namespace utilities; `Nameplates.lua` owns matching/runtime coordination, `Options.lua` the editor, and the remaining modules rendering/sharing. Predicate results are shared only within one refresh. Preserve native frame hierarchy, pooling, cast lifting and interrupted effects; use EUI renderers and check secrets before Lua comparisons/arithmetic. No upstream files are modified.
 

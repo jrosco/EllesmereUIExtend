@@ -12,7 +12,6 @@ local MULTI_CONDITION_VALUES = {
     playerCombat = { inCombat = true, outOfCombat = true },
     instanceType = { world = true, dungeon = true, raid = true, battleground = true, arena = true, scenario = true, delve = true },
     castState = { none = true, casting = true, channel = true, empowered = true, interruptible = true, interruptOnCD = true, uninterruptible = true },
-    spellSchool = { physical = true, holy = true, fire = true, nature = true, frost = true, shadow = true, arcane = true, mixed = true },
 }
 local SCALAR_CONDITION_VALUES = {
     questObjective = { any = true, yes = true, no = true },
@@ -25,25 +24,25 @@ local DEFAULT_RULES = {
     {
         name = "Elite Enemies",
         enabled = true,
-        conditions = { unitType = {}, reaction = { enemy = true }, classification = { elite = true }, target = {}, questObjective = "any", castState = {}, spellSchool = {} },
+        conditions = { unitType = {}, reaction = { enemy = true }, classification = { elite = true }, target = {}, questObjective = "any", castState = {} },
         style = { healthColorEnabled = true, healthColor = { r = 0.72, g = 0.36, b = 1.00 }, scale = 120, opacity = 100, borderSize = 2, borderColor = { r = 1.00, g = 1.00, b = 1.00 }, texture = "eui" },
     },
     {
         name = "Enemy Casting",
         enabled = true,
-        conditions = { unitType = {}, reaction = { enemy = true }, classification = {}, target = {}, questObjective = "any", castState = { casting = true }, spellSchool = {} },
+        conditions = { unitType = {}, reaction = { enemy = true }, classification = {}, target = {}, questObjective = "any", castState = { casting = true } },
         style = { healthColorEnabled = true, healthColor = { r = 1.00, g = 0.28, b = 0.18 }, scale = 120, opacity = 100, borderSize = 2, borderColor = { r = 1.00, g = 1.00, b = 1.00 }, texture = "eui" },
     },
     {
         name = "Current Target",
         enabled = true,
-        conditions = { unitType = {}, reaction = {}, classification = {}, target = { yes = true }, questObjective = "any", castState = {}, spellSchool = {} },
+        conditions = { unitType = {}, reaction = {}, classification = {}, target = { yes = true }, questObjective = "any", castState = {} },
         style = { healthColorEnabled = true, healthColor = { r = 0.12, g = 0.92, b = 0.67 }, scale = 110, opacity = 100, borderSize = 2, borderColor = { r = 1.00, g = 1.00, b = 1.00 }, texture = "eui" },
     },
     {
         name = "Non Target",
         enabled = true,
-        conditions = { unitType = {}, reaction = {}, classification = {}, target = { no = true, none = true }, questObjective = "any", castState = {}, spellSchool = {} },
+        conditions = { unitType = {}, reaction = {}, classification = {}, target = { no = true, none = true }, questObjective = "any", castState = {} },
         style = { healthColorEnabled = true, healthColor = { r = 0.12, g = 0.92, b = 0.67 }, scale = 100, opacity = 50, borderSize = 1, borderColor = { r = 1.00, g = 1.00, b = 1.00 }, texture = "eui" },
     },
 }
@@ -79,6 +78,16 @@ end
 
 local function NormalizeRuleConditions(rule)
     if type(rule.conditions) ~= "table" then rule.conditions = {} end
+    -- Retire this built-in filter without silently broadening enabled rules.
+    local retired = rule.conditions.spellSchool
+    if type(retired) == "string" and retired ~= "any" then
+        rule.enabled = false
+    elseif type(retired) == "table" then
+        for choice, selected in pairs(retired) do
+            if choice ~= "any" and selected == true then rule.enabled = false; break end
+        end
+    end
+    rule.conditions.spellSchool = nil
     -- Selection sets are atomic: empty/missing means Any, never starter-rule values.
     for key, allowed in pairs(MULTI_CONDITION_VALUES) do
         rule.conditions[key] = NormalizeMultiCondition(rule.conditions[key], allowed)
@@ -164,8 +173,6 @@ local unitFrame = CreateFrame("Frame")
 local queued = false
 local states = setmetatable({}, { __mode = "k" })
 local hooked = setmetatable({}, { __mode = "k" })
-local spellSchools = {}
-local combatLogActive = false
 local snapshotState
 local watchCastTransitions = false
 local pendingPlates = setmetatable({}, { __mode = "k" })
@@ -220,61 +227,12 @@ local function TextureOf(statusBar)
     return fill:GetTexture()
 end
 
-local SCHOOL_MASKS = {
-    physical = 1, holy = 2, fire = 4, nature = 8,
-    frost = 16, shadow = 32, arcane = 64,
-}
-
-local function GetSchoolFromMask(mask)
-    if IsSecret(mask) or type(mask) ~= "number" or mask ~= mask
-       or mask < 1 or mask > 127 or mask % 1 ~= 0
-       or not bit or type(bit.band) ~= "function" then return "unknown" end
-    local found, count
-    count = 0
-    for name, value in pairs(SCHOOL_MASKS) do
-        if bit.band(mask, value) ~= 0 then found = name; count = count + 1 end
-    end
-    if count == 1 then return found end
-    if count > 1 then return "mixed" end
-    return "unknown"
-end
-
-local function IsReadableSpellID(spellID)
-    return not IsSecret(spellID) and type(spellID) == "number"
-        and spellID == spellID and spellID > 0 and spellID < math.huge and spellID % 1 == 0
-end
-
-local function GetSchool(spellID)
-    if not IsReadableSpellID(spellID) then return "unknown" end
-    return spellSchools[spellID] or "unknown"
-end
-
-local function GetCombatLogReader()
-    -- The renamed getter can be secure-only on Retail. Its presence does not
-    -- promise readable payloads; do not load deprecation fallbacks to obtain it.
-    if C_CombatLog and type(C_CombatLog.GetCurrentEventInfo) == "function" then
-        return C_CombatLog.GetCurrentEventInfo
-    end
-    if type(CombatLogGetCurrentEventInfo) == "function" then
-        return CombatLogGetCurrentEventInfo -- Forever/older clients
-    end
-end
-
-local function CanReadCombatLog()
-    if C_CombatLog and type(C_CombatLog.IsCombatLogRestricted) == "function" then
-        local ok, restricted = pcall(C_CombatLog.IsCombatLogRestricted)
-        if not ok or IsSecret(restricted) or type(restricted) ~= "boolean" then return false end
-        return restricted == false
-    end
-    return true -- Forever may not expose the restriction query.
-end
-
 local function ReadCast(unit, includeDebug)
-    local name, _, _, _, _, _, _, notInterruptible, spellID = UnitCastingInfo(unit)
+    local name, _, _, _, _, _, _, notInterruptible = UnitCastingInfo(unit)
     local castState = "casting"
     if type(name) == "nil" then
         local isEmpowered
-        name, _, _, _, _, _, notInterruptible, spellID, isEmpowered = UnitChannelInfo(unit)
+        name, _, _, _, _, _, notInterruptible, _, isEmpowered = UnitChannelInfo(unit)
         castState = "channel"
         if SafeBool(isEmpowered) == true then
             castState = "empowered"
@@ -293,12 +251,12 @@ local function ReadCast(unit, includeDebug)
                 (type(notInterruptible) == "boolean" and "known" or "unknown (unavailable)"),
         }
     end
-    if type(name) == "nil" then return "none", "any", "unknown", debugInfo end
+    if type(name) == "nil" then return "none", "any", debugInfo end
     local interruptible = "unknown"
     if not IsSecret(notInterruptible) and type(notInterruptible) == "boolean" then
         interruptible = notInterruptible and "uninterruptible" or "interruptible"
     end
-    return castState, interruptible, GetSchool(spellID), debugInfo
+    return castState, interruptible, debugInfo
 end
 
 local function ReadKnownCastColorState(interruptible)
@@ -426,7 +384,7 @@ local function GetTraits(unit, checkQuestObjective, checkThreat, checkThreatRole
     if IsSecret(classification) then classification = "unknown"
     elseif type(classification) == "nil" then classification = "normal"
     elseif classification == "worldboss" then classification = "boss" end
-    local castState, interruptible, spellSchool = ReadCast(unit)
+    local castState, interruptible = ReadCast(unit)
     local targetExists = SafeBool(UnitExists("target"))
     local isTarget = SafeBool(UnitIsUnit(unit, "target"))
     local questObjective
@@ -447,7 +405,6 @@ local function GetTraits(unit, checkQuestObjective, checkThreat, checkThreatRole
         castState = castState,
         interruptible = interruptible,
         castColorState = KnownCastColorState(interruptible),
-        spellSchool = spellSchool,
         playerCombat = checkCombat and ReadPlayerCombat() or nil,
         instanceType = checkInstance and ReadInstanceType() or nil,
     }
@@ -542,18 +499,13 @@ local function MatchesReadableConditions(rule, unit, traits)
     end) then return false end
     if c.questObjective == "yes" and traits.questObjective ~= true then return false end
     if c.questObjective == "no" and traits.questObjective ~= false then return false end
-    if not AnySelectionMatches(c.spellSchool, function(value)
-        return traits.castState ~= "none" and value == traits.spellSchool
-    end) then
-        return false
-    end
     for key, expected in pairs(c) do
         local predicate = addon.customConditions and addon.customConditions[key]
         if predicate then
             local ok, matches = pcall(predicate, unit, traits, expected, rule)
             if not ok or SafeBool(matches) ~= true then return false end
         elseif key ~= "unitType" and key ~= "reaction" and key ~= "classification"
-           and key ~= "target" and key ~= "threat" and key ~= "questObjective" and key ~= "castState" and key ~= "spellSchool"
+           and key ~= "target" and key ~= "threat" and key ~= "questObjective" and key ~= "castState"
            and key ~= "playerCombat" and key ~= "instanceType" then
             return false
         end
@@ -657,27 +609,6 @@ end
 
 local function FindRule(unit)
     return FindRuleWithSnapshot(unit)
-end
-
-local function UpdateCombatLogRegistration()
-    GetSettings()
-    local shouldListen = false
-    if db.enabled ~= false and GetCombatLogReader() then
-        for _, rule in ipairs(db.rules) do
-            local conditions = rule.conditions
-            if rule.enabled ~= false and conditions and HasSelection(conditions.spellSchool) then
-                shouldListen = true
-                break
-            end
-        end
-    end
-    if shouldListen and not combatLogActive then
-        local ok, registered = pcall(unitFrame.RegisterEvent, unitFrame, "COMBAT_LOG_EVENT_UNFILTERED")
-        combatLogActive = ok and not IsSecret(registered) and registered ~= false
-    elseif not shouldListen and combatLogActive then
-        TryUnregisterEvent(unitFrame, "COMBAT_LOG_EVENT_UNFILTERED")
-        combatLogActive = false
-    end
 end
 
 -- Only recapture a getter while our paint is absent. Secret native writes
@@ -905,7 +836,6 @@ local function RefreshAll()
     if not NP then NP = _G.EllesmereNameplates_NS end
     if not NP then return end
     if InstallHooks then InstallHooks() end
-    UpdateCombatLogRegistration()
     UpdateCastTransitionTracking()
     for _, plate in pairs(NP.plates or {}) do ApplyPlateSafely(plate) end
     for _, plate in pairs(NP.friendlyPlates or {}) do ApplyPlateSafely(plate) end
@@ -1067,19 +997,6 @@ unitFrame:SetScript("OnEvent", function(_, event, loadedAddon)
         if loadedAddon ~= addonName then return end
         GetSettings()
         TryUnregisterEvent(unitFrame, "ADDON_LOADED")
-    elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
-        local reader = GetCombatLogReader()
-        if not reader or not CanReadCombatLog() then return end
-        local ok, _, subevent, _, _, _, _, _, _, _, _, _, spellID, _, school = pcall(reader)
-        if not ok or IsSecret(subevent) or type(subevent) ~= "string" then return end
-        if subevent == "SPELL_CAST_START" and IsReadableSpellID(spellID) then
-            local schoolName = GetSchoolFromMask(school)
-            if schoolName ~= "unknown" then
-                spellSchools[spellID] = schoolName
-                QueueRefresh()
-            end
-        end
-        return
     elseif event == "SPELL_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_USABLE"
         or event == "SPELLS_CHANGED" or event == "UNIT_PET" then
         if event == "UNIT_PET" and loadedAddon ~= "player" then return end
@@ -1109,22 +1026,12 @@ addon.RegisterCondition = function(key, predicate)
     addon.customConditions[key] = predicate
     return true
 end
-addon.RegisterSpellSchool = function(spellID, school)
-    if not IsReadableSpellID(spellID) or IsSecret(school) or type(school) ~= "string" then return false end
-    local valid = SCHOOL_MASKS[school] or school == "mixed"
-    if not valid then return false end
-    spellSchools[spellID] = school
-    QueueRefresh()
-    return true
-end
-
 local publicAPI = {
     Refresh = function()
         if InstallHooks then InstallHooks() end
         QueueRefresh()
     end,
     RegisterCondition = addon.RegisterCondition,
-    RegisterSpellSchool = addon.RegisterSpellSchool,
     NormalizeRuleConditions = NormalizeRuleConditions,
     ValidateRuleConditions = ValidateRuleConditions,
     SupportsCastColorStates = SupportsCastColorStates,
@@ -1150,7 +1057,7 @@ SlashCmdList.EXTENDNAMEPLATES = function(message)
     if type(message) == "string" and message:lower():match("^%s*cast%s*$") then
         local function ReportCast(text) print("Extend Nameplates: " .. text) end
         if not UnitExists("target") then ReportCast("Cast debug: select a target first."); return end
-        local ok, castState, interruptible, _, debugInfo = pcall(ReadCast, "target", true)
+        local ok, castState, interruptible, debugInfo = pcall(ReadCast, "target", true)
         if not ok then ReportCast("Cast debug: API read failed; state unknown."); return end
         ReportCast("Target cast=" .. castState .. "; source=" .. debugInfo.source
             .. "; interruptibility=" .. interruptible .. "; knowledge=" .. debugInfo.knowledge)

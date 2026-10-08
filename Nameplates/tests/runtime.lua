@@ -764,9 +764,9 @@ local classification = rows["Classification"]
 local targetState = rows["Target state"]
 local threatState = rows["Threat"]
 local castState = rows["Cast state"]
-local spellSchool = rows["Spell school"]
-assert(unitType and reaction and classification and targetState and threatState and castState and spellSchool,
+assert(unitType and reaction and classification and targetState and threatState and castState,
     "categorical multi-select controls were not built")
+assert(rows["Spell school"] == nil, "retired condition control must not be built")
 assert(threatState.emptyLabel == "Any threat" and #threatState.items == 3, "Threat choices missing")
 assert(threatState.row == rows["Quest Objective"].row, "Threat and Quest Objective must share a row")
 threatState.set("me", true)
@@ -878,7 +878,6 @@ assert(namespace.FindRule("nameplate1") == api.GetRules()[1], "cast-state select
 castState.set("none", false)
 assert(namespace.FindRule("nameplate1") == nil, "cast state should reject a unit outside the selected alternatives")
 activeCast = "casting"
-assert(api.RegisterSpellSchool(123, "fire"), "spell school registration failed")
 assert(namespace.FindRule("nameplate1") == api.GetRules()[1], "selected casting state did not match")
 castState.set("channel", true)
 assert(namespace.FindRule("nameplate1") == api.GetRules()[1], "cast-state alternatives should match active casts")
@@ -907,14 +906,8 @@ castState.set("empowered", true)
 assert(not castState.get("casting"), "Empowered should not expose implicit Casting")
 castState.set("empowered", false)
 castState.set("casting", false)
-spellSchool.set("fire", true)
-spellSchool.set("frost", true)
-assert(namespace.FindRule("nameplate1") == api.GetRules()[1], "spell-school alternatives should match active casts")
-spellSchool.set("fire", false)
-assert(namespace.FindRule("nameplate1") == nil, "spell school should reject a nonselected school")
-spellSchool.set("frost", false)
 activeCast = nil
-assert(namespace.FindRule("nameplate1") == api.GetRules()[1], "empty school selection should mean Any")
+assert(namespace.FindRule("nameplate1") == api.GetRules()[1], "empty cast selection should mean Any")
 
 rows["Add Rule"].click(); Flush()
 assert(rows["Edit rule"].values["1"] == "[1] Custom Rule 2")
