@@ -215,7 +215,9 @@ local SCHOOL_MASKS = {
 }
 
 local function GetSchoolFromMask(mask)
-    if IsSecret(mask) or type(mask) ~= "number" or not bit then return "unknown" end
+    if IsSecret(mask) or type(mask) ~= "number" or mask ~= mask
+       or mask < 1 or mask > 127 or mask % 1 ~= 0
+       or not bit or type(bit.band) ~= "function" then return "unknown" end
     local found, count
     count = 0
     for name, value in pairs(SCHOOL_MASKS) do
@@ -226,9 +228,34 @@ local function GetSchoolFromMask(mask)
     return "unknown"
 end
 
+local function IsReadableSpellID(spellID)
+    return not IsSecret(spellID) and type(spellID) == "number"
+        and spellID == spellID and spellID > 0 and spellID < math.huge and spellID % 1 == 0
+end
+
 local function GetSchool(spellID)
-    if IsSecret(spellID) or type(spellID) ~= "number" then return "unknown" end
+    if not IsReadableSpellID(spellID) then return "unknown" end
     return spellSchools[spellID] or "unknown"
+end
+
+local function GetCombatLogReader()
+    -- The renamed getter can be secure-only on Retail. Its presence does not
+    -- promise readable payloads; do not load deprecation fallbacks to obtain it.
+    if C_CombatLog and type(C_CombatLog.GetCurrentEventInfo) == "function" then
+        return C_CombatLog.GetCurrentEventInfo
+    end
+    if type(CombatLogGetCurrentEventInfo) == "function" then
+        return CombatLogGetCurrentEventInfo -- Forever/older clients
+    end
+end
+
+local function CanReadCombatLog()
+    if C_CombatLog and type(C_CombatLog.IsCombatLogRestricted) == "function" then
+        local ok, restricted = pcall(C_CombatLog.IsCombatLogRestricted)
+        if not ok or IsSecret(restricted) or type(restricted) ~= "boolean" then return false end
+        return restricted == false
+    end
+    return true -- Forever may not expose the restriction query.
 end
 
 local function ReadCast(unit, includeDebug)
@@ -624,7 +651,7 @@ end
 local function UpdateCombatLogRegistration()
     GetSettings()
     local shouldListen = false
-    if db.enabled ~= false then
+    if db.enabled ~= false and GetCombatLogReader() then
         for _, rule in ipairs(db.rules) do
             local conditions = rule.conditions
             if rule.enabled ~= false and conditions and HasSelection(conditions.spellSchool) then
@@ -634,7 +661,8 @@ local function UpdateCombatLogRegistration()
         end
     end
     if shouldListen and not combatLogActive then
-        combatLogActive = TryRegisterEvent(unitFrame, "COMBAT_LOG_EVENT_UNFILTERED")
+        local ok, registered = pcall(unitFrame.RegisterEvent, unitFrame, "COMBAT_LOG_EVENT_UNFILTERED")
+        combatLogActive = ok and not IsSecret(registered) and registered ~= false
     elseif not shouldListen and combatLogActive then
         TryUnregisterEvent(unitFrame, "COMBAT_LOG_EVENT_UNFILTERED")
         combatLogActive = false
@@ -962,9 +990,11 @@ unitFrame:SetScript("OnEvent", function(_, event, loadedAddon)
         GetSettings()
         TryUnregisterEvent(unitFrame, "ADDON_LOADED")
     elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
-        if not CombatLogGetCurrentEventInfo then return end
-        local _, subevent, _, _, _, _, _, _, _, _, _, spellID, _, school = CombatLogGetCurrentEventInfo()
-        if subevent == "SPELL_CAST_START" and not IsSecret(spellID) and type(spellID) == "number" then
+        local reader = GetCombatLogReader()
+        if not reader or not CanReadCombatLog() then return end
+        local ok, _, subevent, _, _, _, _, _, _, _, _, _, spellID, _, school = pcall(reader)
+        if not ok or IsSecret(subevent) or type(subevent) ~= "string" then return end
+        if subevent == "SPELL_CAST_START" and IsReadableSpellID(spellID) then
             local schoolName = GetSchoolFromMask(school)
             if schoolName ~= "unknown" then
                 spellSchools[spellID] = schoolName
@@ -1002,7 +1032,7 @@ addon.RegisterCondition = function(key, predicate)
     return true
 end
 addon.RegisterSpellSchool = function(spellID, school)
-    if IsSecret(spellID) or type(spellID) ~= "number" or type(school) ~= "string" then return false end
+    if not IsReadableSpellID(spellID) or IsSecret(school) or type(school) ~= "string" then return false end
     local valid = SCHOOL_MASKS[school] or school == "mixed"
     if not valid then return false end
     spellSchools[spellID] = school
