@@ -257,9 +257,11 @@ local function PrebuildTest()
         "Cast-bar texture", "Cast border size",
         "Override target arrows", "Target-arrow style", "Health border texture", "Cast border texture",
         "Health border glow", "Health glow color", "Cast border glow", "Cast glow color",
-        "Override text", "Top text content", "Cast timer text content", "Name text color", "Player combat state", "Instance Type" }) do
+        "Override text", "Top text", "Cast timer text", "+ Add Text Slot", "Player combat state", "Instance Type" }) do
         assert(index[label], "prebuild missed " .. label)
     end
+    assert(not index["Name text color"] and not index["Left text"], "compact text search should omit separate colors and unused slots")
+    assert(index["Top text"].tooltip:find("color", 1, true), "slot search retains color description")
     assert(index["Unit type"].tooltip:find("Any creature", 1, true), "condition tooltip lost")
     for _, text in ipairs(actions) do assert(index[text], "action search entry lost: " .. text) end
     Build()

@@ -916,51 +916,236 @@ local function BuildStylePage(parent, yOffset)
         disabledTooltip = "Select this rule again to edit its text.",
         getValue = function() return GetRule().style.textEnabled == true end,
         setValue = function(value) GetRule().style.textEnabled = value; Changed(); Rebuild() end,
-        tooltip = "Apply this rule's text content and colors. Off restores EUI's text. Bar overrides are not required.",
+        tooltip = "Apply this rule's text content, colors, sizes and offsets. Off restores EUI's text. Bar overrides are not required.",
     }); y = y - h
-    local function TextOff() return DB() ~= db or GetRule() ~= rule or GetRule().style.textEnabled ~= true end
+    local function TextOff()
+        return RuleLocked() or DB() ~= db or GetRule() ~= rule or rule.style.textEnabled ~= true
+    end
+    local function TextTip()
+        if RuleLocked() then return LockTip() end
+        if DB() ~= db or GetRule() ~= rule then return "Select this rule again to edit its text." end
+        return "Enable Override text first."
+    end
+    local slots, slotMap, positionValues, positionOrder = addon.RuleTextSlots, {}, {}, {}
+    local function Content(slot)
+        -- Show the saved layout even with the master off. Inherited EUI slots
+        -- are listed too, so their content/color can be overridden or removed.
+        return addon.ResolveRuleText({ textEnabled = true, textSlots = rule.style.textSlots }, slot)
+    end
+    local function Assigned(slot) return Content(slot) ~= "none" end
+    local function Choice(slot) return rule.style.textSlots and rule.style.textSlots[slot.key] or "eui" end
+    local function Color(slot) return addon.GetRuleTextColor(rule.style, slot, Content(slot)) end
+    for _, slot in ipairs(slots) do
+        slotMap[slot.key], positionValues[slot.key] = slot, slot.label
+        positionOrder[#positionOrder + 1] = slot.key
+    end
+    local function SetContent(slot, value)
+        if TextOff() or not Assigned(slot) then return end
+        local values = addon.GetRuleTextChoices(slot.cast)
+        if not values[value] then return end
+        local style = rule.style
+        style.textSlots = style.textSlots or {}
+        if value == "eui" then style.textSlots[slot.key] = nil else style.textSlots[slot.key] = value end
+        Changed(); Rebuild()
+    end
+    local function MoveBlocked(slot, key)
+        local destination = slotMap[key]
+        if TextOff() or not Assigned(slot) or not destination then return true end
+        if destination.cast ~= slot.cast then return "Health and cast text use separate slot groups." end
+        if key ~= slot.key and Assigned(destination) then return "This text position is already used." end
+    end
+    local function Move(slot, key)
+        if MoveBlocked(slot, key) or key == slot.key then return end
+        local style, element, color = rule.style, Content(slot), Color(slot)
+        style.textSlots = style.textSlots or {}
+        style.textSlotColors = style.textSlotColors or {}
+        -- Inherited content becomes explicit at the destination. Saved layout
+        -- overrides travel with it; unset fields follow the destination's EUI.
+        style.textSlots[key], style.textSlots[slot.key] = element, "none"
+        style.textSlotColors[key] = color and { r = color.r, g = color.g, b = color.b } or false
+        style.textSlotColors[slot.key] = nil
+        if style.textSlotLayout then
+            style.textSlotLayout[key] = style.textSlotLayout[slot.key] and CopyRule(style.textSlotLayout[slot.key]) or nil
+            style.textSlotLayout[slot.key] = nil
+        end
+        Changed(); Rebuild()
+    end
+    local function AddBlocked(key)
+        return TextOff() or not slotMap[key] or Assigned(slotMap[key])
+    end
+    local function Add(key)
+        if AddBlocked(key) then return end
+        local slot, style = slotMap[key], rule.style
+        style.textSlots = style.textSlots or {}
+        style.textSlots[key] = slot.cast and (key == "castTimer" and "castRemaining" or key == "castTarget" and "castTarget" or "spellName") or "name"
+        Changed(); Rebuild()
+    end
+    local function FirstFree()
+        for _, slot in ipairs(slots) do if not Assigned(slot) then return slot.key end end
+    end
     local function TextSlot(slot)
         local values, order = addon.GetRuleTextChoices(slot.cast)
-        return { type = "dropdown", text = slot.label .. " content", values = values, order = order,
-            disabled = TextOff, disabledTooltip = "Enable Override text first.",
-            getValue = function() return GetRule().style.textSlots and GetRule().style.textSlots[slot.key] or "eui" end,
-            setValue = function(value)
-                local style = GetRule().style
-                style.textSlots = style.textSlots or {}
-                if value == "eui" then style.textSlots[slot.key] = nil else style.textSlots[slot.key] = value end
-                Changed()
-            end,
-            tooltip = "Choose what this slot shows. Use EUI setting keeps its content; None hides it. Position and font follow EUI."
+        values.none = "Remove"
+        return { type = "dropdown", text = slot.label, values = values, order = order,
+            disabled = TextOff, disabledTooltip = TextTip,
+            getValue = function() return Choice(slot) end,
+            setValue = function(value) SetContent(slot, value) end,
+            tooltip = "Use EUI setting inherits content; Remove hides this slot. The settings icon overrides color, size and X/Y offsets."
                 .. (slot.cast and " Cast-target text is unavailable on Forever." or "") .. " Unavailable data stays blank.",
         }
     end
-    for index = 1, #addon.RuleTextSlots, 2 do
-        local right = addon.RuleTextSlots[index + 1]
-        _, h = LockedRow(TextSlot(addon.RuleTextSlots[index]), right and TextSlot(right) or nil); y = y - h
-    end
-    _, h = W:SectionHeader(parent, "TEXT COLORS", y); y = y - h
-    for _, key in ipairs(addon.RuleTextElements) do
-        local label = addon.RuleTextLabels[key]
-        local function ColorOff() return TextOff() or not (GetRule().style.textColors and GetRule().style.textColors[key]) end
-        _, h = LockedRow({ type = "toggle", text = "Override " .. label .. " color", disabled = TextOff,
-            tooltip = "Use a custom color for " .. label:lower() .. " text. Off keeps EUI's color."
-                .. ((key == "name" or key == "level") and " Combined name/level labels may keep EUI's colors." or ""),
-            disabledTooltip = "Enable Override text first.",
-            getValue = function() return GetRule().style.textColors and GetRule().style.textColors[key] ~= nil or false end,
-            setValue = function(value)
-                local style = GetRule().style; style.textColors = style.textColors or {}
-                if value then style.textColors[key] = { r = 1, g = 1, b = 1 } else style.textColors[key] = nil end
+    local function FinishTextSlot(row, regionKey, slot)
+        if EllesmereUI.IsSearchPrebuild() then return end
+        local region = row[regionKey]
+        local function SlotOff() return TextOff() or not Assigned(slot) end
+        local function SlotTip() return TextOff() and TextTip() or "Add this text slot again to edit it." end
+        if EllesmereUI.BuildRowLabelMenu then
+            EllesmereUI.BuildRowLabelMenu(region, { values = positionValues, order = positionOrder,
+                getValue = function() return slot.key end,
+                setValue = function(key) Move(slot, key) end,
+                itemDisabled = function(key) return MoveBlocked(slot, key) end,
+                locked = SlotOff, lockTip = SlotTip,
+                tooltip = "Move this text and its saved overrides to a free position. Unset sizes/offsets follow EUI at the destination." })
+        end
+        if not EllesmereUI.BuildInlineCog then return end
+        local values, order = addon.GetRuleTextChoices(slot.cast)
+        values.none = "Remove"
+        local function Layout() return rule.style.textSlotLayout and rule.style.textSlotLayout[slot.key] or {} end
+        local function SetLayout(field, value)
+            if SlotOff() then return end
+            local range = addon.RuleTextLayoutRanges[field]
+            if value ~= nil and (type(value) ~= "number" or value ~= value or value < range[1] or value > range[2]) then return end
+            local style = rule.style
+            style.textSlotLayout = style.textSlotLayout or {}
+            style.textSlotLayout[slot.key] = style.textSlotLayout[slot.key] or {}
+            style.textSlotLayout[slot.key][field] = value
+            if not next(style.textSlotLayout[slot.key]) then style.textSlotLayout[slot.key] = nil end
+            if not next(style.textSlotLayout) then style.textSlotLayout = nil end
+            Changed()
+        end
+        local function SizeOff() return SlotOff() or Layout().size == nil end
+        local function OffsetsOff() return SlotOff() or (Layout().x == nil and Layout().y == nil) end
+        local popupRows = {
+            { type = "dropdown", label = "Content", values = values, order = order,
+                tooltip = "Choose this slot's content. Use EUI setting inherits content; Remove hides the slot for this rule. Unavailable data stays blank.",
+                get = function() return Choice(slot) end,
+                set = function(value) SetContent(slot, value) end,
+                disabled = SlotOff, disabledTooltip = SlotTip },
+            { type = "toggle", label = "Override color", disabled = SlotOff, disabledTooltip = SlotTip,
+                tooltip = "Apply a color to this slot only. Off keeps EUI's color. Combined native name/level labels may retain EUI's embedded colors.",
+                get = function() return Color(slot) ~= nil end,
+                set = function(value)
+                    if SlotOff() then return end
+                    local style, color = rule.style, Color(slot) or { r = 1, g = 1, b = 1 }
+                    style.textSlotColors = style.textSlotColors or {}
+                    style.textSlotColors[slot.key] = value and { r = color.r, g = color.g, b = color.b } or false
+                    Changed()
+                end },
+            { type = "colorpicker", label = "Text color", hasAlpha = false,
+                tooltip = "Choose a custom text color for this slot only.",
+                disabled = function() return SlotOff() or not Color(slot) end,
+                disabledTooltip = function() return SlotOff() and SlotTip() or "Enable Override color first." end,
+                get = function()
+                    local color = Color(slot) or { r = 1, g = 1, b = 1 }
+                    return color.r, color.g, color.b, 1
+                end,
+                set = function(r, g, b)
+                    if SlotOff() or not Color(slot) then return end
+                    rule.style.textSlotColors = rule.style.textSlotColors or {}
+                    rule.style.textSlotColors[slot.key] = { r = r, g = g, b = b }; Changed()
+                end },
+            { type = "toggle", label = "Override size", disabled = SlotOff, disabledTooltip = SlotTip,
+                tooltip = "Override this slot's font size without replacing its content. Off restores EUI's latest size.",
+                get = function() return Layout().size ~= nil end,
+                set = function(value)
+                    if SlotOff() then return end
+                    if value then SetLayout("size", addon.GetRuleTextLayoutValue(rule.style, slot, "size")) else SetLayout("size", nil) end
+                end },
+            { type = "slider", label = "Size", min = 6, max = 30, step = 1,
+                tooltip = "Font size for this slot. Fonts and outline styles still follow EUI.",
+                disabled = SizeOff, disabledTooltip = function() return SlotOff() and SlotTip() or "Enable Override size first." end,
+                get = function() return addon.GetRuleTextLayoutValue(rule.style, slot, "size") end,
+                set = function(value) if not SizeOff() then SetLayout("size", value) end end },
+            { type = "toggle", label = "Override offsets", disabled = SlotOff, disabledTooltip = SlotTip,
+                tooltip = "Replace EUI's configured X/Y offsets for this slot. Base anchors and dynamic cast/resource spacing stay native. Off restores EUI's latest offsets.",
+                get = function() return Layout().x ~= nil or Layout().y ~= nil end,
+                set = function(value)
+                    if SlotOff() then return end
+                    if value then
+                        SetLayout("x", addon.GetRuleTextLayoutValue(rule.style, slot, "x"))
+                        SetLayout("y", addon.GetRuleTextLayoutValue(rule.style, slot, "y"))
+                    else SetLayout("x", nil); SetLayout("y", nil) end
+                end },
+        }
+        for _, field in ipairs({ "x", "y" }) do
+            popupRows[#popupRows + 1] = { type = "slider", label = field == "x" and "X Offset" or "Y Offset", min = -200, max = 200, step = 1,
+                tooltip = "Replace this slot's EUI " .. field:upper() .. " offset; this is not an additional offset on top of EUI's setting.",
+                disabled = OffsetsOff, disabledTooltip = function() return SlotOff() and SlotTip() or "Enable Override offsets first." end,
+                get = function() return addon.GetRuleTextLayoutValue(rule.style, slot, field) end,
+                set = function(value) if not OffsetsOff() then SetLayout(field, value) end end }
+        end
+        popupRows[#popupRows + 1] = { type = "button", label = "Reset to EUI",
+            tooltip = "Reset this slot's content, color, size and X/Y offsets to EUI's current settings. Other slots are unchanged.",
+            -- Shared popup buttons do not support disabled overlays. Hide the
+            -- action while locked and guard the callback independently, too.
+            hidden = SlotOff,
+            action = function()
+                if SlotOff() then return end
+                local style = rule.style
+                if style.textSlots then
+                    style.textSlots[slot.key] = nil
+                    if not next(style.textSlots) then style.textSlots = nil end
+                end
+                -- Explicit EUI coloring suppresses existing content-wide
+                -- colors without changing colors used by any other slot.
+                style.textSlotColors = style.textSlotColors or {}
+                style.textSlotColors[slot.key] = false
+                if style.textSlotLayout then
+                    style.textSlotLayout[slot.key] = nil
+                    if not next(style.textSlotLayout) then style.textSlotLayout = nil end
+                end
                 Changed(); Rebuild()
-            end,
-        }, { type = "colorpicker", text = label .. " text color", hasAlpha = false,
-            tooltip = "Choose the color of " .. label:lower() .. " text.",
-            disabled = ColorOff, disabledTooltip = "Enable Override " .. label .. " color first.",
-            getValue = function()
-                local c = GetRule().style.textColors and GetRule().style.textColors[key] or { r = 1, g = 1, b = 1 }
-                return c.r, c.g, c.b, 1
-            end,
-            setValue = function(r, g, b) GetRule().style.textColors[key] = { r = r, g = g, b = b }; Changed() end,
-        }); y = y - h
+            end }
+        -- Older EUI versions can still move slots through the shared popup.
+        if not EllesmereUI.BuildRowLabelMenu then
+            popupRows[#popupRows + 1] = { type = "dropdown", label = "Position", values = positionValues, order = positionOrder,
+                tooltip = "Move text and its saved overrides to a free position in the same health or cast group. Unset sizes/offsets follow EUI at the destination.",
+                get = function() return slot.key end, set = function(key) Move(slot, key) end,
+                disabled = SlotOff, disabledTooltip = SlotTip,
+                itemDisabled = function(key) return MoveBlocked(slot, key) end }
+        end
+        EllesmereUI.BuildInlineCog(region, { title = slot.label .. " settings", rows = popupRows,
+            captureRegion = region, icon = EllesmereUI.RESIZE_ICON,
+            disabled = SlotOff, disabledTooltip = SlotTip, tip = "Choose this slot's content, color, size and X/Y offsets." })
+    end
+    local addOpen
+    local addCfg = { type = "button", text = "+ Add Text Slot", width = 220,
+        disabled = function() return TextOff() or not FirstFree() end,
+        disabledTooltip = function() return TextOff() and TextTip() or "Every text position is full." end,
+        onClick = function()
+            if TextOff() then return end
+            if addOpen then addOpen() else local key = FirstFree(); if key then Add(key) end end
+        end }
+    local cells = {}
+    for _, slot in ipairs(slots) do if Assigned(slot) then cells[#cells + 1] = slot end end
+    cells[#cells + 1] = addCfg
+    for index = 1, #cells, 2 do
+        local left, right = cells[index], cells[index + 1]
+        local function Config(cell)
+            if not cell then return { type = "spacer", text = "" } end
+            return cell == addCfg and addCfg or TextSlot(cell)
+        end
+        local row
+        row, h = LockedRow(Config(left), Config(right)); y = y - h
+        for _, entry in ipairs({ { left, "_leftRegion" }, { right, "_rightRegion" } }) do
+            local cell, regionKey = entry[1], entry[2]
+            if cell == addCfg then
+                if not EllesmereUI.IsSearchPrebuild() and EllesmereUI.AttachButtonMenu then
+                    addOpen = EllesmereUI.AttachButtonMenu(row[regionKey]._control, { width = 220,
+                        values = positionValues, order = positionOrder, setValue = Add, itemDisabled = AddBlocked })
+                end
+            elseif cell then FinishTextSlot(row, regionKey, cell) end
+        end
     end
     _, h = W:SectionHeader(parent, "APPEARANCE - TARGET ARROWS", y); y = y - h
     local arrowValues, arrowOrder = addon.GetTargetArrowOptions()

@@ -71,6 +71,8 @@ function CreateFrame(kind, _, parentFrame, template)
     function frame:GetStatusBarColor() return unpack(self.color) end
     function frame:SetColorTexture(...) self.color = { ... } end
     function frame:SetFont(path, size, flags) self.fontPath, self.fontSize, self.fontFlags = path, size, flags; return true end
+    function frame:GetFont() return self.fontPath, self.fontSize, self.fontFlags end
+    function frame:SetFontHeight(size) self.fontSize = size end
     function frame:SetFrameLevel(value) self.frameLevel = value end
     function frame:SetFrameStrata(value) self.frameStrata = value end
     function frame:SetTextColor(r, g, b, a) self.textColor = { r, g, b, a or 1 } end
@@ -91,6 +93,7 @@ function CreateFrame(kind, _, parentFrame, template)
         return font
     end
     function frame:SetPoint(...) self.point = { ... } end
+    function frame:ClearAllPoints() self.point = nil end
     function frame:GetNumPoints() return self.point and 1 or 0 end
     function frame:GetPoint() return unpack(self.point) end
     function frame:SetTexture(path) self.texture = path end
@@ -489,10 +492,13 @@ function W:DualRow(_, _, config, right)
     local row = CreateFrame()
     row._leftRegion = CreateFrame("Frame", nil, row)
     row._rightRegion = CreateFrame("Frame", nil, row)
-    for _, cfg in ipairs({ config, right }) do
+    for index, cfg in ipairs({ config, right }) do
+        local region = index == 1 and row._leftRegion or row._rightRegion
+        region._cfg = cfg
+        region._control = CreateFrame("Button", nil, region)
         if cfg.type == "colorpicker" then assert(type(cfg.getValue()) == "number") end
         rows[cfg.text] = { get = cfg.getValue, set = cfg.setValue, disabled = cfg.disabled,
-            disabledTooltip = cfg.disabledTooltip, values = cfg.values, row = row, tooltip = cfg.tooltip }
+            disabledTooltip = cfg.disabledTooltip, values = cfg.values, row = row, tooltip = cfg.tooltip, click = cfg.onClick }
     end
     return row, 50
 end
@@ -525,6 +531,14 @@ EllesmereUI = {
         assert(region and region.nativeFrame, "cog needs a native region")
         rows[opts.title] = opts
         return CreateFrame("Button", nil, region)
+    end,
+    BuildRowLabelMenu = function(region, opts)
+        rows[region._cfg.text .. " position menu"] = opts
+        return CreateFrame("Button", nil, region)
+    end,
+    AttachButtonMenu = function(button, opts)
+        rows[button:GetParent()._cfg.text .. " add menu"] = opts
+        return Noop
     end,
     MakeStyledButton = function(button, text, _, _, click)
         rows[text] = { click = click, row = button.parent, button = button }

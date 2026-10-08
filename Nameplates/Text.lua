@@ -22,6 +22,7 @@ for _, slot in ipairs(SLOTS) do validSlots[slot.key] = slot end
 for _, key in ipairs(HEALTH) do healthValues[key] = true end
 for _, key in ipairs(CAST) do castValues[key] = true end
 api.RuleTextSlots, api.RuleTextElements, api.RuleTextLabels = SLOTS, {}, LABELS
+api.RuleTextLayoutRanges = { size = { 6, 30 }, x = { -200, 200 }, y = { -200, 200 } }
 for _, group in ipairs({ HEALTH, CAST }) do for _, key in ipairs(group) do api.RuleTextElements[#api.RuleTextElements + 1] = key end end
 function api.GetRuleTextChoices(cast)
     local values, order = { eui = "Use EUI setting", none = "None" }, { "eui", "none" }
@@ -47,7 +48,37 @@ function api.ValidateRuleText(style)
             end
         end
     end
+    if style.textSlotColors ~= nil then
+        if type(style.textSlotColors) ~= "table" then return false end
+        for key, color in pairs(style.textSlotColors) do
+            if not validSlots[key] then return false end
+            -- false explicitly retains EUI coloring, including when an existing
+            -- content-wide color is saved. No old settings are migrated.
+            if color ~= false then
+                if type(color) ~= "table" then return false end
+                for _, channel in ipairs({ "r", "g", "b" }) do
+                    local value = color[channel]
+                    if type(value) ~= "number" or value ~= value or value < 0 or value > 1 then return false end
+                end
+            end
+        end
+    end
+    if style.textSlotLayout ~= nil then
+        if type(style.textSlotLayout) ~= "table" then return false end
+        for key, layout in pairs(style.textSlotLayout) do
+            if not validSlots[key] or type(layout) ~= "table" then return false end
+            for field, value in pairs(layout) do
+                local range = api.RuleTextLayoutRanges[field]
+                if not range or type(value) ~= "number" or value ~= value or value < range[1] or value > range[2] then return false end
+            end
+        end
+    end
     return true
+end
+function api.GetRuleTextColor(style, slot, element)
+    local color = style.textSlotColors and style.textSlotColors[slot.key]
+    if color == false then return nil end
+    return color or (style.textColors and style.textColors[element])
 end
 local states, hooked = setmetatable({}, { __mode = "k" }), setmetatable({}, { __mode = "k" })
 local overlayHooks = setmetatable({}, { __mode = "k" })
@@ -59,6 +90,15 @@ local function Setting(key, fallback)
     if p[key] ~= nil then return p[key] end
     if d[key] ~= nil then return d[key] end
     return fallback
+end
+local function LayoutSetting(slot, field)
+    local suffix = field == "size" and "Size" or field == "x" and (slot.cast and "OffsetX" or "XOffset") or (slot.cast and "OffsetY" or "YOffset")
+    return Setting(slot.key .. suffix, field == "size" and (slot.cast and 10 or 12) or 0)
+end
+function api.GetRuleTextLayoutValue(style, slot, field)
+    local layout = style and style.textSlotLayout and style.textSlotLayout[slot.key]
+    if layout and layout[field] ~= nil then return layout[field] end
+    return LayoutSetting(slot, field)
 end
 local NATIVE = { enemyName = "name", levelName = "name", nameLevel = "name", healthNumber = "healthCurrent",
     healthPercentNoSign = "healthPercent", healthPctNum = "healthCurrent", healthNumPct = "healthCurrent",
@@ -102,6 +142,97 @@ local function NativeBindings(plate)
         for key, fs in pairs(map) do if owners[fs] and owners[fs] ~= key then map[key] = nil end end
     end
     return map
+end
+local function ReadPoints(fs, slot)
+    local ok, count = pcall(fs.GetNumPoints, fs)
+    if not ok or Secret(count) or type(count) ~= "number" then return nil end
+    local points = {}
+    for index = 1, count do
+        local success, point, relative, relativePoint, x, y = pcall(fs.GetPoint, fs, index)
+        if not success or Secret(point) or type(point) ~= "string" then return nil end
+        points[point] = { point, relative, relativePoint, x, y,
+            baseX = LayoutSetting(slot, "x"), baseY = LayoutSetting(slot, "y") }
+    end
+    return points
+end
+local function NativeLayout(fs, entry, layout)
+    local previous = entry.layout
+    entry.layout = layout and { size = layout.size, x = layout.x, y = layout.y }
+    if not entry.layoutHooked then return end
+    entry.writing = true
+    if layout and layout.size ~= nil and entry.font then
+        local font = entry.font
+        if not Secret(font[1]) and type(font[1]) == "string" and not Secret(font[3]) then
+            pcall(fs.SetFont, fs, font[1], layout.size, font[3])
+        end
+    elseif previous and previous.size ~= nil and entry.font then
+        pcall(fs.SetFont, fs, unpack(entry.font, 1, 3))
+    end
+    if (layout and (layout.x ~= nil or layout.y ~= nil)) or (previous and (previous.x ~= nil or previous.y ~= nil)) then
+        for _, point in pairs(entry.points or {}) do
+            local x, y = point[4], point[5]
+            -- Keep EUI's base/dynamic anchor geometry, replacing only its
+            -- configured offsets. Never inspect or do arithmetic on secrets.
+            local readable = not Secret(x) and not Secret(y) and not Secret(point.baseX) and not Secret(point.baseY)
+                and type(x) == "number" and type(y) == "number" and type(point.baseX) == "number" and type(point.baseY) == "number"
+            if readable and layout then
+                if layout.x ~= nil then x = x - point.baseX + layout.x end
+                if layout.y ~= nil then y = y - point.baseY + layout.y end
+            end
+            pcall(fs.SetPoint, fs, point[1], point[2], point[3], x, y)
+        end
+    end
+    entry.writing = nil
+end
+local function WatchLayout(fs, entry, slot, plate)
+    entry.layoutSlot = slot
+    if entry.layoutHooked then return end
+    local function CurrentSlot()
+        for key, original in pairs(NativeBindings(plate)) do
+            if original == fs then return validSlots[key] end
+        end
+        return entry.layoutSlot
+    end
+    entry.layoutHooked = true
+    entry.points = ReadPoints(fs, slot)
+    local ok, path, size, flags = pcall(fs.GetFont, fs)
+    if ok then entry.font = { path, size, flags } end
+    hooksecurefunc(fs, "SetFont", function(_, path, size, flags)
+        if entry.writing then return end
+        entry.font = { path, size, flags }
+        NativeLayout(fs, entry, entry.layout)
+    end)
+    if fs.SetFontHeight then
+        hooksecurefunc(fs, "SetFontHeight", function(_, size)
+            if entry.writing or not entry.font then return end
+            entry.font[2] = size
+            NativeLayout(fs, entry, entry.layout)
+        end)
+    end
+    hooksecurefunc(fs, "ClearAllPoints", function()
+        if not entry.writing then entry.points = {} end
+    end)
+    hooksecurefunc(fs, "SetPoint", function(_, point, relative, relativePoint, x, y)
+        if entry.writing then return end
+        if Secret(point) or type(point) ~= "string" then entry.points = nil; return end
+        -- EUI uses the complete SetPoint signature. For other callers' shorthand
+        -- signatures, fail closed until EUI authors a complete anchor again.
+        if Secret(relativePoint) or type(relativePoint) ~= "string" or type(x) == "nil" or type(y) == "nil" then
+            entry.points = nil; return
+        end
+        entry.points = entry.points or {}
+        local authoredSlot = CurrentSlot()
+        entry.points[point] = { point, relative, relativePoint, x, y,
+            baseX = LayoutSetting(authoredSlot, "x"), baseY = LayoutSetting(authoredSlot, "y") }
+        NativeLayout(fs, entry, entry.layout)
+    end)
+    if fs.SetAllPoints then
+        hooksecurefunc(fs, "SetAllPoints", function()
+            if entry.writing then return end
+            entry.points = ReadPoints(fs, CurrentSlot())
+            NativeLayout(fs, entry, entry.layout)
+        end)
+    end
 end
 local function Watch(state, fs)
     local entry = state.native[fs]
@@ -226,14 +357,14 @@ api.WriteRuleText = Write
 local function Position(fs, plate, slot, sample, style)
     local np = EllesmereNameplates_NS or {}
     local PP = EllesmereUI.PP
-    local x, y = Setting(slot.key .. (slot.cast and "OffsetX" or "XOffset"), 0), Setting(slot.key .. (slot.cast and "OffsetY" or "YOffset"), 0)
+    local x, y = api.GetRuleTextLayoutValue(style, slot, "x"), api.GetRuleTextLayoutValue(style, slot, "y")
     fs:ClearAllPoints()
     if slot.cast then
         local side = Setting(slot.key .. "Side", slot.side)
         if side == "none" then side = slot.side end
         local pt, ox, justify = side == "right" and "RIGHT" or "LEFT", side == "right" and -3 or 3, side == "right" and "RIGHT" or "LEFT"
         local timer = style and api.ResolveRuleText(style, validSlots.castTimer) or "castRemaining"
-        local reserve = Setting("castTimerSize", 10) * (timer == "castElapsedTotal" and 6 or 2.2)
+        local reserve = api.GetRuleTextLayoutValue(style, validSlots.castTimer, "size") * (timer == "castElapsedTotal" and 6 or 2.2)
         local pushed = slot.key ~= "castTimer" and timer ~= "none" and Setting("castTimerSide", "right") == side
         if np.GetCastTextAnchor then pt, ox, justify = np.GetCastTextAnchor(side, pushed, reserve, slot.key == "castTimer")
         elseif pushed then ox = side == "right" and ox - reserve or ox + reserve end
@@ -260,7 +391,7 @@ local function Position(fs, plate, slot, sample, style)
             fs:SetJustifyH(slot.bottom and (slot.key == "textSlotBottomLeft" and "LEFT" or "RIGHT") or slot.anchor == "CENTER" and "CENTER" or slot.anchor == "BOTTOM" and "CENTER" or slot.anchor)
         end
     end
-    local size = Setting(slot.key .. "Size", 12)
+    local size = api.GetRuleTextLayoutValue(style, slot, "size")
     if np.SetFSFont and not sample then np.SetFSFont(fs, size)
     else fs:SetFont(EllesmereUI.GetFontPath and EllesmereUI.GetFontPath("nameplates") or "Fonts\\FRIZQT__.TTF", size, "OUTLINE") end
     local wrap = not slot.bottom and Setting(slot.key .. "Wrap", false) == true
@@ -288,7 +419,7 @@ function api.UpdateRuleTextPreview(preview, style)
             local element = api.ResolveRuleText(style, slot)
             preview.textElements[slot.key] = element
             Position(fs, plate, slot, true, style)
-            local c = style.textColors and style.textColors[element] or Setting(slot.key .. "Color", { r = 1, g = 1, b = 1 })
+            local c = api.GetRuleTextColor(style, slot, element) or Setting(slot.key .. "Color", { r = 1, g = 1, b = 1 })
             fs:SetTextColor(c.r, c.g, c.b, 1)
             Write(fs, element, nil, preview)
             fs:SetShown(element ~= "none")
@@ -315,7 +446,6 @@ local function ApplyBody(plate, state)
             state.castHost:SetFrameLevel(900)
         end
         local bindings = NativeBindings(plate)
-        local colors = type(style.textColors) == "table" and style.textColors or {}
         for _, slot in ipairs(SLOTS) do
             if not slot.cast or plate.cast then
                 local choice = type(style.textSlots) == "table" and style.textSlots[slot.key] or "eui"
@@ -326,7 +456,13 @@ local function ApplyBody(plate, state)
                 if original then
                     local d = desired[original] or {}; desired[original] = d
                     d.hide = d.hide or choice ~= "eui"
-                    if not (slot.cast and plate._interrupted) then d.tint = colors[element] or d.tint end
+                    if not (slot.cast and plate._interrupted) then
+                        d.tint = api.GetRuleTextColor(style, slot, element) or d.tint
+                        if choice == "eui" and element ~= "none" then
+                            d.layout = style.textSlotLayout and style.textSlotLayout[slot.key]
+                            d.slot = slot
+                        end
+                    end
                 end
                 local fs = state.fonts[slot.key]
                 if choice ~= "eui" and choice ~= "none" then
@@ -340,7 +476,7 @@ local function ApplyBody(plate, state)
                         state.fonts[slot.key] = fs
                     end
                     Position(fs, plate, slot, false, style)
-                    local color = colors[element] or Setting(slot.key .. "Color", { r = 1, g = 1, b = 1 })
+                    local color = api.GetRuleTextColor(style, slot, element) or Setting(slot.key .. "Color", { r = 1, g = 1, b = 1 })
                     fs:SetTextColor(color.r, color.g, color.b, 1)
                     Write(fs, element, plate.unit)
                     fs:Show()
@@ -348,8 +484,15 @@ local function ApplyBody(plate, state)
             end
         end
     else for _, fs in pairs(state.fonts) do fs:Hide() end end
-    for fs, d in pairs(desired) do local entry = Watch(state, fs); AlphaAndColor(fs, entry, d.hide, d.tint) end
-    for fs, entry in pairs(state.native) do if not desired[fs] then AlphaAndColor(fs, entry, false, nil) end end
+    for fs, d in pairs(desired) do
+        local entry = Watch(state, fs)
+        if d.layout then WatchLayout(fs, entry, d.slot, plate) end
+        NativeLayout(fs, entry, d.layout)
+        AlphaAndColor(fs, entry, d.hide, d.tint)
+    end
+    for fs, entry in pairs(state.native) do
+        if not desired[fs] then NativeLayout(fs, entry, nil); AlphaAndColor(fs, entry, false, nil) end
+    end
     local ticking = false
     state.timerFonts = {}
     if enabled then

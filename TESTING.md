@@ -64,7 +64,7 @@ Paths below are relative to each addon's `tests/` directory.
 | `target-states.lua`, `threat.lua`, `combat-instance.lua`, `context-options.lua` | Target/no-target distinctions, aggro-holder roles, OR/AND/Any semantics, client gates and context-change events. |
 | `scaling.lua`, `scaling-options.lua`, `rendering.lua` | Selective effective scales, native animations/writes, lifted casts, lazy decorations, aura transfers, restoration and sharing. |
 | `border-overrides.lua`, `rule-glows.lua`, `glow-options.lua` | Native borders, stock art, secret alpha forwarding, glow geometry/lifecycle and Important Cast restoration. |
-| `target-arrows.lua`, `target-arrow-options.lua`, `text-overrides.lua`, `text-options.lua` | Priority, repaints, restoration, templates/fallbacks, text sinks, previews, validated sharing and locks. |
+| `target-arrows.lua`, `target-arrow-options.lua`, `text-overrides.lua`, `text-options.lua`, `text-layout.lua`, `text-reset.lua` | Priority, repaints, restoration, templates/fallbacks, text sinks, native/replacement size and absolute offsets, per-slot layout reset, restricted geometry, previews, validated sharing and locks. |
 | `appearance-previews.lua`, `header-preview.lua`, `options-search.lua` | Live selected-rule previews, pinned header, casts/glows, sizing, cache/scroll lifecycle and frameless search. |
 | `ui-locks.lua`, `tooltips.lua`, `reset-defaults.lua` | Hover explanations, stale callbacks, override prerequisites, saved-data preservation and pristine active-profile reset. |
 
@@ -94,6 +94,8 @@ Mocks do not reproduce Retail's secret-value VM, native rendering/menu/mover eng
 - Inspect textures, stock art, Solid/textured borders, Pixel/Shine glows, opacity, text/time/health formatting and current-target arrows. Verify native Important Cast Glow returns when overrides stop.
 - Test every scaling category, EUI target/cast animations, lifted casts, aura/pool transfers, retargeting and recycling. Disabled/unmatched overrides must restore the latest EUI state.
 - Exercise live/header previews, scrolling/cache restoration, teardown, sharing, reset, search and locks—including controls/popups already open when disabled.
+- Check compact text slots: inherited EUI content, Add/Remove/Move within health/cast groups, occupied-position locks, per-slot colors, sizes and absolute X/Y offsets. Confirm moves carry saved overrides and unset fields use destination EUI settings. Toggle each override off after EUI settings/reanchor changes and verify latest-state restoration, cast lifting/interrupted labels, native class-resource/bottom-text spacing and restricted-geometry safety. Stale menus/popups must not edit a different rule/profile. Check older-EUI menu fallbacks.
+- In each health/cast slot popup, use Reset to EUI after changing EUI content/colors/sizes/offsets. Confirm the current EUI settings return immediately, other slots (including those sharing saved content-wide colors) remain unchanged, and an already-open reset action cannot write while locked, removed, or on another rule/profile. A reset to an empty EUI position should remove its row.
 
 ### Quest Tracker
 

@@ -27,9 +27,14 @@ for name, row in pairs(rows) do
     end
     if row.rows then
         Tooltip(row.tip, name .. " cog")
-        for _, control in ipairs(row.rows) do Tooltip(control.tooltip, name .. ": " .. control.label) end
+        for _, control in ipairs(row.rows) do
+            Tooltip(control.tooltip, name .. ": " .. control.label)
+            if control.get and control.set then settings = settings + 1 end
+        end
     end
 end
+-- Compact text slots replace the separate content/color rows; count popup
+-- controls as settings too rather than requiring the old page's row count.
 Check(settings >= 70 and choices >= 40, "review covers settings and condition choices")
 Check(rows.Reaction.tooltip:find("Leave empty for Any", 1, true), "empty conditions remain explained")
 Check(rows["Rule enabled"].tooltip:find("all its conditions", 1, true), "condition groups still combine with AND")
