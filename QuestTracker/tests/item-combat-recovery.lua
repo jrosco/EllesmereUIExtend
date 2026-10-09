@@ -6,6 +6,7 @@ local function Run(forever)
     EUI_CLIENT_FOREVER = forever
     local combat, dead, ghost, active = false, false, false, false
     local quest, distance, tracking = 10, 25, true
+    local insideArea = false
     local counts, watches = { [110] = 1, [120] = 1 }, { [10] = 0, [20] = 0 }
     local frames, tickers, driverWrites, protectedWrites = {}, {}, 0, 0
     local combatWriteAttempts = 0
@@ -67,9 +68,11 @@ local function Run(forever)
     C_SuperTrack = { GetSuperTrackedQuestID = function() return quest end,
         IsSuperTrackingQuest = function() return tracking end }
     C_Navigation = { GetDistance = function() return distance end }
+    C_Minimap = { IsInsideQuestBlob = function(id) assert(id == quest); return insideArea end }
     C_QuestLog = { GetNumQuestLogEntries = function() return 2 end,
         GetInfo = function(index) return { questID = index * 10, isHeader = false } end,
         GetQuestWatchType = function(id) return watches[id] end,
+        GetDistanceSqToQuest = function(id) assert(id == quest); return distance * distance, true end,
         IsComplete = function() return false end,
         GetLogIndexForQuestID = function(id) return id / 10 end }
     C_Item = { GetItemCount = function(id) return counts[id] end }
@@ -153,6 +156,13 @@ local function Run(forever)
     Check(b.attrs.item1 == nil and not b.shown, "regen hides out-of-range item")
     Deferred(function() distance = 100 end, "QUEST_POI_UPDATE", "entering proximity")
     Check(b.attrs.item1 == "item:120" and b.shown, "regen reveals inclusive threshold candidate")
+    distance = 300; ns.UpdateQuestItem()
+    Check(not b.shown, "outside quest area and beyond navigation range hides")
+    Deferred(function() insideArea = true end, "QUEST_POI_UPDATE", "entering quest area")
+    Check(b.shown and b.attrs.item1 == "item:120", "regen reveals inside-area item despite distant navigation")
+    Deferred(function() insideArea = false end, "QUEST_POI_UPDATE", "leaving quest area")
+    Check(not b.shown and b.attrs.item1 == nil, "regen hides outside-area distant navigation item")
+    distance = 100; ns.UpdateQuestItem()
     Deferred(function() watches[20] = nil end, "QUEST_WATCH_LIST_CHANGED", "unwatch")
     Check(b.attrs.item1 == nil and not b.shown, "regen clears unwatched quest")
     watches[20] = 0; ns.UpdateQuestItem()

@@ -370,7 +370,7 @@ local function BuildPage(page, parent, yOffset)
         })
         Section("PROXIMITY")
         Row({ type = "slider", text = "Quest proximity (yards)", min = 1, max = 1000, step = 1,
-            tooltip = "Show at or below this navigation distance in yards (1–1000, default 100). Uses the unrounded distance for the super-tracked quest. Changes apply out of combat.",
+            tooltip = "Show inside the super-tracked quest's highlighted area, or at or below this navigation distance in yards (1–1000, default 100), on both Retail and Forever. If the area check is unavailable or unreadable, only valid navigation distance qualifies. Changes apply out of combat.",
             disabled = ItemLocked, disabledTooltip = "Enable the quest-item button first.",
             getValue = ns.ItemProximityYards,
             setValue = function(value)

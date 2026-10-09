@@ -144,17 +144,27 @@ local function CreatePreview()
     return preview
 end
 
--- One evaluator for gameplay and diagnostics: navigation distance belongs only
--- to the active super-tracked destination, never to each quest in the log.
+-- One evaluator for gameplay and diagnostics. Navigation selects the quest;
+-- Both clients qualify inside that quest's area OR within navigation range.
 local function EvaluateItem()
-    local d = { proximityYards = ns.ItemProximityYards(), eligible = false }
+    local d = { proximityYards = ns.ItemProximityYards(), eligible = false,
+        distanceSource = "navigation" }
     local function Stop(reason) d.reason = reason; return nil, d end
     if not ns.HasQuestNavigation() then return Stop("missing-navigation-api") end
     d.questID = ns.ID(ns.Call(C_SuperTrack.GetSuperTrackedQuestID))
-    d.navDistance = ns.Number(ns.Call(C_Navigation.GetDistance))
+    d.navDistance = ns.Number(ns.Call(C_Navigation and C_Navigation.GetDistance))
     d.trackingQuest = ns.Boolean(ns.Call(C_SuperTrack.IsSuperTrackingQuest))
     if d.trackingQuest ~= true then return Stop("navigation-not-a-quest") end
     if not d.questID then return Stop("no-navigation-quest") end
+    d.insideArea = ns.Boolean(ns.Call(C_Minimap and C_Minimap.IsInsideQuestBlob, d.questID))
+    d.distance = d.navDistance
+    if d.insideArea == true then d.distanceSource = "quest-area" end
+    -- Optional quest-distance information never controls item eligibility.
+    local squared, onContinent = ns.Call(C_QuestLog and C_QuestLog.GetDistanceSqToQuest, d.questID)
+    d.questDistanceSq, d.onContinent = ns.Number(squared), ns.Boolean(onContinent)
+    if d.questDistanceSq and d.questDistanceSq >= 0 and d.onContinent == true then
+        d.questDistance = math.sqrt(d.questDistanceSq)
+    end
     if not ns.HasQuestItems() then return Stop("missing-item-api") end
     local index
     ns.EachQuest(function(id, logIndex) if id == d.questID then index = logIndex end end)
@@ -172,11 +182,13 @@ local function EvaluateItem()
     local countFunc = C_Item and C_Item.GetItemCount or GetItemCount
     d.count = ns.Number(ns.Call(countFunc, d.itemID, false))
     if not d.count or d.count <= 0 then return Stop("item-not-in-bags-or-unreadable") end
-    if not d.navDistance or d.navDistance < 0 then return Stop("no-nav-distance") end
-    if d.navDistance > d.proximityYards then return Stop("too-far") end
+    if d.insideArea ~= true then
+        if not d.distance or d.distance < 0 then return Stop("no-nav-distance") end
+        if d.distance > d.proximityYards then return Stop("too-far") end
+    end
     d.eligible, d.reason = true, "eligible"
     return { questID = d.questID, index = index, itemID = d.itemID,
-        icon = ns.Number(icon) or ns.String(icon), distance = d.navDistance }, d
+        icon = ns.Number(icon) or ns.String(icon), distance = d.distance }, d
 end
 
 function addon.NearestQuestItem()

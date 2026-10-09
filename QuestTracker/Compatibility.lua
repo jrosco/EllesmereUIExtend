@@ -72,8 +72,9 @@ function ns.HasItemMover()
 end
 
 function ns.HasQuestNavigation()
-    return C_Navigation and type(C_Navigation.GetDistance) == "function"
-        and C_SuperTrack and type(C_SuperTrack.GetSuperTrackedQuestID) == "function"
+    local hasProximity = (C_Navigation and type(C_Navigation.GetDistance) == "function")
+        or (C_Minimap and type(C_Minimap.IsInsideQuestBlob) == "function")
+    return hasProximity and C_SuperTrack and type(C_SuperTrack.GetSuperTrackedQuestID) == "function"
         and type(C_SuperTrack.IsSuperTrackingQuest) == "function" or false
 end
 
