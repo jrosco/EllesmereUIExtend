@@ -73,7 +73,6 @@ local choices = {
     playerCombat = { "inCombat", "outOfCombat" },
     instanceType = { "world", "dungeon", "raid", "battleground", "arena", "scenario", "delve" },
     castState = { "none", "casting", "channel", "empowered", "interruptible", "interruptOnCD", "uninterruptible" },
-    spellSchool = { "physical", "holy", "fire", "nature", "frost", "shadow", "arcane", "mixed" },
 }
 local function ExpectedConditions(key, value)
     local result = { questObjective = "any" }
@@ -112,26 +111,22 @@ local function Accept(conditions, expected, label)
     Same(normalized.conditions, expected, label .. " runtime")
     api.NormalizeRuleConditions(normalized)
     Same(normalized.conditions, expected, label .. " idempotence")
-    for version = 1, 2 do
-        local ok, err = ImportConditions(conditions, version)
-        assert(ok, label .. ": " .. tostring(err))
-        Same(api.GetRules()[1].conditions, expected, label .. " import v" .. version)
-        -- Imported rules pass through all-profile normalization on each switch.
-        assert(api.SelectProfile("Starters"))
-        assert(api.SelectProfile("Default"))
-        Same(api.GetRules()[1].conditions, expected, label .. " switch v" .. version)
-        cases = cases + 1
-    end
+    local ok, err = ImportConditions(conditions, 2)
+    assert(ok, label .. ": " .. tostring(err))
+    Same(api.GetRules()[1].conditions, expected, label .. " import v2")
+    -- Imported rules pass through all-profile normalization on each switch.
+    assert(api.SelectProfile("Starters"))
+    assert(api.SelectProfile("Default"))
+    Same(api.GetRules()[1].conditions, expected, label .. " switch v2")
+    cases = cases + 1
 end
 Accept({}, ExpectedConditions(), "missing conditions")
 for key, values in pairs(choices) do
-    Accept({ [key] = "any" }, ExpectedConditions(), key .. " scalar Any")
     Accept({ [key] = {} }, ExpectedConditions(), key .. " empty selection")
     local all = {}
     for _, value in ipairs(values) do
         all[value] = true
         local expected = ExpectedConditions(key, { [value] = true })
-        Accept({ [key] = value }, expected, key .. " legacy " .. value)
         Accept({ [key] = { [value] = true } }, expected, key .. " selection " .. value)
     end
     Accept({ [key] = all }, ExpectedConditions(key, all), key .. " all selections")
@@ -142,7 +137,7 @@ end
 
 -- Reject bad imports before replacing the live rules; saved-data cleanup remains tolerant.
 for key, values in pairs(choices) do
-    for _, value in ipairs({ "unknown", false, 7, { unknown = true }, { [values[1]] = false }, { [values[1]] = 1 } }) do
+    for _, value in ipairs({ "any", values[1], "unknown", false, 7, { unknown = true }, { [values[1]] = false }, { [values[1]] = 1 } }) do
         local valid, invalidKey = api.ValidateRuleConditions({ [key] = value })
         assert(not valid and invalidKey == key, key .. " invalid value accepted by schema")
         local before = api.GetRules()
@@ -195,4 +190,8 @@ assert(api.GetRules()[1].conditions.castState.casting == nil, "import must not e
 assert(api.ExportRuleSet() == code)
 assert(payload.rules[1].conditions.castState.interruptible and payload.rules[1].conditions.castState.casting == nil,
     "export exposed implicit cast selection")
-print("PASS: schema target reload/switch regressions, " .. cases .. " v1/v2 import cases, validation, custom conditions")
+
+local before = api.GetRules()
+assert(not api.ImportRuleSet("!EUI_NPEX_RULES1!schema") and api.GetRules() == before,
+    "unsupported v1 code must not replace current rules")
+print("PASS: schema target reload/switch regressions, " .. cases .. " v2 import cases, validation, custom conditions")

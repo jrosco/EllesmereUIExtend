@@ -18,7 +18,7 @@ Switching refreshes installed features and settings pages. Renaming updates assi
 - `Sync.lua` validates and merges snapshots at `ADDON_LOADED`. Stable profile IDs preserve independently edited feature sections across renames. Deletion tombstones prevent stale edits/renames from reviving deleted profiles; recreating a name gets a new ID. Independent same-name creations are retained with a numeric suffix.
 - Change stamps use readable `GetServerTime()`, a logical sequence and an owner tie-break; unavailable/restricted clocks fall back to deterministic logical ordering. Session revisions are diagnostic, **not** whole-root merge authority.
 - At `PLAYER_LOGOUT`, every loaded owner saves a full synchronized snapshot. Only changed, loaded feature sections receive new stamps; absent sections retain theirs. Either addon can survive the other's uninstall. Removing both saved snapshots loses profiles.
-- Current embedded snapshots can acquire missing sync metadata. Standalone-core/legacy databases are never imported, modified or aliased; previously overwritten edits cannot be recovered.
+- Saved snapshots must include current synchronization metadata. Unsupported snapshots are rejected, not converted. Standalone-core/legacy databases are never imported, modified or aliased.
 
 ## Extension API
 

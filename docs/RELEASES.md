@@ -4,7 +4,9 @@ Each extension has one simple **Ubuntu** job using [BigWigsMods/packager](https:
 
 ## Targets and package layout
 
-Both workflows currently target **WoW Forever 1.60.1 / Interface 16001 only**. The source retains Retail/Forever capability gates, but Retail must be tested before changing a workflow to advertise it.
+Both workflows target **Retail 12.1.0 / Interface 120100** and **WoW Forever 1.60.1 / Interface 16001** in one ZIP per feature. Source TOCs declare `120100, 16001`; the packager reads those values for upload compatibility. Retail 12.0.x is not advertised: the current upstream EllesmereUI build blocks clients below 12.1 (except Forever). Classic Era and other Classic clients are not supported.
+
+Packaging metadata is not proof of in-game compatibility. Complete the [Retail and Forever checks](../TESTING.md#in-game-verification-retail-and-forever) before publishing; Retail has not been verified in game as part of this packaging update.
 
 | Feature | Workflow | Tag example | CurseForge project-ID variable |
 | --- | --- | --- | --- |
@@ -41,9 +43,9 @@ Leave a feature's project-ID variable unset for GitHub-only publishing, even if 
 3. Create a GitHub release targeting that commit, using the feature prefix and version form above. Add notes; check **Set as a pre-release** for alpha/beta, and leave it unchecked for stable. Publish the release.
 4. Check Actions, then CurseForge moderation when uploads are configured. Share the approved direct file link or GitHub ZIP.
 
-Only the matching feature's packaging job runs when a release is **published**. Drafts and unrelated tags do not deploy. The job validates the tag/project ID and prerelease flag, rewrites only its checked-out feature TOC to the tagged version and `Interface: 16001`, and adds release notes to its changelog. These changes are not committed.
+Only the matching feature's packaging job runs when a release is **published**. Drafts and unrelated tags do not deploy. The job validates the tag/project ID and prerelease flag, rewrites only its checked-out feature TOC to the tagged version while preserving its dual-client Interface list, and adds release notes to its changelog. These changes are not committed.
 
-Packaging uses `.pkgmeta-nameplates` or `.pkgmeta-questtracker`. Changelogs are `docs/NAMEPLATES-CHANGELOG.md` and `docs/QUESTTRACKER-CHANGELOG.md`. BigWigs attaches the ZIP to the release, updates its body from the changelog and may add standard `release.json` metadata. The tag selects Alpha, Beta or Release as shown above; `-g 1.60.1` prevents Retail/Classic fallback tagging.
+Packaging uses `.pkgmeta-nameplates` or `.pkgmeta-questtracker`. Changelogs are `docs/NAMEPLATES-CHANGELOG.md` and `docs/QUESTTRACKER-CHANGELOG.md`. BigWigs attaches the ZIP to the release, updates its body from the changelog and may add standard `release.json` metadata. The tag selects Alpha, Beta or Release as shown above. No `-g` override is used: the pinned packager supports Forever/Camelot and derives both game versions from the TOCs. CurseForge must expose both target versions for upload tagging; verify both on the published file. The file label is `(Retail + Forever)`; the ZIP filename remains unchanged.
 
 Use a new version/tag for changed code; never retarget a published tag to a different commit. To promote a tested alpha/beta to stable, publish a new stable tag/release rather than only editing the prerelease flag. **Check CurseForge Files before rerunning a failed upload**: an upload can succeed without returning its result, and retries can create duplicates.
 
@@ -57,6 +59,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Package.ps1
 
 # A single Forever release; use -Feature QuestTracker for the other extension.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Package.ps1 -Feature Nameplates -Version 0.1.0 -Interface 16001
+
+# A single Retail-only local package (GitHub releases include both clients).
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Package.ps1 -Feature Nameplates -Version 0.1.0 -Interface 120100
 ```
 
 `-Feature` accepts Nameplates, QuestTracker or All (default). `-Version` and `-Interface` override only packaged TOCs, not source; versions may include `-alpha.N` or `-beta.N`. `-OutputDirectory` changes the destination. Local filenames use `<addon identity>-<version>.zip`; GitHub workflows use `<addon identity>-<full feature tag>.zip`. Rebuild both packages when shared source changes and maintain embedded API compatibility across independently updated releases.

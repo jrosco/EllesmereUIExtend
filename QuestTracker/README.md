@@ -6,6 +6,8 @@ Quality-of-life features for **EllesmereUIQuestTracker** on Retail and WoW Forev
 
 Extract the ZIP into `Interface/AddOns/`. The installed folder/TOC identity is **EllesmereUIExtendQuestTracker**. Requires **EllesmereUI** and its **EllesmereUIQuestTracker** module; shared profiles are embedded, with no separate Core addon or Nameplates extension required.
 
+Release packages target **Retail 12.1.0** and **WoW Forever 1.60.1** with the same ZIP. Retail 12.0.x and Classic clients are not advertised. Retail in-game verification is still required before publishing; see [Testing](../TESTING.md).
+
 For source installs, copy `QuestTracker/` into that addon folder and put `Core/Core.lua`, `Core/Sync.lua` and `Core/Options.lua` in its `Shared/` subfolder.
 
 - `/eqtx`: opens settings outside combat.
@@ -35,13 +37,13 @@ Toasts support heading color, background opacity and text alignment. Move **Ques
 2. Make a watched quest with a usable item your active **navigation/super-tracked quest**, with the item in your bags.
 3. Approach its navigation destination outside combat. **Quest proximity** defaults to 100 yards (range 1–1000); checks run about once per second.
 
-The button follows navigation, **not** the selected Quest Log entry or every watched quest. User waypoints, absent/unusable items, unsupported APIs and disallowed completed quests hide it. Distance uses the raw navigation value, which may differ from rounded text or refer to an intermediate waypoint. There is no zone/map-POI requirement. Gameplay always hides while dead or a ghost.
+The button follows navigation, **not** the selected Quest Log entry or every watched quest. User waypoints, absent/unusable items, unsupported APIs and disallowed completed quests hide it. Distance uses the raw navigation value, which may differ from rounded text or refer to an intermediate waypoint. There is no zone/map-POI requirement. Native secure visibility hides gameplay while dead or a ghost; if state-driver APIs are unavailable, fallback hiding can only update outside combat.
 
 Appearance includes Retail artwork, size (24–112; default 56), opacity and EUI/SharedMedia borders. Opacity zero does **not** disable the clickable action; use the feature toggle or **Visibility > Never**. Always/Match Any still require an eligible item within range. Advanced Show/Hide conditions reuse EUI's secure visibility rules; unsupported saved conditions fail closed.
 
 Move **Tracked Quest Item** in EUI Edit/Unlock Mode. The mover is a separate non-clickable preview; Save & Exit commits placement and Discard restores it. If mover APIs are unavailable, right-drag out of combat is the fallback. The pinned settings preview is also non-clickable and can show without an eligible quest.
 
-**Combat:** item selection, proximity and live appearance changes defer until combat ends. A previously configured item can remain after tracking/distance changes; moving into range may not reveal a new item until combat ends. Native secure visibility conditions continue operating. Editing clears/hides the live action and pauses polling; preview clicks never use items.
+**Combat:** item selection, proximity and live appearance changes defer until combat ends. A previously configured item can remain after tracking/distance changes, unwatching a quest or removing/consuming its bag item; a visible button does not prove the retained item is still usable. Moving into range may not reveal a new item until combat ends. Preinstalled native secure visibility conditions continue operating; Lua-only conditions and changed visibility settings wait until combat ends. Editing outside combat clears/hides the live action and pauses polling; preview clicks never use items.
 
 ## Troubleshooting and integration
 

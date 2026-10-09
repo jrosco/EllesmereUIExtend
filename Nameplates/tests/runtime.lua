@@ -241,7 +241,7 @@ local function Near(actual, expected, label)
 end
 local function Settings(name, scale, r)
     return { profiles = { Default = { nameplates = { enabled = true, selectedRule = 1, rules = {
-        { name = name, enabled = true, conditions = { target = "yes" },
+        { name = name, enabled = true, conditions = { target = { yes = true } },
           style = { scale = scale, borderSize = 0, healthColor = { r = r, g = 0.3, b = 0.4 } } },
     } } } } }
 end
@@ -299,7 +299,7 @@ Fire("ADDON_LOADED", "EllesmereUIExtendNameplates")
 assert(api.GetSettings() == EllesmereUIExtendDB.profiles.Default.nameplates)
 assert(type(api.GetRules()[1].conditions.target) == "table"
     and api.GetRules()[1].conditions.target.yes == true,
-    "legacy scalar target condition was not migrated to a selection set")
+    "target selection set was not preserved")
 assert(type(api.GetRules()[1].conditions.unitType) == "table"
     and next(api.GetRules()[1].conditions.unitType) == nil,
     "missing condition should normalize to an empty (Any) selection")
@@ -715,13 +715,10 @@ local invalidConditionOK = api.ImportRuleSet(ruleCode)
 assert(not invalidConditionOK and api.GetRules() == currentRules,
     "import accepted an unknown multi-select condition")
 wirePayload.rules[1].conditions.unitType = exportedUnitType
-wirePayload.rules[1].conditions.unitType = "npc"
 wirePayload.version = 1
 local legacyRuleCode = "!EUI_NPEX_RULES1!" .. ruleCode:sub(18)
-local legacyConditionOK, legacyConditionError = api.ImportRuleSet(legacyRuleCode)
-assert(legacyConditionOK, legacyConditionError)
-assert(api.GetRules()[1].conditions.unitType.npc == true,
-    "legacy scalar import was not normalized to a selection set")
+assert(not api.ImportRuleSet(legacyRuleCode) and api.GetRules() == currentRules,
+    "unsupported v1 import must leave live rules untouched")
 wirePayload.version = 2
 wirePayload.rules[1].conditions.unitType = exportedUnitType
 assert(api.ImportRuleSet(ruleCode), "could not restore the exported multi-select rule")
@@ -778,11 +775,12 @@ local classification = rows["Classification"]
 local targetState = rows["Target state"]
 local threatState = rows["Threat"]
 local castState = rows["Cast state"]
-local spellSchool = rows["Spell school"]
-assert(unitType and reaction and classification and targetState and threatState and castState and spellSchool,
+assert(unitType and reaction and classification and targetState and threatState and castState,
     "categorical multi-select controls were not built")
+assert(rows["Spell school"] == nil, "retired condition control must not be built")
 assert(threatState.emptyLabel == "Any threat" and #threatState.items == 3, "Threat choices missing")
-assert(threatState.row == rows["Quest Objective"].row, "Threat and Quest Objective must share a row")
+assert(threatState.row == castState.row, "Cast state and Threat must share a row")
+assert(rows["Quest Objective"].row ~= castState.row, "Quest Objective must use a separate row")
 threatState.set("me", true)
 assert(api.GetRules()[1].conditions.threat.me, "Threat on me was not saved")
 local originalDetailedThreat = UnitDetailedThreatSituation
@@ -892,7 +890,6 @@ assert(namespace.FindRule("nameplate1") == api.GetRules()[1], "cast-state select
 castState.set("none", false)
 assert(namespace.FindRule("nameplate1") == nil, "cast state should reject a unit outside the selected alternatives")
 activeCast = "casting"
-assert(api.RegisterSpellSchool(123, "fire"), "spell school registration failed")
 assert(namespace.FindRule("nameplate1") == api.GetRules()[1], "selected casting state did not match")
 castState.set("channel", true)
 assert(namespace.FindRule("nameplate1") == api.GetRules()[1], "cast-state alternatives should match active casts")
@@ -921,14 +918,8 @@ castState.set("empowered", true)
 assert(not castState.get("casting"), "Empowered should not expose implicit Casting")
 castState.set("empowered", false)
 castState.set("casting", false)
-spellSchool.set("fire", true)
-spellSchool.set("frost", true)
-assert(namespace.FindRule("nameplate1") == api.GetRules()[1], "spell-school alternatives should match active casts")
-spellSchool.set("fire", false)
-assert(namespace.FindRule("nameplate1") == nil, "spell school should reject a nonselected school")
-spellSchool.set("frost", false)
 activeCast = nil
-assert(namespace.FindRule("nameplate1") == api.GetRules()[1], "empty school selection should mean Any")
+assert(namespace.FindRule("nameplate1") == api.GetRules()[1], "empty cast selection should mean Any")
 
 rows["Add Rule"].click(); Flush()
 assert(rows["Edit rule"].values["1"] == "[1] Custom Rule 2")
@@ -1100,11 +1091,11 @@ assert(not castBorder.shown, "pool release hides cast border")
 plate.unit = "nameplate1"
 api.Refresh(); Flush()
 assert(castBorder.shown)
-api.GetRules()[1].conditions.target = "no"
+api.GetRules()[1].conditions.target = { no = true }
 api.Refresh(); Flush()
 assert(not castBorder.shown, "unmatching restores cast")
 assert(plate.cast:GetStatusBarTexture():GetTexture() == "new-engine-texture")
-api.GetRules()[1].conditions.target = "yes"
+api.GetRules()[1].conditions.target = { yes = true }
 api.Refresh(); Flush()
 api.GetSettings().enabled = false
 api.Refresh(); Flush()

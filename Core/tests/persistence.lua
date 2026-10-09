@@ -156,6 +156,14 @@ for _, reverse in ipairs({ false, true }) do
     invalid.sync.profiles.Default.stamp.sequence = math.huge
     core = Start(order, { nameplates = combined.nameplates, questTracker = invalid })
     Check(core.GetSettings("questTracker").value == 202, "invalid sync metadata is rejected before any partial merge")
+    invalid = core.Copy(combined.questTracker)
+    invalid.sync = nil
+    core = Start(order, { nameplates = combined.nameplates, questTracker = invalid })
+    Check(core.GetSettings("nameplates").value == 101 and core.GetSettings("questTracker").value == 202,
+        "snapshot without required metadata cannot replace a valid snapshot")
+    core = Start({ "questTracker" }, { questTracker = invalid })
+    Check(core.GetSettings("questTracker").value == 0 and core.GetProfileInfo().active == "Default",
+        "snapshot without required metadata rejected rather than converted")
 end
 
 local core = Start({ "nameplates", "questTracker" })

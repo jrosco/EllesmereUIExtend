@@ -6,17 +6,21 @@ Rule-based styling for EllesmereUI nameplates on Retail and WoW Forever, configu
 
 Extract the addon ZIP into `Interface/AddOns/`. The installed folder/TOC identity is **EllesmereUIExtendNameplates**. Requires **EllesmereUI** and its **EllesmereUINameplates** module enabled; shared profiles are embedded, so no separate Core addon or Quest Tracker extension is needed. Do not run the previous Nameplate Extras addon alongside it.
 
+Release packages target **Retail 12.1.0** and **WoW Forever 1.60.1** with the same ZIP. Retail 12.0.x and Classic clients are not advertised. Retail in-game verification is still required before publishing; see [Testing](../TESTING.md).
+
 For source installs, copy `Nameplates/` into that addon folder and put `Core/Core.lua`, `Core/Sync.lua` and `Core/Options.lua` in its `Shared/` subfolder.
 
 ## Rules and matching
 
 - Four enabled starters: **Elite Enemies**, **Enemy Casting**, **Current Target**, **Non Target**. Add/copy/reorder up to 100 rules; the first enabled matching rule controls ordinary appearance. New rules target the current target; copies follow their source.
-- Choices within a condition use **OR**; separate condition groups use **AND**. Empty checklists mean **Any**, not a restrictive filter. Conditions include unit type, reaction, classification, target state, player combat, instance type, casts, spell school, threat and quest objectives.
+- Choices within a condition use **OR**; separate condition groups use **AND**. Empty checklists mean **Any**, not a restrictive filter. Conditions include unit type, reaction, classification, target state, player combat, instance type, casts, threat and quest objectives. Checklist conditions use selection tables, not scalar strings.
 - **Not current target** requires a selected target; **No target selected** is separate. Select both for a combined non-target rule. Combat/instance filters describe **your character**, not the nameplate unit or group type.
-- Threat filters describe the **aggro holder**: Tank threat, Non-tank threat and Threat on me. A temporary spell target is not assumed to hold aggro. School-specific rules require known school metadata; quest objectives use EUI's cached detector and instance setting.
+- Threat filters describe the **aggro holder**: Tank threat, Non-tank threat and Threat on me. A temporary spell target is not assumed to hold aggro. Quest objectives use EUI's cached detector and instance setting.
 - Unsupported/restricted information cannot satisfy a selected filter. Any remains unrestricted. Forever gates Arena/Scenario/Delve choices; imported choices remain saved.
 
 **Enable Nameplate styling** is the master switch. Turning it off restores EUI appearance and locks the editor without deleting rules. A disabled rule locks its editing/actions, but selection, Add Rule and Rule enabled remain available while styling is on. Tooltips explain requirements and locks.
+
+Settings use a two-column layout with two entries per row; an odd number of settings leaves the final row with one entry. Specific pairings are not part of the layout requirement.
 
 ## Appearance
 
@@ -28,7 +32,9 @@ For source installs, copy `Nameplates/` into that addon folder and put `Core/Cor
 | Text | Compact slot rows have a popup for content, per-slot color, font size and X/Y offsets. Use EUI setting inherits content; size/offset overrides can still apply to native text. Remove hides that slot for the rule. Add Text Slot restores a free position; the slot-label menu moves text and saved overrides within the health or cast group. Unavailable health/time/target data stays blank. |
 | Target arrows | EUI artwork or a selected style. Arrows remain **current-target indicators**, never arrows on arbitrary matched units. Color/size follow EUI; arrows use Other elements scaling. |
 
-The pinned **Style preview** displays the selected rule's saved appearance without evaluating conditions. Health, repeating casts/timers, text, glows and arrows update immediately; hidden previews stop animating. Overrides off, unmatched rules, disabled styling and recycled plates restore the **latest EUI-authored state**, not an initial snapshot.
+Unreadable root scale values temporarily suspend all scaling categories and release child compensation; unreadable alpha suspends the root opacity multiplier. Saved rules remain unchanged and styling resumes when native values become readable. Latest native secret writes stay native-owned rather than being replaced by older readable snapshots.
+
+The pinned **Style preview** displays the selected rule's saved appearance without evaluating conditions. Health, repeating casts/timers, text, glows and arrows update immediately; hidden previews stop animating. Overrides off, unmatched rules, disabled styling and recycled plates restore the **latest EUI-authored state**, not an initial snapshot. If native cast-spark anchors are restricted, texture styling continues while spark retargeting waits for a later refresh with readable anchors; native anchors are never cleared or guessed.
 
 Text rows include inherited EUI slots and explicit rule content, omitting hidden positions. Different slots may show the same content with different colors. Existing content-wide saved colors remain a fallback; turning a slot's color override off keeps EUI coloring for that slot without deleting other colors. Older EUI versions without slot-menu helpers add the first free position and offer Move through the popup's Position dropdown.
 
@@ -50,14 +56,14 @@ State checkboxes require EUI or Classic WoW UI nameplate style; Blizzard/WoW For
 
 **Extend > Profiles** or `/eextend` manages character-assigned profiles shared with other installed extensions. **Reset Nameplate** resets only this feature's active section. Persistence, independent edits and uninstall behavior are described in [Core](../Core/README.md); old standalone/legacy databases remain untouched.
 
-**Sharing > Export/Import Rule Set** copies rules only. Import replaces the active profile's rules and selects the first; it does not change assignments or the global enable toggle. Wire identifiers remain `!EUI_NPEX_RULES2!`, with `!EUI_NPEX_RULES1!` imports supported, separate from EUI full-profile exports.
+**Sharing > Export/Import Rule Set** copies rules only. Import replaces the active profile's rules and selects the first; it does not change assignments or the global enable toggle. Only current `!EUI_NPEX_RULES2!` codes are supported, separate from EUI full-profile exports; older development formats are not converted.
 
 - `/enp` or `/extendnameplates`: diagnostics and style reapplication for a visible enemy target; does **not** open settings.
 - `/enp cast`: target cast details and winning rules per cast-color state, without requiring a visible plate. Secret states may report unknown while native rendering still works.
 
 ## Integration notes
 
-Public API: `EllesmereUIExtendNameplates`. `GetSettings()`, `GetRules()` and `Refresh()` expose current state; call Refresh after programmatic rule edits. `RegisterCondition(key, predicate)` receives `(unitToken, traits, expectedValue, rule)`; `RegisterSpellSchool(spellID, school)` seeds metadata. `SupportsCastColorStates()` reports the shared editor/runtime capability.
+Public API: `EllesmereUIExtendNameplates`. `GetSettings()`, `GetRules()` and `Refresh()` expose current state; call Refresh after programmatic rule edits. `RegisterCondition(key, predicate)` receives `(unitToken, traits, expectedValue, rule)`. `SupportsCastColorStates()` reports the shared editor/runtime capability.
 
 `Helpers.lua` provides private namespace utilities; `Nameplates.lua` owns matching/runtime coordination, `Options.lua` the editor, and the remaining modules rendering/sharing. Predicate results are shared only within one refresh. Preserve native frame hierarchy, pooling, cast lifting and interrupted effects; use EUI renderers and check secrets before Lua comparisons/arithmetic. No upstream files are modified.
 
