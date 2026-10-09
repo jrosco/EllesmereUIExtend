@@ -35,11 +35,11 @@ Toasts support heading color, background opacity and text alignment. Move **Ques
 
 1. Open **Quest Item** and enable **Show tracked quest item**.
 2. Make a watched quest with a usable item your active **navigation/super-tracked quest**, with the item in your bags.
-3. Approach its navigation destination outside combat. **Quest proximity** defaults to 100 yards (range 1–1000); checks run about once per second.
+3. Approach its destination outside combat. **Quest proximity** defaults to 100 yards (range 1–1000); checks run about once per second.
 
-The button follows navigation, **not** the selected Quest Log entry or every watched quest. User waypoints, absent/unusable items, unsupported APIs and disallowed completed quests hide it. Distance uses the raw navigation value, which may differ from rounded text or refer to an intermediate waypoint. There is no zone/map-POI requirement. Native secure visibility hides gameplay while dead or a ghost; if state-driver APIs are unavailable, fallback hiding can only update outside combat.
+The button follows navigation, **not** the selected Quest Log entry or every watched quest. User waypoints, absent/unusable items, unsupported APIs and disallowed completed quests hide it. On both Retail and Forever, an eligible item qualifies **inside its highlighted quest area OR within the navigation-distance threshold**. Area membership uses `C_Minimap.IsInsideQuestBlob` for the active super-tracked quest; missing, throwing or unreadable area checks fall back to valid navigation distance only. Raw navigation distance may differ from rounded text or refer to an intermediate waypoint. Quest distance is diagnostic only, not a visibility condition. There is no zone/map-POI requirement. Native secure visibility hides gameplay while dead or a ghost, including in combat; if state-driver APIs are unavailable, fallback hiding can only update outside combat and requires a readable alive state.
 
-Appearance includes Retail artwork, size (24–112; default 56), opacity and EUI/SharedMedia borders. Opacity zero does **not** disable the clickable action; use the feature toggle or **Visibility > Never**. Always/Match Any still require an eligible item within range. Advanced Show/Hide conditions reuse EUI's secure visibility rules; unsupported saved conditions fail closed.
+Appearance includes Retail artwork, size (24–112; default 56), opacity and EUI/SharedMedia borders. Opacity zero does **not** disable the clickable action; use the feature toggle or **Visibility > Never**. Always/Match Any still require an eligible item inside its quest area or within range. Advanced Show/Hide conditions reuse EUI's secure visibility rules; unsupported saved conditions fail closed.
 
 Move **Tracked Quest Item** in EUI Edit/Unlock Mode. The mover is a separate non-clickable preview; Save & Exit commits placement and Discard restores it. If mover APIs are unavailable, right-drag out of combat is the fallback. The pinned settings preview is also non-clickable and can show without an eligible quest.
 
@@ -47,7 +47,7 @@ Move **Tracked Quest Item** in EUI Edit/Unlock Mode. The mover is a separate non
 
 ## Troubleshooting and integration
 
-For a missing icon, run `/eqtx status` with the desired navigation quest. Check `quest`, `nav`, `threshold`, `eligible` and `reason`, then `liveQuest`, `shown`, `alpha`, `iconAlpha`, `combat`, `editing`, `dead` and `driver`. A shown frame may be transparent; eligible may be true while the feature/visibility hides it. The reason is the **first** failing check, not every blocker. Share both diagnostic lines and your client when reporting problems.
+For a missing icon, run `/eqtx status` with the desired navigation quest. Check `quest`, `source`, `distance`, `nav`, `insideArea`, `questDistance`, `onContinent`, `threshold`, `eligible` and `reason`, then `liveQuest`, `shown`, `alpha`, `iconAlpha`, `combat`, `editing`, `dead` and `driver`. `distance`/`nav` report navigation distance; `source=quest-area` means readable `insideArea=true` bypasses the threshold, otherwise `source=navigation` uses it. `questDistance` and `onContinent` are diagnostic only. A shown frame may be transparent; eligible may be true while the feature/visibility hides it. The reason is the **first** failing check, not every blocker. Share both diagnostic lines and your client when reporting problems.
 
 Common reasons: disabled feature, navigation not a quest, quest not watched, missing item/API/template, item not in bags, unreadable distance, too far, dead/ghost, combat deferred or edit preview. There is no zone check to disable.
 

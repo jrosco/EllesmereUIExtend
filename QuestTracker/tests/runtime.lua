@@ -427,6 +427,99 @@ end
 complete[20] = true
 Check(addon.NearestQuestItem().questID == 20, "completed quest retains an item explicitly allowed after completion")
 complete[20] = false; GetQuestLogSpecialItemInfo = specialItemAPI
+-- Shared rule on Retail and Forever: inside the active quest area OR within
+-- navigation range. Quest distance is optional diagnostic information only.
+do
+    local savedQuestDistance = C_QuestLog.GetDistanceSqToQuest
+    local savedNavigation = C_Navigation
+    local savedMinimap = C_Minimap
+    local squared, onContinent = 3014, true
+    local inside
+    C_Minimap = { IsInsideQuestBlob = function(id)
+        Check(id == navQuest, "area request uses active navigation quest identity")
+        return inside
+    end }
+    C_QuestLog.GetDistanceSqToQuest = function(id)
+        Check(id == navQuest, "diagnostic distance request uses active navigation quest identity")
+        return squared, onContinent
+    end
+    for _, forever in ipairs({ false, true }) do
+        EUI_CLIENT_FOREVER = forever
+        inside = false; navDistance = 180.859375; squared = 3014; onContinent = true
+        Check(addon.NearestQuestItem() == nil, "nearby quest diagnostic cannot qualify outside-area distant navigation")
+        inside = true
+        Check(addon.NearestQuestItem().distance == navDistance, "inside area qualifies despite distant navigation on either client")
+        cfg.questItem = true
+        local d = ns.QuestItemDebugInfo()
+        Check(d.eligible and d.distanceSource == "quest-area" and d.insideArea == true
+            and d.distance == navDistance and Near(d.questDistance, math.sqrt(3014)), "diagnostics distinguish area qualification and quest distance")
+        local messageStart = #messages
+        SlashCmdList.ELLESMEREUIEXTENDQUESTTRACKER("status")
+        Check(messages[messageStart + 3]:find("insideArea=true", 1, true)
+            and messages[messageStart + 3]:find("source=quest-area", 1, true), "status prints area qualification")
+        cfg.questItem = false
+        for _, value in ipairs({ secret, -1, math.huge, 0/0, "25" }) do
+            navDistance = value
+            Check(addon.NearestQuestItem() ~= nil, "readable true area can qualify with invalid navigation distance")
+            inside = false
+            Check(addon.NearestQuestItem() == nil, "invalid navigation and outside area fail closed")
+            inside = true
+        end
+        navDistance = nil
+        Check(addon.NearestQuestItem() ~= nil, "inside area qualifies with absent navigation reading")
+        inside = false
+        Check(addon.NearestQuestItem() == nil, "absent navigation and outside area fail closed")
+        for _, value in ipairs({ false, secret, 1, "true" }) do
+            inside = value; navDistance = 101
+            Check(addon.NearestQuestItem() == nil, "only readable true area can bypass range")
+            navDistance = 100
+            Check(addon.NearestQuestItem() ~= nil, "unreadable or false area permits inclusive valid navigation boundary")
+        end
+        inside = nil; navDistance = 100
+        Check(addon.NearestQuestItem() ~= nil, "missing area result falls back to navigation")
+        navDistance = 100.1
+        Check(addon.NearestQuestItem() == nil, "outside-area unrounded navigation boundary rejects")
+        local areaAPI = C_Minimap.IsInsideQuestBlob
+        C_Minimap.IsInsideQuestBlob = function() error("restricted") end
+        Check(addon.NearestQuestItem() == nil, "throwing area does not bypass distant navigation")
+        navDistance = 25
+        Check(addon.NearestQuestItem() ~= nil, "throwing area permits readable nearby navigation")
+        C_Minimap.IsInsideQuestBlob = areaAPI
+        C_Minimap = nil
+        Check(addon.Capabilities().questItem and addon.NearestQuestItem() ~= nil, "missing area namespace preserves navigation-only capability")
+        C_Minimap = { IsInsideQuestBlob = areaAPI }
+        inside = true; navDistance = 180
+        counts[120] = 0
+        Check(addon.NearestQuestItem() == nil, "inside area does not bypass missing bag item")
+        counts[120] = 1; watches[20] = nil
+        Check(addon.NearestQuestItem() == nil, "inside area does not bypass watched-quest requirement")
+        watches[20] = 1; trackingQuest = false
+        Check(addon.NearestQuestItem() == nil, "inside area cannot reuse quest ID for user waypoint")
+        trackingQuest = true; navQuest = 10
+        Check(addon.NearestQuestItem().questID == 10, "area tracks only the new active quest")
+        navQuest = 20; C_Navigation = nil
+        Check(addon.Capabilities().questItem and addon.NearestQuestItem() ~= nil, "area-only API capability permits eligible inside item")
+        inside = false
+        Check(addon.NearestQuestItem() == nil, "area-only API hides outside with no valid distance")
+        C_Navigation = savedNavigation; inside = true
+        for _, value in ipairs({ secret, -1, math.huge, 0/0, "3014" }) do
+            squared = value
+            Check(addon.NearestQuestItem() ~= nil, "invalid optional quest diagnostic cannot veto area qualification")
+        end
+        squared = 3014; onContinent = secret
+        Check(addon.NearestQuestItem() ~= nil, "secret diagnostic continent flag cannot veto area qualification")
+        onContinent = false; inside = false; navDistance = 25
+        Check(addon.NearestQuestItem() ~= nil, "off-continent quest diagnostic cannot veto valid navigation")
+        C_QuestLog.GetDistanceSqToQuest = function() error("restricted") end
+        Check(addon.NearestQuestItem() ~= nil, "throwing quest diagnostic does not affect eligibility")
+        C_QuestLog.GetDistanceSqToQuest = nil
+        Check(addon.Capabilities().questItem and addon.NearestQuestItem() ~= nil, "missing quest diagnostic API does not gate item capability")
+        C_QuestLog.GetDistanceSqToQuest = function() return squared, onContinent end
+    end
+    C_QuestLog.GetDistanceSqToQuest = savedQuestDistance
+    C_Minimap = savedMinimap
+    EUI_CLIENT_FOREVER = nil; navDistance = 25
+end
 local distanceAPI = C_QuestLog.GetDistanceSqToQuest
 C_QuestLog.GetDistanceSqToQuest = nil
 Check(addon.Capabilities().questItem and addon.NearestQuestItem().questID == 20, "legacy squared distance is not a dependency")
@@ -791,7 +884,8 @@ combat = true; NativeResolve(itemButton, drivers[itemButton]); Event("PLAYER_REG
 Check(itemButton.shown, "native combat visibility can show the secure button during lockdown")
 playerDead = true; NativeResolve(itemButton, drivers[itemButton]); Event("PLAYER_DEAD")
 Check(not itemButton.shown and driverWrites == writesBeforeCombat, "native death gate hides during combat without protected Lua writes")
-Check(ns.QuestItemDebugInfo().reason == "player-dead-or-ghost", "status explains death hiding")
+Check(ns.QuestItemDebugInfo().dead == true and ns.QuestItemDebugInfo().reason == "player-dead-or-ghost",
+    "status explains automatic death hiding")
 playerDead, playerGhost = false, true
 NativeResolve(itemButton, drivers[itemButton]); Event("PLAYER_ALIVE")
 Check(not itemButton.shown, "native death gate stays hidden as a ghost")
