@@ -271,11 +271,13 @@ local function PrebuildTest()
     end
     local paired = false
     for _, row in ipairs(pageRows) do
-        if row._labelText == "Threat Quest Objective" then
-            paired = dropdowns["Threat"].parent == row._leftRegion and type(fields["Quest Objective"].set) == "function"
+        if row._labelText == "Cast state Threat" then
+            paired = dropdowns["Cast state"].parent == row._leftRegion
+                and dropdowns["Threat"].parent == row._rightRegion
         end
     end
-    assert(paired, "Threat dropdown and Quest Objective toggle must share one settings row")
+    assert(paired, "Cast state and Threat dropdowns must share one settings row")
+    assert(type(fields["Quest Objective"].set) == "function", "Quest Objective toggle remains available")
     local unit = dropdowns["Unit type"]
     assert(unit.emptyLabel == "Any unit" and #unit.items == 4)
     unit.set("npc", true); unit.set("player", true)

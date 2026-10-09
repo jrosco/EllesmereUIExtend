@@ -646,6 +646,8 @@ local function BuildStylePage(parent, yOffset)
             "Choose where your character is, not your group type. Arena, scenario and delve are unavailable on Forever."),
         ConditionMultiDropdown("Cast state", "castState", CAST_STATES, CAST_ORDER,
             "Choose cast types or cast-color states. Color-state choices apply other styling to all active casts."),
+        ConditionMultiDropdown("Threat", "threat", THREATS, THREAT_ORDER,
+            "Choose who holds the unit's aggro. Unknown threat or roles cannot match the corresponding choice."),
     }
     for index = 1, #conditions, 2 do
         local left, right = conditions[index], conditions[index + 1]
@@ -663,11 +665,7 @@ local function BuildStylePage(parent, yOffset)
         end
         y = y - rowHeight
     end
-    local threat = ConditionMultiDropdown("Threat", "threat", THREATS, THREAT_ORDER,
-        "Choose who holds the unit's aggro. Unknown threat or roles cannot match the corresponding choice.")
-    local threatRow
-    threatRow, h = LockedRow(
-        { type = "spacer", text = threat.text, tooltip = threat.tooltip }, {
+    _, h = LockedRow({
         type = "toggle", text = "Quest Objective",
         getValue = function() return GetRule().conditions.questObjective == "yes" end,
         setValue = function(value)
@@ -676,7 +674,6 @@ local function BuildStylePage(parent, yOffset)
         end,
         tooltip = "Match only incomplete objectives in your quest log. Follows EUI's Show In Instances setting. Off ignores quest status.",
     })
-    if not EllesmereUI.IsSearchPrebuild() then BuildConditionMultiDropdown(threatRow._leftRegion, threat) end
     y = y - h
     _, h = W:SectionHeader(parent, "APPEARANCE - NAMEPLATE", y); y = y - h
     local sizeRow

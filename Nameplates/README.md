@@ -20,6 +20,8 @@ For source installs, copy `Nameplates/` into that addon folder and put `Core/Cor
 
 **Enable Nameplate styling** is the master switch. Turning it off restores EUI appearance and locks the editor without deleting rules. A disabled rule locks its editing/actions, but selection, Add Rule and Rule enabled remain available while styling is on. Tooltips explain requirements and locks.
 
+Settings use a two-column layout with two entries per row; an odd number of settings leaves the final row with one entry. Specific pairings are not part of the layout requirement.
+
 ## Appearance
 
 | Area | Options and important behavior |

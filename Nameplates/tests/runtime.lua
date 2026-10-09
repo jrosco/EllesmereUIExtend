@@ -765,7 +765,8 @@ assert(unitType and reaction and classification and targetState and threatState 
     "categorical multi-select controls were not built")
 assert(rows["Spell school"] == nil, "retired condition control must not be built")
 assert(threatState.emptyLabel == "Any threat" and #threatState.items == 3, "Threat choices missing")
-assert(threatState.row == rows["Quest Objective"].row, "Threat and Quest Objective must share a row")
+assert(threatState.row == castState.row, "Cast state and Threat must share a row")
+assert(rows["Quest Objective"].row ~= castState.row, "Quest Objective must use a separate row")
 threatState.set("me", true)
 assert(api.GetRules()[1].conditions.threat.me, "Threat on me was not saved")
 local originalDetailedThreat = UnitDetailedThreatSituation
