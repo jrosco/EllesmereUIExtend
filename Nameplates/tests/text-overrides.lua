@@ -73,6 +73,19 @@ Near(plate.name:GetAlpha(), 0.6, "Use EUI restores latest native alpha")
 Near(plate.name.textColor[1], 0.2, "per-element name color can override native slot without replacing content")
 plate.name:SetTextColor(0.8, 0.6, 0.4, 0.9)
 Near(plate.name.textColor[1], 0.2, "text color survives native color repaint")
+style.textSlotColors = { textSlotTop = { r = 0.3, g = 0.4, b = 0.5 }, textSlotLeft = { r = 0.7, g = 0.6, b = 0.5 } }
+style.textSlots.textSlotLeft = "name"
+Refresh()
+Near(plate.name.textColor[1], 0.3, "slot color overrides native content without replacement")
+Near(fonts.textSlotLeft.textColor[1], 0.7, "same content in another slot has independent color")
+plate.name:SetTextColor(0.8, 0.6, 0.4, 0.9)
+Near(plate.name.textColor[1], 0.3, "slot color survives native repaint")
+style.textSlotColors.textSlotTop = false
+Refresh()
+Near(plate.name.textColor[1], 0.8, "slot Off restores latest engine color despite existing content-wide override")
+Check(style.textColors.name.r == 0.2, "slot Off does not modify content-wide saved color")
+style.textSlotColors = nil
+style.textSlots.textSlotLeft = "level"
 style.textColors.name = nil
 Refresh()
 Near(plate.name.textColor[1], 0.8, "color toggle off restores latest native color")
@@ -137,8 +150,11 @@ rule.conditions.target = { no = true }
 Refresh()
 Check(not fonts.textSlotLeft:IsShown(), "unmatching rule restores text")
 Check(api.ValidateRuleText({ textSlots = { textSlotTop = "name", castTimer = "castRemaining" }, textColors = {} }), "valid text schema")
+Check(api.ValidateRuleText({ textSlotColors = { textSlotTop = false, castTimer = { r = 0, g = 1, b = 0.5 } } }), "valid slot-color schema")
 for _, bad in ipairs({ { textSlots = { unknown = "name" } }, { textSlots = { castName = "healthPercent" } },
-    { textColors = { name = { r = 2, g = 0, b = 0 } } }, { textColors = { unknown = { r = 0, g = 0, b = 0 } } } }) do
+    { textColors = { name = { r = 2, g = 0, b = 0 } } }, { textColors = { unknown = { r = 0, g = 0, b = 0 } } },
+    { textSlotColors = true }, { textSlotColors = { unknown = false } }, { textSlotColors = { castName = true } },
+    { textSlotColors = { textSlotLeft = { r = 0 / 0, g = 0, b = 0 } } } }) do
     Check(not api.ValidateRuleText(bad), "invalid text schema rejected")
 end
 print("PASS: " .. checks .. " per-rule text slots/colors, native restoration, health/cast content, secret sinks and Forever fallbacks")

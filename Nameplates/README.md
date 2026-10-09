@@ -29,12 +29,22 @@ Settings use a two-column layout with two entries per row; an odd number of sett
 | Nameplate | Opacity and a size multiplier on EUI's base scale. The cog selects Health bar, Cast bar, Class resources, Text and Other elements; unchecked categories retain EUI sizing. |
 | Health/cast bars | Independent master overrides, fill textures, colors and replacement media borders. Tap-denied enemies retain EUI's tapped health color; stock cast artwork may retain its atlas. |
 | Glows | Independent Pixel Glow or Auto-Cast Shine, with color and effect settings. Require the corresponding bar master, not a border override. Cast glows temporarily suppress EUI Important Cast Glow and restore its latest state afterward. |
-| Text | Override content and/or colors in EUI's health/nameplate and cast slots. Use EUI setting preserves content; None hides it. Fonts/positions remain EUI-owned; unavailable health/time/target data stays blank. |
+| Text | Compact slot rows have a popup for content, per-slot color, font size and X/Y offsets. Use EUI setting inherits content; size/offset overrides can still apply to native text. Remove hides that slot for the rule. Add Text Slot restores a free position; the slot-label menu moves text and saved overrides within the health or cast group. Unavailable health/time/target data stays blank. |
 | Target arrows | EUI artwork or a selected style. Arrows remain **current-target indicators**, never arrows on arbitrary matched units. Color/size follow EUI; arrows use Other elements scaling. |
 
 Unreadable root scale values temporarily suspend all scaling categories and release child compensation; unreadable alpha suspends the root opacity multiplier. Saved rules remain unchanged and styling resumes when native values become readable. Latest native secret writes stay native-owned rather than being replaced by older readable snapshots.
 
 The pinned **Style preview** displays the selected rule's saved appearance without evaluating conditions. Health, repeating casts/timers, text, glows and arrows update immediately; hidden previews stop animating. Overrides off, unmatched rules, disabled styling and recycled plates restore the **latest EUI-authored state**, not an initial snapshot. If native cast-spark anchors are restricted, texture styling continues while spark retargeting waits for a later refresh with readable anchors; native anchors are never cleared or guessed.
+
+Text rows include inherited EUI slots and explicit rule content, omitting hidden positions. Different slots may show the same content with different colors. Existing content-wide saved colors remain a fallback; turning a slot's color override off keeps EUI coloring for that slot without deleting other colors. Older EUI versions without slot-menu helpers add the first free position and offer Move through the popup's Position dropdown.
+
+Move blocks inherited EUI formats that the rule renderer cannot preserve (combined name/level or health formats, percentages without a sign or with decimals, Forever shortened names, and combined spell/target labels). The menu explains the restriction; choose an explicit rule content option first to intentionally use a supported format. Plain inherited names/health numbers remain movable.
+
+**Override size** enables a 6–30 font-size slider. **Override offsets** enables X/Y sliders from -200 to 200; these replace EUI's configured slot offsets, not add to them. Base anchors, font face/outline, strata, wrapping and dynamic cast/resource spacing remain EUI-owned. Unset fields inherit the destination's EUI settings after a move. Turning overrides off or releasing a rule restores the latest engine-authored layout; unreadable/restricted native geometry is left alone.
+
+If a native layout restoration fails temporarily, later text refreshes retry the unresolved font/anchors without replaying successfully restored anchors or an outdated EUI state.
+
+Each slot popup's **Reset to EUI** button restores that slot's content, color, size and X/Y offsets to EUI's current settings, turning its override toggles off. Other slots and their saved colors remain unchanged. If EUI has no content assigned to the position, its row disappears until added again.
 
 ### Cast-color states
 
