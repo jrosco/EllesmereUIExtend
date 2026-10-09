@@ -106,7 +106,7 @@ local function Fresh(opacity, scale, initialAlpha)
     NP.db.profile.castOverlayEnabled = true
     NP.RefreshCastOverlay(plate)
     EllesmereUIExtendDB = { profiles = { Default = { nameplates = { enabled = true, rules = {
-        { name = "Rendering", conditions = { target = "yes" }, style = {
+        { name = "Rendering", conditions = { target = { yes = true } }, style = {
             opacity = opacity, scale = scale or 100, healthEnabled = false, borderSize = 0,
         } },
     } } } } }
@@ -140,7 +140,7 @@ Test("zero opacity and rule transitions", function()
     for _ = 1, 5 do NP.NT_Apply(plate); Flush() end
     style.opacity = 50; api.Refresh(); Flush()
     Near(plate:GetAlpha(), 0.15, "leaving zero uses authoritative alpha")
-    api.GetRules()[1].conditions.target = "no"; api.Refresh(); Flush()
+    api.GetRules()[1].conditions.target = { no = true }; api.Refresh(); Flush()
     Near(plate:GetAlpha(), 0.3, "unmatched rule restoration")
 end)
 Test("independent alpha writes survive cached NT passes", function()

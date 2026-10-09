@@ -35,19 +35,13 @@ function api.IsScaleElementEnabled(style, key)
 end
 function addon.NormalizeScaleElements(selection)
     if type(selection) ~= "table" then return selection end
-    -- Retired aura toggles no longer override Other. Keep Other's existing
-    -- choice (missing means enabled) when loading older settings/share codes.
-    selection.buffs, selection.debuffs, selection.cc = nil, nil, nil
-    -- Text previously belonged to Other. Preserve old opt-outs on load/import;
-    -- the editor stores an explicit true when Text is enabled independently.
-    if selection.text == nil and selection.other == false then selection.text = false end
     return next(selection) and selection or nil
 end
 api.NormalizeScaleElements = addon.NormalizeScaleElements
 function api.ValidateScaleElements(selection)
     if selection == nil then return true end
     if type(selection) ~= "table" then return false end
-    local valid = { buffs = true, debuffs = true, cc = true } -- accepted only for legacy migration
+    local valid = {}
     for _, option in ipairs(OPTIONS) do valid[option.key] = true end
     for key, value in pairs(selection) do
         if not valid[key] or type(value) ~= "boolean" then return false end

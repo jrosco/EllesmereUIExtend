@@ -12,7 +12,6 @@ local MULTI_CONDITION_VALUES = {
     playerCombat = { inCombat = true, outOfCombat = true },
     instanceType = { world = true, dungeon = true, raid = true, battleground = true, arena = true, scenario = true, delve = true },
     castState = { none = true, casting = true, channel = true, empowered = true, interruptible = true, interruptOnCD = true, uninterruptible = true },
-    spellSchool = { physical = true, holy = true, fire = true, nature = true, frost = true, shadow = true, arcane = true, mixed = true },
 }
 local SCALAR_CONDITION_VALUES = {
     questObjective = { any = true, yes = true, no = true },
@@ -25,25 +24,25 @@ local DEFAULT_RULES = {
     {
         name = "Elite Enemies",
         enabled = true,
-        conditions = { unitType = {}, reaction = { enemy = true }, classification = { elite = true }, target = {}, questObjective = "any", castState = {}, spellSchool = {} },
+        conditions = { unitType = {}, reaction = { enemy = true }, classification = { elite = true }, target = {}, questObjective = "any", castState = {} },
         style = { healthColorEnabled = true, healthColor = { r = 0.72, g = 0.36, b = 1.00 }, scale = 120, opacity = 100, borderSize = 2, borderColor = { r = 1.00, g = 1.00, b = 1.00 }, texture = "eui" },
     },
     {
         name = "Enemy Casting",
         enabled = true,
-        conditions = { unitType = {}, reaction = { enemy = true }, classification = {}, target = {}, questObjective = "any", castState = { casting = true }, spellSchool = {} },
+        conditions = { unitType = {}, reaction = { enemy = true }, classification = {}, target = {}, questObjective = "any", castState = { casting = true } },
         style = { healthColorEnabled = true, healthColor = { r = 1.00, g = 0.28, b = 0.18 }, scale = 120, opacity = 100, borderSize = 2, borderColor = { r = 1.00, g = 1.00, b = 1.00 }, texture = "eui" },
     },
     {
         name = "Current Target",
         enabled = true,
-        conditions = { unitType = {}, reaction = {}, classification = {}, target = { yes = true }, questObjective = "any", castState = {}, spellSchool = {} },
+        conditions = { unitType = {}, reaction = {}, classification = {}, target = { yes = true }, questObjective = "any", castState = {} },
         style = { healthColorEnabled = true, healthColor = { r = 0.12, g = 0.92, b = 0.67 }, scale = 110, opacity = 100, borderSize = 2, borderColor = { r = 1.00, g = 1.00, b = 1.00 }, texture = "eui" },
     },
     {
         name = "Non Target",
         enabled = true,
-        conditions = { unitType = {}, reaction = {}, classification = {}, target = { no = true, none = true }, questObjective = "any", castState = {}, spellSchool = {} },
+        conditions = { unitType = {}, reaction = {}, classification = {}, target = { no = true, none = true }, questObjective = "any", castState = {} },
         style = { healthColorEnabled = true, healthColor = { r = 0.12, g = 0.92, b = 0.67 }, scale = 100, opacity = 50, borderSize = 1, borderColor = { r = 1.00, g = 1.00, b = 1.00 }, texture = "eui" },
     },
 }
@@ -67,9 +66,7 @@ local MAX_PROFILES = core.MaxProfiles
 
 local function NormalizeMultiCondition(value, allowed)
     local selected = {}
-    if type(value) == "string" then
-        if value ~= "any" and allowed[value] then selected[value] = true end
-    elseif type(value) == "table" then
+    if type(value) == "table" then
         for key, enabled in pairs(value) do
             if enabled == true and allowed[key] then selected[key] = true end
         end
@@ -98,7 +95,7 @@ local function ValidateRuleConditions(conditions)
     for key, allowed in pairs(MULTI_CONDITION_VALUES) do
         local value = conditions[key]
         if value ~= nil then
-            local valid = type(value) == "string" and (value == "any" or allowed[value])
+            local valid = false
             if type(value) == "table" then
                 valid = true
                 for choice, selected in pairs(value) do
@@ -164,8 +161,6 @@ local unitFrame = CreateFrame("Frame")
 local queued = false
 local states = setmetatable({}, { __mode = "k" })
 local hooked = setmetatable({}, { __mode = "k" })
-local spellSchools = {}
-local combatLogActive = false
 local snapshotState
 local watchCastTransitions = false
 local pendingPlates = setmetatable({}, { __mode = "k" })
@@ -185,10 +180,21 @@ local function SafeBool(value)
     return value
 end
 
+local function ReadRootValue(plate, method)
+    if type(plate[method]) ~= "function" then return nil end
+    local ok, value = pcall(plate[method], plate)
+    if ok then return value end
+end
+
+local function ReadableRootValue(value)
+    return not IsSecret(value) and type(value) == "number"
+end
+
 local function GetState(plate)
     local state = states[plate]
     if not state then
-        state = { baseScale = plate:GetScale(), baseAlpha = plate:GetAlpha(), alphaFactor = 1, scaleFactor = 1 }
+        state = { baseScale = ReadRootValue(plate, "GetScale"), baseAlpha = ReadRootValue(plate, "GetAlpha"),
+            alphaFactor = 1, scaleFactor = 1 }
         states[plate] = state
     end
     return state
@@ -209,34 +215,12 @@ local function TextureOf(statusBar)
     return fill:GetTexture()
 end
 
-local SCHOOL_MASKS = {
-    physical = 1, holy = 2, fire = 4, nature = 8,
-    frost = 16, shadow = 32, arcane = 64,
-}
-
-local function GetSchoolFromMask(mask)
-    if IsSecret(mask) or type(mask) ~= "number" or not bit then return "unknown" end
-    local found, count
-    count = 0
-    for name, value in pairs(SCHOOL_MASKS) do
-        if bit.band(mask, value) ~= 0 then found = name; count = count + 1 end
-    end
-    if count == 1 then return found end
-    if count > 1 then return "mixed" end
-    return "unknown"
-end
-
-local function GetSchool(spellID)
-    if IsSecret(spellID) or type(spellID) ~= "number" then return "unknown" end
-    return spellSchools[spellID] or "unknown"
-end
-
 local function ReadCast(unit, includeDebug)
-    local name, _, _, _, _, _, _, notInterruptible, spellID = UnitCastingInfo(unit)
+    local name, _, _, _, _, _, _, notInterruptible = UnitCastingInfo(unit)
     local castState = "casting"
     if type(name) == "nil" then
         local isEmpowered
-        name, _, _, _, _, _, notInterruptible, spellID, isEmpowered = UnitChannelInfo(unit)
+        name, _, _, _, _, _, notInterruptible, _, isEmpowered = UnitChannelInfo(unit)
         castState = "channel"
         if SafeBool(isEmpowered) == true then
             castState = "empowered"
@@ -255,12 +239,12 @@ local function ReadCast(unit, includeDebug)
                 (type(notInterruptible) == "boolean" and "known" or "unknown (unavailable)"),
         }
     end
-    if type(name) == "nil" then return "none", "any", "unknown", debugInfo end
+    if type(name) == "nil" then return "none", "any", debugInfo end
     local interruptible = "unknown"
     if not IsSecret(notInterruptible) and type(notInterruptible) == "boolean" then
         interruptible = notInterruptible and "uninterruptible" or "interruptible"
     end
-    return castState, interruptible, GetSchool(spellID), debugInfo
+    return castState, interruptible, debugInfo
 end
 
 local function ReadKnownCastColorState(interruptible)
@@ -388,7 +372,7 @@ local function GetTraits(unit, checkQuestObjective, checkThreat, checkThreatRole
     if IsSecret(classification) then classification = "unknown"
     elseif type(classification) == "nil" then classification = "normal"
     elseif classification == "worldboss" then classification = "boss" end
-    local castState, interruptible, spellSchool = ReadCast(unit)
+    local castState, interruptible = ReadCast(unit)
     local targetExists = SafeBool(UnitExists("target"))
     local isTarget = SafeBool(UnitIsUnit(unit, "target"))
     local questObjective
@@ -409,15 +393,13 @@ local function GetTraits(unit, checkQuestObjective, checkThreat, checkThreatRole
         castState = castState,
         interruptible = interruptible,
         castColorState = KnownCastColorState(interruptible),
-        spellSchool = spellSchool,
         playerCombat = checkCombat and ReadPlayerCombat() or nil,
         instanceType = checkInstance and ReadInstanceType() or nil,
     }
 end
 
 local function AnySelectionMatches(selection, predicate)
-    if selection == nil or selection == "any" then return true end
-    if type(selection) == "string" then return predicate(selection) end
+    if selection == nil then return true end
     if type(selection) ~= "table" then return false end
     local hasSelection = false
     for value, enabled in pairs(selection) do
@@ -430,7 +412,6 @@ local function AnySelectionMatches(selection, predicate)
 end
 
 local function HasSelection(selection)
-    if type(selection) == "string" then return selection ~= "any" end
     if type(selection) == "table" then
         for _, enabled in pairs(selection) do
             if enabled == true then return true end
@@ -504,18 +485,13 @@ local function MatchesReadableConditions(rule, unit, traits)
     end) then return false end
     if c.questObjective == "yes" and traits.questObjective ~= true then return false end
     if c.questObjective == "no" and traits.questObjective ~= false then return false end
-    if not AnySelectionMatches(c.spellSchool, function(value)
-        return traits.castState ~= "none" and value == traits.spellSchool
-    end) then
-        return false
-    end
     for key, expected in pairs(c) do
         local predicate = addon.customConditions and addon.customConditions[key]
         if predicate then
             local ok, matches = pcall(predicate, unit, traits, expected, rule)
             if not ok or SafeBool(matches) ~= true then return false end
         elseif key ~= "unitType" and key ~= "reaction" and key ~= "classification"
-           and key ~= "target" and key ~= "threat" and key ~= "questObjective" and key ~= "castState" and key ~= "spellSchool"
+           and key ~= "target" and key ~= "threat" and key ~= "questObjective" and key ~= "castState"
            and key ~= "playerCombat" and key ~= "instanceType" then
             return false
         end
@@ -621,42 +597,60 @@ local function FindRule(unit)
     return FindRuleWithSnapshot(unit)
 end
 
-local function UpdateCombatLogRegistration()
-    GetSettings()
-    local shouldListen = false
-    if db.enabled ~= false then
-        for _, rule in ipairs(db.rules) do
-            local conditions = rule.conditions
-            if rule.enabled ~= false and conditions and HasSelection(conditions.spellSchool) then
-                shouldListen = true
-                break
-            end
-        end
+-- Only recapture a getter while our paint is absent. Secret native writes
+-- replace the old base too; never fall back to a stale readable snapshot.
+local function RootValues(plate, state, suffix)
+    local current = ReadRootValue(plate, "Get" .. suffix)
+    local baseKey, appliedKey = "base" .. suffix, "applied" .. suffix
+    if not state[appliedKey] and not ReadableRootValue(state[baseKey]) and ReadableRootValue(current) then
+        state[baseKey] = current
     end
-    if shouldListen and not combatLogActive then
-        combatLogActive = TryRegisterEvent(unitFrame, "COMBAT_LOG_EVENT_UNFILTERED")
-    elseif not shouldListen and combatLogActive then
-        TryUnregisterEvent(unitFrame, "COMBAT_LOG_EVENT_UNFILTERED")
-        combatLogActive = false
+    return state[baseKey], current
+end
+
+local function ApplyRootFactor(plate, state, suffix, factor)
+    local base, current = RootValues(plate, state, suffix)
+    local appliedKey, writingKey = "applied" .. suffix, "writing" .. suffix
+    local readable = ReadableRootValue(base) and ReadableRootValue(current)
+    -- A restricted getter cannot authorize multiplication. If we still own an
+    -- override, remove it using the latest readable native setter argument.
+    local target
+    if readable then
+        target = base * factor
+    elseif state[appliedKey] and ReadableRootValue(base) then
+        target = base
+    else
+        return false
+    end
+    if ReadableRootValue(current) and current == target then
+        state[appliedKey] = readable and factor ~= 1 or nil
+        return readable
+    end
+    state[writingKey] = true
+    local ok = pcall(plate["Set" .. suffix], plate, target)
+    state[writingKey] = nil
+    if ok then state[appliedKey] = readable and factor ~= 1 or nil end
+    return ok and readable
+end
+
+local function RefreshRootCastOverlay(plate)
+    if NP and NP.RefreshCastOverlay then
+        -- EUI's lifted-cast helper also reads effective scale. Its geometry may
+        -- be restricted even when the root setter argument was readable.
+        pcall(NP.RefreshCastOverlay, plate)
     end
 end
 
 local function SetScaleFactor(plate, state, factor)
     state.scaleFactor = factor
-    local scale = state.baseScale * factor
-    if plate:GetScale() == scale then return end
-    state.writingScale = true
-    plate:SetScale(scale)
-    state.writingScale = nil
-    if NP and NP.RefreshCastOverlay then NP.RefreshCastOverlay(plate) end
+    local ok = ApplyRootFactor(plate, state, "Scale", factor)
+    state.scaleSuspended = not ok
+    if ok then RefreshRootCastOverlay(plate) end
+    return ok
 end
 
 local function ApplyAlpha(plate, state)
-    local alpha = state.baseAlpha * state.alphaFactor
-    if plate:GetAlpha() == alpha then return end
-    state.writingAlpha = true
-    plate:SetAlpha(alpha)
-    state.writingAlpha = nil
+    return ApplyRootFactor(plate, state, "Alpha", state.alphaFactor)
 end
 
 local function ResetStyle(plate, state, released, castColors)
@@ -679,16 +673,20 @@ local function ResetStyle(plate, state, released, castColors)
         end
     end
     state.writingHealth = nil
-    if state.scaleFactor and state.scaleFactor ~= 1 and plate.SetScale then
+    if (state.scaleFactor ~= 1 or state.appliedScale) and plate.SetScale then
         SetScaleFactor(plate, state, 1)
     end
     if refreshResources and NP and NP.RefreshClassPower and not released then NP.RefreshClassPower() end
     -- ClearUnit has already reset the engine's pool state. Do not restore the
     -- departing unit's alpha, including when the engine skipped its alpha setter.
-    if released then state.baseAlpha = 1 end
+    if released and ReadableRootValue(state.baseAlpha) then
+        -- This is EUI's explicit pool-reset contract, not a replacement for an
+        -- unreadable live alpha. A secret native write must remain untouched.
+        state.baseAlpha = 1
+    end
     local hadAlpha = state.alphaFactor ~= 1
     state.alphaFactor = 1
-    if (hadAlpha or released) and plate.SetAlpha then
+    if (hadAlpha or released or state.appliedAlpha) and plate.SetAlpha then
         ApplyAlpha(plate, state)
     end
     state.hadColor, state.hadTexture = nil, nil
@@ -749,9 +747,20 @@ local function ApplyStyle(plate)
     if addon.ApplyTargetArrowStyle then addon.ApplyTargetArrowStyle(plate, style) end
     local scale = math.max(50, math.min(200, tonumber(style.scale) or 100)) / 100
     local opacity = math.max(0, math.min(100, tonumber(style.opacity) or 100)) / 100
-    local rootScale = addon.PrepareScaleSelection and addon.PrepareScaleSelection(plate, scale, style.scaleElements) or scale
-    SetScaleFactor(plate, state, rootScale)
-    if addon.ApplyScaleSelection then addon.ApplyScaleSelection(plate) end
+    local baseScale, currentScale = RootValues(plate, state, "Scale")
+    local canScale = ReadableRootValue(baseScale) and ReadableRootValue(currentScale)
+    if canScale then
+        local rootScale = addon.PrepareScaleSelection and addon.PrepareScaleSelection(plate, scale, style.scaleElements) or scale
+        canScale = SetScaleFactor(plate, state, rootScale)
+    else
+        SetScaleFactor(plate, state, 1)
+    end
+    if canScale then
+        if addon.ApplyScaleSelection then addon.ApplyScaleSelection(plate) end
+    elseif addon.ClearScaleSelection then
+        -- Child compensation must not assume an unapplied root multiplier.
+        addon.ClearScaleSelection(plate)
+    end
     state.alphaFactor = opacity
     if plate.SetAlpha then ApplyAlpha(plate, state) end
     if addon.ApplyCastStyle then addon.ApplyCastStyle(plate, style, rule.conditions, castColors) end
@@ -813,7 +822,6 @@ local function RefreshAll()
     if not NP then NP = _G.EllesmereNameplates_NS end
     if not NP then return end
     if InstallHooks then InstallHooks() end
-    UpdateCombatLogRegistration()
     UpdateCastTransitionTracking()
     for _, plate in pairs(NP.plates or {}) do ApplyPlateSafely(plate) end
     for _, plate in pairs(NP.friendlyPlates or {}) do ApplyPlateSafely(plate) end
@@ -887,18 +895,32 @@ local function InstallPlateHooks(plate)
     -- Keep EUI's animation values unmodified; multiply only the rendered scale.
     hooksecurefunc(plate, "SetScale", function(self, scale)
         if state.writingScale then return end
+        local wasSuspended = state.scaleSuspended
         state.baseScale = scale
-        if state.scaleFactor ~= 1 then
-            SetScaleFactor(self, state, state.scaleFactor)
-        elseif NP and NP.RefreshCastOverlay then
-            NP.RefreshCastOverlay(self)
+        state.appliedScale = nil
+        if not ReadableRootValue(scale) then
+            state.scaleFactor = 1
+            state.scaleSuspended = true
+            if addon.ClearScaleSelection then pcall(addon.ClearScaleSelection, self) end
+            QueueRefresh()
+            return
         end
+        if state.scaleFactor ~= 1 then
+            if not SetScaleFactor(self, state, state.scaleFactor) then
+                state.scaleFactor = 1
+                if addon.ClearScaleSelection then pcall(addon.ClearScaleSelection, self) end
+            end
+        else
+            RefreshRootCastOverlay(self)
+        end
+        if wasSuspended or state.scaleSuspended then QueueRefresh() end
     end)
     -- Observe actual writes rather than NT_Apply's cache or our multiplied render
     -- value. This also preserves independent writers and works at zero opacity.
     hooksecurefunc(plate, "SetAlpha", function(self, alpha)
         if state.writingAlpha then return end
         state.baseAlpha = alpha
+        state.appliedAlpha = nil
         if state.alphaFactor ~= 1 then ApplyAlpha(self, state) end
     end)
     if type(plate.ClearUnit) == "function" then
@@ -961,17 +983,6 @@ unitFrame:SetScript("OnEvent", function(_, event, loadedAddon)
         if loadedAddon ~= addonName then return end
         GetSettings()
         TryUnregisterEvent(unitFrame, "ADDON_LOADED")
-    elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
-        if not CombatLogGetCurrentEventInfo then return end
-        local _, subevent, _, _, _, _, _, _, _, _, _, spellID, _, school = CombatLogGetCurrentEventInfo()
-        if subevent == "SPELL_CAST_START" and not IsSecret(spellID) and type(spellID) == "number" then
-            local schoolName = GetSchoolFromMask(school)
-            if schoolName ~= "unknown" then
-                spellSchools[spellID] = schoolName
-                QueueRefresh()
-            end
-        end
-        return
     elseif event == "SPELL_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_USABLE"
         or event == "SPELLS_CHANGED" or event == "UNIT_PET" then
         if event == "UNIT_PET" and loadedAddon ~= "player" then return end
@@ -1001,22 +1012,12 @@ addon.RegisterCondition = function(key, predicate)
     addon.customConditions[key] = predicate
     return true
 end
-addon.RegisterSpellSchool = function(spellID, school)
-    if IsSecret(spellID) or type(spellID) ~= "number" or type(school) ~= "string" then return false end
-    local valid = SCHOOL_MASKS[school] or school == "mixed"
-    if not valid then return false end
-    spellSchools[spellID] = school
-    QueueRefresh()
-    return true
-end
-
 local publicAPI = {
     Refresh = function()
         if InstallHooks then InstallHooks() end
         QueueRefresh()
     end,
     RegisterCondition = addon.RegisterCondition,
-    RegisterSpellSchool = addon.RegisterSpellSchool,
     NormalizeRuleConditions = NormalizeRuleConditions,
     ValidateRuleConditions = ValidateRuleConditions,
     SupportsCastColorStates = SupportsCastColorStates,
@@ -1042,7 +1043,7 @@ SlashCmdList.EXTENDNAMEPLATES = function(message)
     if type(message) == "string" and message:lower():match("^%s*cast%s*$") then
         local function ReportCast(text) print("Extend Nameplates: " .. text) end
         if not UnitExists("target") then ReportCast("Cast debug: select a target first."); return end
-        local ok, castState, interruptible, _, debugInfo = pcall(ReadCast, "target", true)
+        local ok, castState, interruptible, debugInfo = pcall(ReadCast, "target", true)
         if not ok then ReportCast("Cast debug: API read failed; state unknown."); return end
         ReportCast("Target cast=" .. castState .. "; source=" .. debugInfo.source
             .. "; interruptibility=" .. interruptible .. "; knowledge=" .. debugInfo.knowledge)

@@ -37,13 +37,13 @@ local function Capability(expected, label)
     Equal(runtime.SupportsCastColorStates(), expected, label .. " runtime capability")
 end
 
--- SavedVariables loading exercises production normalization, including old scalar choices.
+-- SavedVariables loading exercises production normalization of selection tables.
 for _, style in ipairs({ "eui", "classic", "blizzard", "forever" }) do
     np._npStyle = style
     local supported = style == "eui" or style == "classic"
     Capability(supported, style)
     for _, key in ipairs(keys) do
-        for _, selection in ipairs({ key, { [key] = true } }) do
+        for _, selection in ipairs({ { [key] = true } }) do
             EllesmereUIExtendDB = { profiles = { Default = { nameplates = { enabled = true, rules = { Rule(selection) } } } } }
             local rule = api.GetRules()[1]
             Equal(rule.conditions.castState[key], true, style .. " saved choice retained")
@@ -102,7 +102,7 @@ EllesmereNameplates_NS = np
 -- OR policy: matching broad choices win; blocked states never broaden a mismatch.
 for _, style in ipairs({ "eui", "classic", "blizzard", "forever" }) do
     np._npStyle = style
-    for _, selection in ipairs({ "any", {}, "casting", { casting = true, interruptible = true } }) do
+    for _, selection in ipairs({ {}, { casting = true }, { casting = true, interruptible = true } }) do
         SetRules(selection)
         Palette(all, style .. " Any/Casting/mixed generic tint")
     end
@@ -156,10 +156,11 @@ for _, key in ipairs({ "CompressDeflate", "EncodeForPrint", "DecodeForPrint", "D
 end
 function LibStub(name) if name == "LibDeflate" then return codec end end
 assert(loadfile("Nameplates/RuleIO.lua"))("EllesmereUIExtendNameplates", runtime)
-for version = 1, 2 do
+do
+    local version = 2
     for _, key in ipairs(keys) do
         payload = { format = "EllesmereUINameplateExtrasRules", version = version,
-            rules = { Rule(version == 1 and key or { [key] = true }) } }
+            rules = { Rule({ [key] = true }) } }
         np._npStyle = "blizzard"
         assert(api.ImportRuleSet("!EUI_NPEX_RULES" .. version .. "!style"))
         local saved = api.GetRules()[1].conditions.castState

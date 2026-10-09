@@ -22,7 +22,16 @@ foreach ($path in $archives) {
         $toc = Get-Content -LiteralPath (Join-Path $root "$name/$identity.toc") -Raw
         Check ($toc -match "## Dependencies: EllesmereUI, EllesmereUI$name\r?\n") 'Only corresponding upstream dependencies'
         Check ($toc -match "## SavedVariables: ${identity}Profiles\r?\n") 'Each feature saves its own profile snapshot'
-        Check ($toc -match '## Interface: .*16001') 'Forever interface included'
+        Check ($toc -match '(?m)^## Interface: 120100, 16001\r?$') 'Only Retail 12.1 and Forever interfaces advertised'
+        $reader = New-Object System.IO.StreamReader($archive.GetEntry("$identity/$identity.toc").Open())
+        try { $packagedToc = $reader.ReadToEnd() } finally { $reader.Dispose() }
+        Check ($packagedToc -ceq $toc) 'Default ZIP preserves the dual-client source TOC'
+        $workflowName = if ($name -eq 'Nameplates') { 'nameplates' } else { 'questtracker' }
+        $workflow = Get-Content -LiteralPath (Join-Path $root ".github/workflows/$workflowName-release.yaml") -Raw
+        Check ($workflow -notmatch 's/\^## Interface:') 'Release preparation does not overwrite client interfaces'
+        $argsLine = [regex]::Match($workflow, '(?m)^\s+args: .+$').Value
+        Check ($argsLine -ne '' -and $argsLine -notmatch '(?:^|\s)-g(?:\s|$)') 'Packager derives supported versions from TOCs'
+        Check ($argsLine -match '\(Retail \+ Forever\)') 'Published file label names both supported clients'
         Check ($toc.IndexOf('Shared/Core.lua') -ge 0 -and $toc.IndexOf('Shared/Core.lua') -lt $toc.IndexOf('Shared/Sync.lua') -and
             $toc.IndexOf('Shared/Sync.lua') -lt $toc.IndexOf('Shared/Options.lua') -and
             $toc.IndexOf('Shared/Options.lua') -lt $toc.IndexOf("$name.lua")) 'All embedded modules load in order before feature code'

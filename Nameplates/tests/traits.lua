@@ -1,6 +1,10 @@
 -- Run from the repository root with Lua or fengari.
 local fixture = assert(loadfile("Nameplates/tests/runtime.lua"))("traits")
 local api, namespace, mocks, secret = fixture.api, fixture.namespace, fixture.mocks, fixture.secret
+assert(api.RegisterSpellSchool == nil and namespace.RegisterSpellSchool == nil, "retired API must not remain")
+for _, frame in ipairs(fixture.frames) do
+    assert(not frame.events.COMBAT_LOG_EVENT_UNFILTERED, "retired discovery must not subscribe to combat logs")
+end
 local cases = 0
 local function Reset()
     for key in pairs(mocks) do mocks[key] = nil end
@@ -18,50 +22,47 @@ local function Equal(actual, expected, label)
     cases = cases + 1
     assert(actual == expected, label .. ": expected " .. tostring(expected) .. ", got " .. tostring(actual))
 end
-local function Cast(state, interruptible, school, label)
+local function Cast(state, interruptible, label)
     local traits = Traits()
     Equal(traits.castState, state, label .. " state")
     Equal(traits.interruptible, interruptible, label .. " interruptibility")
-    Equal(traits.spellSchool, school, label .. " school")
 end
 Reset()
-assert(api.RegisterSpellSchool(123, "fire"))
-assert(api.RegisterSpellSchool(456, "frost"))
-Cast("none", "any", "unknown", "no cast")
+Cast("none", "any", "no cast")
 mocks.casting = { "Cast", nil, nil, nil, nil, nil, nil, false, 123 }
 mocks.channel = { "Channel", nil, nil, nil, nil, nil, true, 456, true }
 -- A channel/obsolete API must not override an ordinary cast.
 UnitEmpoweredChannelInfo = function() error("obsolete empowerment API called") end
-Cast("casting", "interruptible", "fire", "ordinary cast takes precedence")
+Cast("casting", "interruptible", "ordinary cast takes precedence")
 mocks.casting[8] = true
-Cast("casting", "uninterruptible", "fire", "uninterruptible cast")
+Cast("casting", "uninterruptible", "uninterruptible cast")
 mocks.casting = {}
-Cast("empowered", "uninterruptible", "frost", "ninth return empowered")
+Cast("empowered", "uninterruptible", "ninth return empowered")
 api.GetRules()[1].conditions.castState = { channel = true }
 Equal(namespace.FindRule("nameplate1"), nil, "empowered must not match ordinary channel rule")
 api.GetRules()[1].conditions.castState = { empowered = true }
 Equal(namespace.FindRule("nameplate1") ~= nil, true, "empowered-only rule matches")
 api.GetRules()[1].conditions.castState = {}
 mocks.channel[9] = false
-Cast("channel", "uninterruptible", "frost", "ordinary channel")
+Cast("channel", "uninterruptible", "ordinary channel")
 mocks.channel[9] = nil
 UnitEmpoweredChannelInfo = nil
-Cast("channel", "uninterruptible", "frost", "older client without empowerment flag")
+Cast("channel", "uninterruptible", "older client without empowerment flag")
 mocks.channel[7], mocks.channel[8] = nil, 999
-Cast("channel", "unknown", "unknown", "unavailable interruptibility and school")
+Cast("channel", "unknown", "unavailable interruptibility")
 mocks.channel[7], mocks.channel[8], mocks.channel[9] = secret, secret, secret
-Cast("unknown", "unknown", "unknown", "restricted channel metadata")
+Cast("unknown", "unknown", "restricted channel metadata")
 api.GetRules()[1].conditions.castState = { casting = true, channel = true, empowered = true }
 Equal(namespace.FindRule("nameplate1") ~= nil, true, "explicit Casting includes active casts with restricted kind metadata")
 api.GetRules()[1].conditions.castState = { channel = true, empowered = true }
 Equal(namespace.FindRule("nameplate1"), nil, "unknown cast kind must not match specific kind rules")
 api.GetRules()[1].conditions.castState = {}
 mocks.channel[9] = "true"
-Cast("unknown", "unknown", "unknown", "malformed empowerment flag")
+Cast("unknown", "unknown", "malformed empowerment flag")
 mocks.channel[1], mocks.channel[9] = secret, false
-Cast("channel", "unknown", "unknown", "restricted name still indicates channel presence")
+Cast("channel", "unknown", "restricted name still indicates channel presence")
 mocks.casting = { secret, nil, nil, nil, nil, nil, nil, secret, secret }
-Cast("casting", "unknown", "unknown", "restricted cast metadata")
+Cast("casting", "unknown", "restricted cast metadata")
 
 local function Reaction(attackable, reaction, expected, label)
     Reset()
@@ -124,8 +125,8 @@ api.GetRules()[1].conditions.castState = { interruptible = true }
 api.GetRules()[1].style = { castEnabled = true, castColorEnabled = true }
 Equal(namespace.FindRule("nameplate1"), api.GetRules()[1], "secret Interruptible implies Casting for appearance effects")
 Equal(namespace.FindCastColorOverrides("nameplate1").interruptible ~= nil, true, "Interruptible supplies a secret-safe color candidate")
-api.GetRules()[1].conditions.castState = "interruptible"
-Equal(namespace.FindCastColorOverrides("nameplate1").interruptible ~= nil, true, "legacy scalar color selection remains supported")
+api.GetRules()[1].conditions.castState = { interruptible = true }
+Equal(namespace.FindCastColorOverrides("nameplate1").interruptible ~= nil, true, "color selection remains supported")
 for _, selection in ipairs({ "casting", "interruptible", "interruptOnCD", "uninterruptible" }) do
     api.GetRules()[1].conditions.castState = { [selection] = true }
     mocks.casting = { "Cast", nil, nil, nil, nil, nil, nil, secret, secret }

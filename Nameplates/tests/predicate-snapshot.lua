@@ -141,10 +141,6 @@ probe.conditions.classification = { elite = true }
 namespace.RefreshAll()
 Equal(calls, 1, "AND between groups rejects before custom predicate")
 Equal(next(paints.nameplate1.colors), nil, "readable group rejects both paths")
-probe.conditions.classification = nil
-probe.conditions.spellSchool = { frost = true }
-namespace.RefreshAll()
-Equal(calls, 1, "spell school rejection stays lazy")
 
 -- Restricted, nonboolean, false and throwing callbacks are cached as rejection.
 local rejected = {

@@ -8,8 +8,8 @@ try {
     $tests = @(Get-ChildItem 'Nameplates/tests/*.lua' | Where-Object {
         $_.BaseName -notin @('upstream', 'glow-mocks', 'border-mocks')
     } | ForEach-Object { 'Nameplates/tests/' + $_.Name })
-    $tests += @('Core/tests/runtime.lua', 'Core/tests/persistence.lua', 'QuestTracker/tests/runtime.lua',
-        'QuestTracker/tests/notifications.lua', 'QuestTracker/tests/visibility.lua')
+    $tests += @('Core/tests/runtime.lua', 'Core/tests/persistence.lua')
+    $tests += @(Get-ChildItem 'QuestTracker/tests/*.lua' | ForEach-Object { 'QuestTracker/tests/' + $_.Name })
     if ($UnitOnly) {
         $integration = @('Nameplates/tests/scaling.lua', 'Nameplates/tests/rendering.lua',
             'Nameplates/tests/cast-colors.lua', 'Nameplates/tests/cooldown-transitions.lua',

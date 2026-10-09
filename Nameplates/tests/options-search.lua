@@ -53,7 +53,7 @@ end
 
 local function Rule(name)
     return { name = name, enabled = true, conditions = { unitType = {}, reaction = {}, classification = {},
-        target = { yes = true }, castState = {}, spellSchool = {} },
+        target = { yes = true }, castState = {} },
         style = { healthColor = { r = 1, g = 1, b = 1 }, borderColor = { r = 1, g = 1, b = 1 } } }
 end
 local db = { selectedRule = 1, rules = { Rule("First rule"), Rule("Second rule") } }
@@ -253,7 +253,7 @@ local function PrebuildTest()
     assert(aboutIndexed, "About sections must be indexed without creating live paragraph controls")
     refreshes = {}
     for _, label in ipairs({ "Unit type", "Reaction", "Classification", "Target state", "Threat", "Cast state",
-        "Spell school", "Quest Objective", "Nameplate size (%)", "Opacity (%)", "Health-bar texture",
+        "Quest Objective", "Nameplate size (%)", "Opacity (%)", "Health-bar texture",
         "Cast-bar texture", "Cast border size",
         "Override target arrows", "Target-arrow style", "Health border texture", "Cast border texture",
         "Health border glow", "Health glow color", "Cast border glow", "Cast glow color",
@@ -261,20 +261,23 @@ local function PrebuildTest()
         assert(index[label], "prebuild missed " .. label)
     end
     assert(index["Unit type"].tooltip:find("Any creature", 1, true), "condition tooltip lost")
+    assert(index["Spell school"] == nil, "retired condition must not appear in search")
     for _, text in ipairs(actions) do assert(index[text], "action search entry lost: " .. text) end
     Build()
-    assert(#refreshes >= 7, "live condition refresh registrations missing")
-    for _, label in ipairs({ "Unit type", "Reaction", "Classification", "Target state", "Cast state", "Spell school", "Threat", "Player combat state", "Instance Type" }) do
+    assert(#refreshes >= 8, "live condition refresh registrations missing")
+    for _, label in ipairs({ "Unit type", "Reaction", "Classification", "Target state", "Cast state", "Threat", "Player combat state", "Instance Type" }) do
         assert(dropdowns[label] and rawget(dropdowns[label].parent, "nativeFrame"), "live dropdown missing: " .. label)
         assert(dropdowns[label].parent._slotLabel == label, "slot highlight metadata lost")
     end
     local paired = false
     for _, row in ipairs(pageRows) do
-        if row._labelText == "Threat Quest Objective" then
-            paired = dropdowns["Threat"].parent == row._leftRegion and type(fields["Quest Objective"].set) == "function"
+        if row._labelText == "Cast state Threat" then
+            paired = dropdowns["Cast state"].parent == row._leftRegion
+                and dropdowns["Threat"].parent == row._rightRegion
         end
     end
-    assert(paired, "Threat dropdown and Quest Objective toggle must share one settings row")
+    assert(paired, "Cast state and Threat dropdowns must share one settings row")
+    assert(type(fields["Quest Objective"].set) == "function", "Quest Objective toggle remains available")
     local unit = dropdowns["Unit type"]
     assert(unit.emptyLabel == "Any unit" and #unit.items == 4)
     unit.set("npc", true); unit.set("player", true)
@@ -283,7 +286,7 @@ local function PrebuildTest()
     assert(not unit.get("npc") and unit.get("player"), "deselect erased another selection")
     unit.set("player", false)
     assert(next(db.rules[1].conditions.unitType) == nil, "empty selection must mean Any")
-    print("PASS prebuild: actual GlobalSearch pass/index; two wrapper frames, zero controls; nine live dropdowns")
+    print("PASS prebuild: actual GlobalSearch pass/index; two wrapper frames, zero controls; eight live dropdowns")
 end
 local function SectionsTest()
     Build() -- first registration is retained, exactly like GlobalSearch.

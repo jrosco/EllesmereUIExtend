@@ -30,7 +30,7 @@ for name, row in pairs(rows) do
         for _, control in ipairs(row.rows) do Tooltip(control.tooltip, name .. ": " .. control.label) end
     end
 end
-Check(settings >= 70 and choices >= 40, "review covers settings and condition choices")
+Check(settings >= 70 and choices >= 35, "review covers settings and condition choices")
 Check(rows.Reaction.tooltip:find("Leave empty for Any", 1, true), "empty conditions remain explained")
 Check(rows["Rule enabled"].tooltip:find("all its conditions", 1, true), "condition groups still combine with AND")
 Check(rows["Cast state"].tooltip:find("all active casts", 1, true), "color-state appearance behavior remains explained")

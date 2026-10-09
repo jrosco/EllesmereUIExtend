@@ -61,13 +61,11 @@ np.NPC_AttachPlate(plate, bundle)
 for _, observation in ipairs(observations) do observation.base = observation.object:GetEffectiveScale() end
 EllesmereUIExtendDB = { profiles = { Default = { nameplates = { enabled = true, rules = {
     { name = "Scaling", enabled = true, conditions = {}, style = { scale = 150, healthEnabled = false,
-        scaleElements = { buffs = false, debuffs = true, cc = false, other = true } } },
+        scaleElements = { other = true } } },
 } } } } }
 f.Fire("ADDON_LOADED", "EllesmereUIExtendNameplates")
 local rule = api.GetRules()[1]
-Check(rule.style.scaleElements.buffs == nil and rule.style.scaleElements.debuffs == nil
-    and rule.style.scaleElements.cc == nil and rule.style.scaleElements.other == true,
-    "saved legacy aura toggles removed while preserving Other")
+Check(rule.style.scaleElements.other == true, "saved Other selection preserved")
 local function Refresh() api.Refresh(); f.Flush() end
 
 -- All combinations check effective scale, not just the compensation setter.
