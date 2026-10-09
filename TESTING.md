@@ -74,7 +74,7 @@ Paths below are relative to each addon's `tests/` directory.
 
 | Suite | Coverage |
 | --- | --- |
-| `runtime.lua` | Settings, navigation identity/raw proximity, no zone/POI dependency, menus, color restoration, capability gates, secure selection, combat recovery, previews and EUI mover Save/Discard. |
+| `runtime.lua` | Settings, navigation identity, shared quest-area OR navigation proximity, secret/missing area fallbacks, diagnostic-only quest distance, no zone/POI dependency, menus, color restoration, capability gates, secure selection, combat recovery, previews and EUI mover Save/Discard. |
 | `objective-structures.lua` | Retail tracker block/line contract, failed/ineligible preservation, missing/secret structures, native ownership and latest-color restoration. |
 | `item-combat-recovery.lua` | Deferred navigation/bag/proximity/settings updates, recovery, driver contract, edit suspension and non-clickable preview isolation; not native hardware-click verification. |
 | `notifications.lua` | Per-status/None/global switches, sounds/channels, multi-destination routing, restrictions, UTF-8 formatting, throttling, toast lifecycle, search and UI locks. |
@@ -104,8 +104,9 @@ Mocks do not reproduce Retail's secret-value VM, native rendering/menu/mover eng
 
 - Exercise native quest/log/achievement menus, objective colors and notification destinations, sounds, None, throttling, toast appearance/movement and silent login baselines.
 - Follow different navigation quests and user waypoints; cross raw distance thresholds and use quests without map POIs. Missing items/ineligible quests must hide gameplay, including with Always/Match Any.
+- On both clients, enter/leave a highlighted quest area (quest 6381 on Forever is a known test case): `insideArea=true`/`source=quest-area` must permit an eligible item even above the navigation threshold. Outside, verify inclusive navigation thresholds and `source=navigation`; missing/unreadable area checks must use valid navigation distance only. `questDistance`/`onContinent` must not affect eligibility. Cross an area boundary in combat and verify recovery after combat.
 - Test artwork on/off; minimum/default/maximum sizes; Solid/textured/None borders, tints, opacity, cooldown and hover geometry. No green outline by default; opacity zero must not be mistaken for disabling the action.
-- Test Always/Never/Mouseover, combat/group/target/mounted conditions and Match All/Any. Death/ghost must hide gameplay. Change tracking, bags, distance and appearance in combat; verify post-combat recovery and both cast-on-key-down preferences.
+- Test Always/Never/Mouseover, combat/group/target/mounted conditions and Match All/Any. Death/ghost must hide gameplay, including in combat with native state drivers; driver-less fallback updates only outside combat and fails closed on unreadable death state. Verify restoration after resurrection. Change tracking, bags, distance and appearance in combat; verify post-combat recovery and both cast-on-key-down preferences.
 - Move the no-item preview in EUI Edit Mode: Save & Exit, Discard, Reset and reload. Combat suspension must preserve staged placement; preview clicks must never use items. Test right-drag/missing-mover fallbacks.
 - Trigger a native extra action alongside the button. Open maps/tooltips in combat with taint logging; native collapse, instance visibility and tracked quests must remain unchanged.
 
