@@ -4,7 +4,7 @@
 ## Group: EllesmereUI
 ## Notes: Apply configurable visual rules to EllesmereUI nameplates.
 ## Author: jrosco
-## Version: 0.1.1
+## Version: 0.1.2
 ## Dependencies: EllesmereUI, EllesmereUINameplates
 ## SavedVariables: EllesmereUIExtendNameplatesProfiles
 ## IconTexture: Interface\AddOns\EllesmereUI\media\eg-logo.tga
