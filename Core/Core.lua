@@ -22,6 +22,8 @@ function core.RegisterOwner(name)
         owners[name] = "EllesmereUIExtendNameplatesProfiles"
     elseif name == "EllesmereUIExtendQuestTracker" then
         owners[name] = "EllesmereUIExtendQuestTrackerProfiles"
+    elseif name == "EllesmereUIExtendBags" then
+        owners[name] = "EllesmereUIExtendBagsProfiles"
     end
 end
 core.RegisterOwner(addonName)

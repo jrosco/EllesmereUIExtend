@@ -1,6 +1,6 @@
 # Testing EllesmereUI Extend
 
-Run commands from the **repository root**. Tests cover shared Core, Nameplates and Quest Tracker; never modify or bundle upstream EUI to make tests pass. Add focused regressions for behavior changes and follow [AGENTS.md](AGENTS.md) for compatibility and secret-value rules.
+Run commands from the **repository root**. Tests cover shared Core, Nameplates, Quest Tracker and Bags; never modify or bundle upstream EUI to make tests pass. Add focused regressions for behavior changes and follow [AGENTS.md](AGENTS.md) for compatibility and secret-value rules.
 
 ## Run the suites
 
@@ -97,6 +97,17 @@ Paths below are relative to each addon's `tests/` directory.
 | `packaging.ps1` | TOC identity/dependencies, source files and native-ownership invariants (no layout/collapse/tracking/reparenting writes). |
 
 ## In-game verification: Retail and Forever
+
+### Bags initial alpha
+
+- Run `npx.cmd --yes --package fengari-node-cli fengari Bags/tests/runtime.lua` and `npx.cmd --yes --package fengari-node-cli fengari Bags/tests/profiles.lua`. Both are included in `tools/Test.ps1`.
+- Visit a normal banker; check every personal bank tab/bag, supported reagent storage, counts, links and empty-bank capture. Deposit, withdraw, move stacks, rename/purchase tabs, wait for capture, then close and reopen the snapshot away from the banker. Immediate closure may preserve the preceding scan.
+- Open portable Warband storage: personal snapshots must remain untouched; carried reagent bags and guild/Warband contents must never appear.
+- Capture two characters, relog/reload, browse both, search names/IDs (including uncached items), select tabs and page large banks. Verify timestamp, no-data and empty/search states.
+- Confirm clicking/dragging snapshot icons never picks up, deposits, withdraws, uses or transfers items. Verify tooltips are snapshot-link based, not current container locations.
+- Verify the attached button does not overlap EUI header/footer currencies at small scales, profiles and all bag display modes. Check viewer positioning, Escape, combat access, EUI Edit Mode locks and missing helper fallbacks.
+- Install Bags alone, with either existing extension, and all three in different load orders. Switch/reset UI profiles without losing inventory. Validate actual native rendering, taint and restricted data on both clients; mocked tests cannot establish those.
+
 
 Mocks do not reproduce Retail's secret-value VM, native rendering/menu/mover engines or secure hardware clicks. Verify changed behavior on **both clients**, including missing-API fallbacks. Passing mock tests does not establish release support; see [Releases](docs/RELEASES.md) for the current target.
 

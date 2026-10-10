@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Nameplates', 'QuestTracker', 'All')]
+    [ValidateSet('Nameplates', 'QuestTracker', 'Bags', 'All')]
     [string] $Feature = 'All',
     [string] $OutputDirectory,
     [ValidatePattern('^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$')]
@@ -28,7 +28,7 @@ function Get-AddonFiles([string] $source, [string] $identity) {
     [pscustomobject] @{ Path = (Join-Path $root 'LICENSE'); Entry = "$identity/LICENSE" }
 }
 
-$features = if ($Feature -eq 'All') { @('Nameplates', 'QuestTracker') } else { @($Feature) }
+$features = if ($Feature -eq 'All') { @('Nameplates', 'QuestTracker', 'Bags') } else { @($Feature) }
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 foreach ($name in $features) {
     $identity = "EllesmereUIExtend$name"

@@ -68,7 +68,7 @@ Use a new version/tag for changed code; never retarget a published tag to a diff
 `tools/Package.ps1` remains available for local installs; it builds independent ZIPs in git-ignored `dist/` and excludes tests/upstream files. Keep installed folder names and their identity-matching TOCs.
 
 ```powershell
-# Both features, using source versions/interfaces.
+# All three local features, using source versions/interfaces.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Package.ps1
 
 # A single Forever release; use -Feature QuestTracker for the other extension.
@@ -78,7 +78,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Package.ps1 -Featu
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Package.ps1 -Feature Nameplates -Version 0.1.0 -Interface 120100
 ```
 
-`-Feature` accepts Nameplates, QuestTracker or All (default). `-Version` and `-Interface` override only packaged TOCs, not source; versions may include `-alpha.N` or `-beta.N`. `-OutputDirectory` changes the destination. Local filenames use `<addon identity>-<version>.zip`; GitHub workflows use `<addon identity>-<full feature tag>.zip`. Rebuild both packages when shared source changes and maintain embedded API compatibility across independently updated releases.
+`-Feature` accepts Nameplates, QuestTracker, Bags or All (default, all three). `-Version` and `-Interface` override only packaged TOCs, not source; versions may include `-alpha.N` or `-beta.N`. `-OutputDirectory` changes the destination. Local filenames use `<addon identity>-<version>.zip`; GitHub workflows use `<addon identity>-<full feature tag>.zip`. Rebuild all packages when shared source changes and maintain embedded API compatibility across independently updated releases.
+
+### Bags initial alpha
+
+Build locally with `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Package.ps1 -Feature Bags`. The archive contains only `EllesmereUIExtendBags/`, its embedded Shared modules, README and license. Its TOC targets the same Retail/Forever interfaces and requires EllesmereUI plus EllesmereUIBags. Inventory uses `EllesmereUIExtendBagsDB`; shared settings use `EllesmereUIExtendBagsProfiles`.
+
+`.pkgmeta-bags` provides package layout metadata, but **the current release planner/workflow still publishes only Nameplates and Quest Tracker**. Bags release automation and a CurseForge project are not configured by this feature build. Do not publish before both-client bank/viewer checks. Existing feature packaging metadata excludes Bags to preserve independent install ownership.
 
 ## Upgrades and distribution caveats
 

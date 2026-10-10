@@ -1,0 +1,19 @@
+## Interface: 120100, 16001
+## Title: |cff0cd29fEllesmereUI|r Extend Bags
+## Category: |cff0cd29fEllesmere|rUI
+## Group: EllesmereUI
+## Notes: Read-only personal bank snapshots for all captured characters.
+## Author: jrosco
+## Version: 0.1.0-alpha.1
+## Dependencies: EllesmereUI, EllesmereUIBags
+## SavedVariables: EllesmereUIExtendBagsProfiles, EllesmereUIExtendBagsDB
+## IconTexture: Interface\AddOns\EllesmereUI\media\eg-logo.tga
+
+Shared/Core.lua
+Shared/Sync.lua
+Shared/Options.lua
+Compatibility.lua
+Bags.lua
+Snapshot.lua
+Viewer.lua
+Options.lua
