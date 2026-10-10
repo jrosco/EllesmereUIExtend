@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 import subprocess
 
-FEATURES = {"nameplates": "Nameplates", "questtracker": "QuestTracker"}
+FEATURES = {"nameplates": "Nameplates", "questtracker": "QuestTracker", "bags": "Bags"}
 HEADER = re.compile(r"^(\w+)(?:\(([^)]+)\))?(!)?: (.+)$")
 VERSION = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta)\.(\d+))?$")
 RELEASE_TYPES = {"feat", "fix", "perf", "refactor", "revert", "build"}
@@ -84,9 +84,11 @@ def notes_for(entries, feature, base, tag):
                 for line in entry["message"].splitlines():
                     if re.match(r"^BREAKING[ -]CHANGE: ", line):
                         groups[label].append("  - " + line.split(": ", 1)[1])
+    requirement = (f"Requires EllesmereUI with its {FEATURES[feature]} module, or EUI Standalone {FEATURES[feature]}."
+                   if feature in ("nameplates", "bags") else "Requires EllesmereUI and its matching feature module.")
     lines = [f"# {FEATURES[feature]} {tag.split('-v', 1)[1]}", "",
              "For Retail and WoW Forever. Shared Extend profiles are embedded.",
-             "Requires EllesmereUI and its matching feature module.", ""]
+             requirement, ""]
     if base:
         lines.extend([f"Changes since `{base}`.", ""])
     for label in ("Breaking changes", "Features", "Fixes", "Performance", "Other changes"):
@@ -149,11 +151,14 @@ def plan(feature, channel, target, all_tags):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--channel", choices=("alpha", "beta", "stable"), required=True)
+    parser.add_argument("--features", nargs="+", choices=tuple(FEATURES), default=tuple(FEATURES),
+                        help="Addons to consider (default: all); accepts multiple names")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     target = git("rev-parse", "HEAD")
     tags = git("tag", "--list").splitlines()
-    plans = [p for f in FEATURES if (p := plan(f, args.channel, target, tags))]
+    selected = [f for f in FEATURES if f in args.features]
+    plans = [p for f in selected if (p := plan(f, args.channel, target, tags))]
     args.output.mkdir(parents=True, exist_ok=True)
     for p in plans:
         (args.output / f"{p['feature']}.md").write_text(p.pop("notes"), encoding="utf-8")
@@ -163,7 +168,8 @@ def main():
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
             output.write(f"matrix={json.dumps(matrix)}\n")
             output.write(f"has_releases={'true' if plans else 'false'}\n")
-    summary = "\n".join(f"- {p['tag']} at {target[:7]}" for p in plans) or "No code-driven releases to create."
+    summary = ("Selected addons: " + ", ".join(FEATURES[f] for f in selected) + "\n\n"
+               + ("\n".join(f"- {p['tag']} at {target[:7]}" for p in plans) or "No code-driven releases to create."))
     print(summary)
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:

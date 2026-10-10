@@ -10,6 +10,8 @@ ignore:
   - .gitignore
   - .pkgmeta-nameplates
   - .pkgmeta-questtracker
+  - .pkgmeta-bags
+  - Bags
   - AGENTS.md
   - README.md
   - TESTING.md

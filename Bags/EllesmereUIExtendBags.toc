@@ -1,0 +1,20 @@
+## Interface: 120100, 16001
+## Title: |cffadd8e6EllesmereUI|r Extend Bags
+## Category: |cffadd8e6Ellesmere|rUI
+## Group: EllesmereUI
+## Notes: Read-only personal bank snapshots; opens on the current character with alt browsing.
+## Author: jrosco
+## Version: 0.2.0
+## OptionalDeps: EllesmereUI, EllesmereUIBags, EUIStandaloneBags
+## SavedVariables: EllesmereUIExtendBagsProfiles, EllesmereUIExtendBagsDB
+## IconTexture: Interface\AddOns\EllesmereUIExtendBags\Media\Icon.tga
+
+Shared/Core.lua
+Shared/Sync.lua
+Shared/Options.lua
+Compatibility.lua
+Bags.lua
+Snapshot.lua
+Tooltip.lua
+Viewer.lua
+Options.lua

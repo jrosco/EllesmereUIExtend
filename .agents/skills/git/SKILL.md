@@ -1,6 +1,6 @@
 ---
 name: Git
-description: Prepare, review, and create Git commits in EllesmereUIExtend using Conventional Commits 1.0.0 and the required nameplates, questtracker, and shared scopes. Use when choosing commit messages, staging changes, or committing work.
+description: Prepare, review, and create Git commits in EllesmereUIExtend using Conventional Commits 1.0.0 and the required nameplates, questtracker, bags, and shared scopes. Use when choosing commit messages, staging changes, or committing work.
 ---
 
 # Git workflow
@@ -49,9 +49,10 @@ branch name or the entire working tree.
 | --- | --- |
 | Only the Nameplates feature (`Nameplates/`) | `nameplates` |
 | Only the QuestTracker feature (`QuestTracker/`) | `questtracker` |
+| Only the Bags feature (`Bags/`) | `bags` |
 | Any shared Core changes (`Core/`), including Core alone | `shared` |
-| Both Nameplates and QuestTracker | `shared` |
-| Core plus either or both features | `shared` |
+| Two or more features (Nameplates, QuestTracker, Bags) | `shared` |
+| Core plus any feature(s) | `shared` |
 | Repository-wide tooling, packaging, or guidance not specific to one feature | `shared` |
 
 Feature-specific tests and documentation follow that feature's scope, even when
@@ -63,13 +64,19 @@ If ownership is unclear, inspect the changes and ask before choosing a scope.
 Prefer separate commits for unrelated work; do not split a cohesive cross-feature
 change merely to avoid the `shared` scope.
 
+The release planner/workflow supports `nameplates`, `questtracker` and `bags`
+scopes with independent tags/history. `shared` routes notes to all three, but a
+release still requires a qualifying runtime path for that feature or shared Core.
+Never change the scope to trigger an unrelated addon's release. See `docs/RELEASES.md`.
+
 ### Examples
 
 ```text
 fix(nameplates): restore healthbar appearance when a rule stops matching
 feat(questtracker): add quest item visibility controls
+fix(bags): preserve bank snapshots when tab data is unavailable
 fix(shared): synchronize profile sections across addons
-refactor(shared): update both feature integrations
+refactor(shared): update multiple feature integrations
 docs(shared): document repository commit conventions
 feat(shared)!: change the profile sharing contract
 ```

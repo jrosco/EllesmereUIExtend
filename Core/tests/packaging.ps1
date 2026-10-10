@@ -8,30 +8,33 @@ function Check([bool] $value, [string] $label) {
 }
 Check (-not (Test-Path (Join-Path $root 'Core/EllesmereUIExtend.toc'))) 'No separately installed Core addon'
 $archives = @(& (Join-Path $root 'tools/Package.ps1'))
-Check ($archives.Count -eq 2) 'Two independently installable feature archives'
+Check ($archives.Count -eq 3) 'Three independently installable feature archives'
 foreach ($path in $archives) {
     $archive = [System.IO.Compression.ZipFile]::OpenRead($path)
     try {
-        $name = if ([System.IO.Path]::GetFileName($path) -match 'Nameplates') { 'Nameplates' } else { 'QuestTracker' }
+        $name = [regex]::Match([System.IO.Path]::GetFileName($path), '^EllesmereUIExtend(Nameplates|QuestTracker|Bags)-').Groups[1].Value
         $identity = "EllesmereUIExtend$name"
         $entries = @($archive.Entries | ForEach-Object { $_.FullName })
         Check (-not ($entries | Where-Object { $_ -notlike "$identity/*" })) 'ZIP has only the chosen addon folder; uninstall cannot delete another addon code folder'
         Check ($entries -contains "$identity/$identity.toc") 'Feature TOC matches installed folder'
         Check ($entries -contains "$identity/LICENSE") 'License included'
-        Check (-not ($entries | Where-Object { $_ -match '/tests/|\.git|^Nameplates/|^QuestTracker/' })) 'No development source paths or tests bundled'
-        $pkgmetaName = if ($name -eq 'Nameplates') { 'nameplates' } else { 'questtracker' }
+        Check (-not ($entries | Where-Object { $_ -match '/tests/|\.git|^Nameplates/|^QuestTracker/|^Bags/' })) 'No development source paths or tests bundled'
+        $pkgmetaName = $name.ToLowerInvariant()
         $pkgmeta = Get-Content -LiteralPath (Join-Path $root ".pkgmeta-$pkgmetaName") -Raw
         Check ($pkgmeta -match '(?m)^\s+- \.agents\r?$') 'Release metadata excludes agent skills'
         $toc = Get-Content -LiteralPath (Join-Path $root "$name/$identity.toc") -Raw
-        if ($name -eq 'Nameplates') {
-            Check ($toc -match '(?m)^## OptionalDeps: EllesmereUI, EllesmereUINameplates, EUIStandaloneNameplates\r?$' -and
-                $toc -notmatch '(?m)^## Dependencies:') 'Either nameplate host loads first without requiring the full suite'
-            Check ($pkgmeta -match '(?m)^optional-dependencies:\r?$' -and $pkgmeta -match '(?m)^  - eui-nameplates\r?$' -and
+        if ($name -in @('Nameplates', 'Bags')) {
+            Check ($toc -match "(?m)^## OptionalDeps: EllesmereUI, EllesmereUI$name, EUIStandalone$name\r?`$" -and
+                $toc -notmatch '(?m)^## Dependencies:') 'Either feature host loads first without requiring the full suite'
+            $standaloneSlug = if ($name -eq 'Bags') { 'eui-bags' } else { 'eui-nameplates' }
+            Check ($pkgmeta -match '(?m)^optional-dependencies:\r?$' -and $pkgmeta -match "(?m)^  - $standaloneSlug\r?`$" -and
+                $pkgmeta -match '(?m)^  - ellesmereui\r?$' -and
                 $pkgmeta -notmatch '(?m)^required-dependencies:') 'Addon managers offer alternative hosts without forcing the conflicting suite'
         } else {
-            Check ($toc -match "## Dependencies: EllesmereUI, EllesmereUI$name\r?\n") 'Quest Tracker retains its upstream dependencies'
+            Check ($toc -match "## Dependencies: EllesmereUI, EllesmereUI$name\r?\n") 'Quest Tracker retains its corresponding upstream dependencies'
         }
-        Check ($toc -match "## SavedVariables: ${identity}Profiles\r?\n") 'Each feature saves its own profile snapshot'
+        $savedVariables = if ($name -eq 'Bags') { "${identity}Profiles, ${identity}DB" } else { "${identity}Profiles" }
+        Check ($toc -match "## SavedVariables: $savedVariables\r?\n") 'Each feature saves its own profile snapshot and only its own inventory database'
         Check ($toc -match '(?m)^## Interface: 120100, 16001\r?$') 'Only Retail 12.1 and Forever interfaces advertised'
         $reader = New-Object System.IO.StreamReader($archive.GetEntry("$identity/$identity.toc").Open())
         try { $packagedToc = $reader.ReadToEnd() } finally { $reader.Dispose() }
@@ -72,7 +75,7 @@ foreach ($path in $archives) {
     } finally { $archive.Dispose() }
 }
 $sourceTocs = @{}
-foreach ($name in @('Nameplates', 'QuestTracker')) {
+foreach ($name in @('Nameplates', 'QuestTracker', 'Bags')) {
     $sourceTocs[$name] = Get-Content -LiteralPath (Join-Path $root "$name/EllesmereUIExtend$name.toc") -Raw
 }
 $tempRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { Join-Path $env:LOCALAPPDATA 'Temp/opencode' }
@@ -81,7 +84,7 @@ $alphaArchives = @(& (Join-Path $root 'tools/Package.ps1') -Version '0.1.0-alpha
 foreach ($path in $alphaArchives) {
     $archive = [System.IO.Compression.ZipFile]::OpenRead($path)
     try {
-        $name = if ([System.IO.Path]::GetFileName($path) -match 'Nameplates') { 'Nameplates' } else { 'QuestTracker' }
+        $name = [regex]::Match([System.IO.Path]::GetFileName($path), '^EllesmereUIExtend(Nameplates|QuestTracker|Bags)-').Groups[1].Value
         $identity = "EllesmereUIExtend$name"
         Check ([System.IO.Path]::GetFileName($path) -eq "$identity-0.1.0-alpha.1.zip") 'Local alpha filename uses override'
         $reader = New-Object System.IO.StreamReader($archive.GetEntry("$identity/$identity.toc").Open())

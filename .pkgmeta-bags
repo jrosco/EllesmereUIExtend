@@ -1,8 +1,8 @@
-package-as: EllesmereUIExtendNameplates
+package-as: EllesmereUIExtendBags
 
 move-folders:
-  EllesmereUIExtendNameplates/Core: EllesmereUIExtendNameplates/Nameplates/Shared
-  EllesmereUIExtendNameplates/Nameplates: EllesmereUIExtendNameplates
+  EllesmereUIExtendBags/Core: EllesmereUIExtendBags/Bags/Shared
+  EllesmereUIExtendBags/Bags: EllesmereUIExtendBags
 
 ignore:
   - .agents
@@ -11,21 +11,21 @@ ignore:
   - .pkgmeta-nameplates
   - .pkgmeta-questtracker
   - .pkgmeta-bags
-  - Bags
   - AGENTS.md
   - README.md
   - TESTING.md
+  - Nameplates
   - QuestTracker
   - tools
   - docs
   - dist
   - Core/tests
-  - Nameplates/tests
+  - Bags/tests
 
 manual-changelog:
-  filename: docs/NAMEPLATES-CHANGELOG.md
+  filename: docs/BAGS-CHANGELOG.md
   markup-type: markdown
 
 optional-dependencies:
   - ellesmereui
-  - eui-nameplates
+  - eui-bags
