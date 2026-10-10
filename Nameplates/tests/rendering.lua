@@ -59,6 +59,8 @@ UIParent:SetScale(0.8)
 local NP = { plates = {}, friendlyPlates = {}, _ntAlpha = 1,
     db = { profile = { castOverlayEnabled = true } } }
 EllesmereNameplates_NS = NP
+-- Rendering needs an active host; this fixture only exercises its plate engine.
+EllesmereUI = {}
 -- Same alpha calculation/cache contract as the actual engine's NT_Apply.
 function NP.NT_Apply(plate)
     local unit = plate.unit

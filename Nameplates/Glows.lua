@@ -1,4 +1,6 @@
+if EUI_CLIENT_BLOCKED then return end
 local _, addon = ...
+local GetHost = addon.GetHost
 local api = EllesmereUIExtendNameplates
 local STYLES = { [0] = "None", [1] = "Pixel Glow", [3] = "Auto-Cast Shine" }
 local ORDER = { 0, 1, 3 }
@@ -10,7 +12,7 @@ local Apply
 local Secret = addon.IsSecret
 local Number = addon.ClampNumber
 function api.SupportsRuleGlows()
-    local G = EllesmereUI and EllesmereUI.Glows
+    local G = GetHost() and GetHost().Glows
     return G and type(G.StartSpecGlow) == "function" and type(G.StopGlow) == "function"
         and type(G.StartAutoCastShine) == "function" or false
 end
@@ -19,7 +21,7 @@ function api.ValidateRuleGlowStyle(value)
 end
 function api.GetRuleGlowOptions()
     local values, order = {}, {}
-    local G = EllesmereUI and EllesmereUI.Glows
+    local G = GetHost() and GetHost().Glows
     for _, key in ipairs(ORDER) do
         values[key] = G and G.STYLES and G.STYLES[key] and G.STYLES[key].name or STYLES[key]
         order[#order + 1] = key
@@ -57,7 +59,7 @@ end
 function api.StopRuleGlowPreview(host) Stop(host) end
 local function Render(host, spec, width, height, preview, restricted)
     if not spec or not api.SupportsRuleGlows() then Stop(host); return false end
-    local G = EllesmereUI.Glows
+    local G = GetHost().Glows
     if host._extrasGlowEngine and host._extrasGlowEngine ~= G then Stop(host) end
     local kind = restricted and "engine" or "bar"
     if restricted and spec.style == 3 then spec.style = 1 end -- native Pixel ants, not an icon-style fallback

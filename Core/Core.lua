@@ -28,6 +28,16 @@ function core.RegisterOwner(name)
 end
 core.RegisterOwner(addonName)
 
+-- The standalone bundles the same APIs under a private core name. Never
+-- publish aliases or select a standalone that upstream has made inert.
+function core.GetHost()
+    if EUI_CLIENT_BLOCKED then return nil end
+    if _G.EllesmereUI then return _G.EllesmereUI end
+    if not _G.__EUISTANDALONE_NAMEPLATES_INERT then
+        return _G.EUICoreStandaloneNameplates
+    end
+end
+
 local function Secret(value)
     return type(issecretvalue) == "function" and issecretvalue(value)
 end
@@ -130,8 +140,9 @@ local function Manage()
     Store()
     if persistence then persistence.Ensure() end
     if not character then return false, "The character name and realm are not available yet." end
-    if EllesmereUI and type(EllesmereUI.IsUnlockModeActive) == "function" then
-        local ok, editing = pcall(EllesmereUI.IsUnlockModeActive, EllesmereUI)
+    local host = core.GetHost()
+    if host and type(host.IsUnlockModeActive) == "function" then
+        local ok, editing = pcall(host.IsUnlockModeActive, host)
         if not ok or Secret(editing) or editing then return false, "Finish EUI Edit Mode before changing profiles." end
     end
     return true
