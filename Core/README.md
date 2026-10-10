@@ -12,6 +12,7 @@ Switching refreshes installed features and settings pages. Renaming updates assi
 
 - Load `Shared/Core.lua`, `Shared/Sync.lua`, then `Shared/Options.lua` before feature code. For source installs, copy those files from `Core/` into each feature's `Shared/` folder.
 - The first copy creates the `EllesmereUIExtend` singleton; later copies register their owner and reuse it. The plugin ID stays `EllesmereUIExtend`, but its label is **Extend Addons** because EUI reserves labels beginning with Ellesmere/EUI.
+- `GetHost()` resolves the full-suite `EllesmereUI` core or the active `EUICoreStandaloneNameplates` core, without global aliases. The full suite takes precedence; blocked/inert standalone hosts are never used. Quest Tracker still requires the full suite.
 - Register features/modules during addon loading; access settings only after SavedVariables load. The combined UI registers once at `PLAYER_LOGIN`. Keep features non-load-on-demand: late module registration is rejected.
 - `EllesmereUIExtendDB` is the **in-memory** root: `profiles[name].nameplates`, `profiles[name].questTracker` and `characterProfiles[character]`. It is not a SavedVariable.
 - Each feature owns its account-wide snapshot: `EllesmereUIExtendNameplatesProfiles` or `EllesmereUIExtendQuestTrackerProfiles`, shaped as `{ format = 1, revision = n, data = <root>, sync = <metadata> }`.
@@ -26,6 +27,7 @@ Switching refreshes installed features and settings pages. Renaming updates assi
 
 | API | Contract |
 | --- | --- |
+| `GetHost()` | Returns the full-suite or active Standalone Nameplates core, or nil when unavailable/blocked. Never creates global aliases. |
 | `RegisterFeature(key, { defaults, normalize, refresh })` | Copies defaults; normalizes each settings table once. Duplicate keys return false. |
 | `RegisterModule({ key, title, pages, buildPage, ... })` | Supplies a feature-owned EUI settings section before UI registration. Duplicate/late modules return false. |
 | `GetSettings(key)` | Returns feature settings, active profile name and shared root. |

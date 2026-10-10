@@ -1,4 +1,6 @@
+if EUI_CLIENT_BLOCKED then return end
 local _, addon = ...
+local GetHost = addon.GetHost
 local api = EllesmereUIExtendNameplates
 local OPTIONS = {
     { key = "healthBar", label = "Health bar", tooltip = "Scale the health bar and its borders and glows. Text scales separately." },
@@ -235,7 +237,7 @@ function addon.ClearScaleSelection(plate)
     end
 end
 function addon.InstallScaleSelectionHooks()
-    local kit = EllesmereUI and EllesmereUI.AuraKit
+    local kit = GetHost() and GetHost().AuraKit
     if kit and kit.AddGroupToContainer and not hookedAuraKits[kit] then
         hookedAuraKits[kit] = true
         local categories = { ["np:buffs"] = "other", ["np:buffs2"] = "other", ["np:buffsplain"] = "other",

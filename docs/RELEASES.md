@@ -27,7 +27,7 @@ Each ZIP contains **one** installed addon folder: `EllesmereUIExtendNameplates/`
 
 Each feature also includes its own `Media/Icon.tga` for the in-game AddOns list. Local and release packaging preserve the feature's `Media/` directory; icons use uncompressed 32-bit, power-of-two TGA textures for both clients.
 
-Both declare **`ellesmereui`** as the required CurseForge dependency; enable its matching Nameplates/Quest Tracker module in game. Lua addon-folder names are not CurseForge slugs—do not add nonexistent module relations such as `ellesmereui-nameplates`.
+Quest Tracker declares **`ellesmereui`** as a required CurseForge dependency. Nameplates declares **`ellesmereui`** and **`eui-nameplates`** as optional alternative dependencies, since requiring the suite would disable upstream's standalone. Users must enable either the suite's Nameplates module or Standalone Nameplates; the TOC orders installed hosts before Extend. Lua addon-folder names are not CurseForge slugs—do not add nonexistent module relations such as `ellesmereui-nameplates`.
 
 ## GitHub setup
 

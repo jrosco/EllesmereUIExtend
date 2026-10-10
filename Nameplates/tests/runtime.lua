@@ -1,5 +1,6 @@
 -- Run from the repository root with Lua or fengari.
 unpack = unpack or table.unpack
+local standalone = ... == "standalone"
 local frames, timers = {}, {}
 local function Noop() end
 local tappedByOther = false
@@ -251,8 +252,16 @@ assert(loadfile("Core/Sync.lua"))("EllesmereUIExtend")
 assert(loadfile("Core/Options.lua"))("EllesmereUIExtend")
 assert(loadfile("Nameplates/Helpers.lua"))("EllesmereUIExtendNameplates", namespace)
 local borderAPI = assert(loadfile("Nameplates/tests/border-mocks.lua"))()
-EllesmereUI = EllesmereUI or {}
+local EllesmereUI = _G.EllesmereUI or {}
 for key, value in pairs(borderAPI) do EllesmereUI[key] = value end
+local function PublishHost()
+    if standalone then
+        _G.EUICoreStandaloneNameplates, _G.EllesmereUI = EllesmereUI, nil
+    else
+        _G.EllesmereUI = EllesmereUI
+    end
+end
+PublishHost()
 if ... == "scaling" then
     UIParent = CreateFrame()
     EllesmereNameplates_NS.db = { profile = { castOverlayEnabled = false } }
@@ -606,6 +615,7 @@ EllesmereUI = {
         spec.modules[1].buildPage("Style", parent, 0)
     end,
 }
+PublishHost()
 assert(loadfile("Nameplates/RuleIO.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/Preview.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/Options.lua"))("EllesmereUIExtendNameplates", namespace)
