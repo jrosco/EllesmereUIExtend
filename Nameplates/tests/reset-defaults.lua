@@ -27,6 +27,9 @@ for _, r in ipairs(current.rules) do reset[r.name] = r end
 Check(reset["Elite Enemies"] and not reset["Externally changed public default"], "reset uses pristine defaults, not public-template mutations")
 Check(reset["Non Target"].conditions.target.no and reset["Non Target"].conditions.target.none
     and not reset["Non Target"].conditions.target.yes, "reset restores both default non-target choices")
+Check(reset["Non Target"].style.healthEnabled == false, "reset disables non-target health-bar override")
+Check(reset["Non Target"].style.opacity == 75, "reset restores non-target 75% opacity")
+Check(reset["Non Target"].style.scale == 100, "reset restores non-target 100% size")
 for _, r in ipairs(current.rules) do
     Check(r.enabled == true, "starter enabled " .. r.name)
     Check(type(r.conditions.playerCombat) == "table" and next(r.conditions.playerCombat) == nil, "combat selection normalized to Any")

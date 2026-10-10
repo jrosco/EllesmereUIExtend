@@ -13,6 +13,7 @@ For source installs, copy `Nameplates/` into that addon folder and put `Core/Cor
 ## Rules and matching
 
 - Four enabled starters: **Elite Enemies**, **Enemy Casting**, **Current Target**, **Non Target**. Add/copy/reorder up to 100 rules; the first enabled matching rule controls ordinary appearance. New rules target the current target; copies follow their source.
+- **Non Target** defaults to health-bar override off, 75% opacity and 100% nameplate size. Starter defaults apply to new profiles and Nameplate resets; existing saved rules are unchanged.
 - Choices within a condition use **OR**; separate condition groups use **AND**. Empty checklists mean **Any**, not a restrictive filter. Conditions include unit type, reaction, classification, target state, player combat, instance type, casts, threat and quest objectives. Checklist conditions use selection tables, not scalar strings.
 - **Not current target** requires a selected target; **No target selected** is separate. Select both for a combined non-target rule. Combat/instance filters describe **your character**, not the nameplate unit or group type.
 - Threat filters describe the **aggro holder**: Tank threat, Non-tank threat and Threat on me. A temporary spell target is not assumed to hold aggro. Quest objectives use EUI's cached detector and instance setting.

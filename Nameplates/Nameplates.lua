@@ -43,7 +43,7 @@ local DEFAULT_RULES = {
         name = "Non Target",
         enabled = true,
         conditions = { unitType = {}, reaction = {}, classification = {}, target = { no = true, none = true }, questObjective = "any", castState = {} },
-        style = { healthColorEnabled = true, healthColor = { r = 0.12, g = 0.92, b = 0.67 }, scale = 100, opacity = 50, borderSize = 1, borderColor = { r = 1.00, g = 1.00, b = 1.00 }, texture = "eui" },
+        style = { healthEnabled = false, healthColorEnabled = true, healthColor = { r = 0.12, g = 0.92, b = 0.67 }, scale = 100, opacity = 75, borderSize = 1, borderColor = { r = 1.00, g = 1.00, b = 1.00 }, texture = "eui" },
     },
 }
 
