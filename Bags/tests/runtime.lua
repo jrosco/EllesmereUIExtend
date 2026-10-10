@@ -50,6 +50,9 @@ local function Widget(kind, name, parent, template)
     function f:GetWidth() return self.width or 0 end
     function f:GetHeight() return self.height or 0 end
     function f:GetCenter() return self.centerX or 1000, self.centerY or 600 end
+    function f:SetScale(scale) self.scale = scale end
+    function f:GetEffectiveScale() return (self.scale or 1) * (self.parent and self.parent:GetEffectiveScale() or 1) end
+    function f:SetFrameStrata(strata) self.strata = strata end
     function f:SetAlpha(alpha) self.alpha = alpha end
     function f:SetPoint(...) self.point = { ... } end
     function f:StartMoving() self.moving = true end
@@ -733,4 +736,53 @@ settings.collapsedCategories["category:Trade Goods"] = true
 settings.groupByCategory = false
 ns.Addon.Refresh()
 Check(native.slots[1]:IsShown() and not native.headings[1]:IsShown(), "disabling grouping ignores saved collapse state")
+-- Independent viewer scale/strata with scale-correct geometry persistence.
+settings = modules.feature.normalize({ showButton = true, windowScale = 1.25, frameStrata = "LOW" })
+ns.Addon.Refresh()
+Check(native.scale == 1.25 and native.strata == "LOW", "profile window scale and strata apply to viewer")
+Check(not EUI_Bags.scale and not ns.BagButton.scale and not ns.BagButton.strata,
+    "window appearance leaves EUI bags and attached snapshot button untouched")
+modules.options.buildPage(nil, UIParent, 0)
+local scaleControl, strataControl
+for _, row in ipairs(rows) do if row.text == "Window Scale" then scaleControl = row end end
+for _, row in ipairs(rightRows) do if row.text == "Frame Strata" then strataControl = row end end
+Check(scaleControl.min == 50 and scaleControl.max == 150 and scaleControl.step == 5 and scaleControl.getValue() == 125,
+    "settings exposes matching EUI percentage scale range")
+Check(strataControl.getValue() == "LOW" and #strataControl.order == 5, "strata dropdown follows EUI base strata")
+editing = true
+scaleControl.setValue(150); strataControl.setValue("HIGH")
+Check(settings.windowScale == 1.25 and settings.frameStrata == "LOW", "stale scale and strata controls honor Edit Mode")
+editing = false
+scaleControl.setValue(150); strataControl.setValue("HIGH")
+Check(native.scale == 1.5 and native.strata == "HIGH", "settings update visible window appearance immediately")
+native.header.scripts.OnDragStart()
+native.centerX, native.centerY = 800, 500
+native.header.scripts.OnDragStop()
+Check(settings.window.x == 200 and settings.window.y == 150, "scaled drag saves offsets in UIParent coordinates")
+Check(math.abs(native.point[4] - 200 / 1.5) < 0.001 and native.point[5] == 100,
+    "scaled position restoration converts anchor offsets correctly")
+scaleControl.setValue(50)
+Check(native.point[4] == 400 and native.point[5] == 300 and settings.window.x == 200,
+    "scale changes preserve saved window position")
+native.resize.scripts.OnMouseDown(native.resize, "LeftButton")
+native:SetSize(900, 700)
+scaleControl.setValue(100)
+Check(not native.sizing and settings.window.width == 620 and native:GetWidth() == 620,
+    "scale changes during a gesture cancel unsaved geometry")
+strataControl.setValue("INVALID"); scaleControl.setValue(secret)
+Check(settings.frameStrata == "HIGH" and settings.windowScale == 1, "invalid strata and secret slider inputs cannot be applied")
+local appearanceProfile = settings
+settings = modules.feature.normalize({ showButton = true })
+ns.Addon.Refresh()
+Check(native.scale == 1 and native.strata == "DIALOG", "new profile uses default scale and original viewer strata")
+settings = appearanceProfile
+ns.Addon.Refresh()
+Check(native.strata == "HIGH", "profile switch restores independent strata")
+native:Hide(); ns.ToggleViewer()
+Check(native.scale == settings.windowScale and native.strata == "HIGH", "reopening retains scale and strata")
+local invalidAppearance = modules.feature.normalize({ windowScale = secret, frameStrata = secret })
+Check(invalidAppearance.windowScale == 1 and invalidAppearance.frameStrata == "DIALOG",
+    "unreadable appearance values safely default")
+Check(ns.WindowScale(5) == 1.5 and ns.WindowScale(0.1) == 0.5 and ns.WindowScale(1.23) == 1.25,
+    "scale normalization clamps and snaps to five-percent steps")
 print("PASS: " .. checks .. " Bags capture, capability, read-only viewer and UI checks")

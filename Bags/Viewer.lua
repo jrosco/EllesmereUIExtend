@@ -257,8 +257,12 @@ local function Build()
         local parentOK, px, py = pcall(UIParent.GetCenter, UIParent)
         x, y, px, py = ns.Number(x), ns.Number(y), ns.Number(px), ns.Number(py)
         if not width or not height or not ok or not parentOK or not x or not y or not px or not py then return end
+        local frameScale = ns.Number(ns.Read(f.GetEffectiveScale, f))
+        local parentScale = ns.Number(ns.Read(UIParent.GetEffectiveScale, UIParent))
+        if not frameScale or frameScale <= 0 or not parentScale or parentScale <= 0 then return end
+        local ratio = frameScale / parentScale
         settings.window = { width = math.max(620, math.min(1600, width)), height = math.max(480, math.min(1200, height)),
-            x = x - px, y = y - py, locked = window.locked }
+            x = x * ratio - px, y = y * ratio - py, locked = window.locked }
         f.geometrySettings, f.geometryWindow = nil, nil
     end
     local function StopGesture()
@@ -487,15 +491,26 @@ function ns.RefreshViewer()
     local f = viewer
     local settings = ns.Addon.Settings()
     local window = WindowSettings()
-    if f.gestureSettings and (f.gestureSettings ~= settings or window.locked or ns.Editing()) then
+    local scale, strata = ns.WindowScale(settings.windowScale), ns.WindowStrata(settings.frameStrata)
+    local appearanceChanged = f.appliedScale ~= scale or f.appliedStrata ~= strata
+    if f.gestureSettings and (f.gestureSettings ~= settings or window.locked or ns.Editing() or appearanceChanged) then
         f:StopMovingOrSizing()
         f.gestureSettings = nil
+        f.geometrySettings, f.geometryWindow = nil, nil
+    end
+    if appearanceChanged then
+        f.applyingGeometry = true
+        f:SetScale(scale)
+        f:SetFrameStrata(strata)
+        f.applyingGeometry = false
+        f.appliedScale, f.appliedStrata = scale, strata
         f.geometrySettings, f.geometryWindow = nil, nil
     end
     if not f.gestureSettings and (f.geometrySettings ~= settings or f.geometryWindow ~= settings.window) then
         f.applyingGeometry = true
         f:ClearAllPoints()
-        f:SetPoint("CENTER", UIParent, "CENTER", window.x, window.y)
+        -- Saved offsets are UIParent units; anchor offsets are viewer-scaled units.
+        f:SetPoint("CENTER", UIParent, "CENTER", window.x / scale, window.y / scale)
         f:SetSize(window.width, window.height)
         f.applyingGeometry = false
         f.geometrySettings, f.geometryWindow = settings, settings.window

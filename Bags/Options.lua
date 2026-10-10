@@ -10,6 +10,28 @@ EllesmereUIExtend.RegisterModule({
         local _, height = W:SectionHeader(parent, "BANK SNAPSHOT", y)
         y = y - height
         _, height = W:DualRow(parent, y, {
+            type = "slider", text = "Window Scale", min = 50, max = 150, step = 5,
+            tooltip = "Scale the bank snapshot window only. 100% is the default; EUI's live bags and bank are unchanged.",
+            getValue = function() return math.floor(ns.WindowScale(ns.Addon.Settings().windowScale) * 100 + 0.5) end,
+            setValue = function(value)
+                if ns.Editing() or not ns.Number(value) then return end
+                ns.Addon.Settings().windowScale = ns.WindowScale(value / 100)
+                ns.Addon.Refresh()
+            end,
+        }, {
+            type = "dropdown", text = "Frame Strata",
+            tooltip = "Controls which overlapping windows appear above the snapshot viewer. Higher strata put it above lower-strata frames. EUI's live windows are unchanged.",
+            values = EllesmereUI.FRAME_STRATA_LABELS or ns.FrameStrataValues,
+            order = EllesmereUI.FRAME_STRATA_ORDER_BASE or ns.FrameStrataOrder,
+            getValue = function() return ns.WindowStrata(ns.Addon.Settings().frameStrata) end,
+            setValue = function(value)
+                if ns.Editing() or not ns.String(value) or not ns.FrameStrataValues[value] then return end
+                ns.Addon.Settings().frameStrata = value
+                ns.Addon.Refresh()
+            end,
+        })
+        y = y - height
+        _, height = W:DualRow(parent, y, {
             type = "toggle", text = "Group by Category",
             tooltip = "Use the current EUI bag categories within the selected bank tabs.",
             getValue = function() return ns.Addon.Settings().groupByCategory == true end,

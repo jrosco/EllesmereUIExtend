@@ -5,6 +5,14 @@ if not core then return end
 local addon = {}
 ns.Addon = addon
 _G.EllesmereUIExtendBags = addon
+ns.FrameStrataValues = { BACKGROUND = "Background", LOW = "Low", MEDIUM = "Medium", HIGH = "High", DIALOG = "Dialog" }
+ns.FrameStrataOrder = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG" }
+function ns.WindowScale(value)
+    return math.floor(math.max(0.5, math.min(1.5, ns.Number(value) or 1)) * 20 + 0.5) / 20
+end
+function ns.WindowStrata(value)
+    return ns.String(value) and ns.FrameStrataValues[value] and value or "DIALOG"
+end
 
 function addon.Settings() return core.GetSettings("bags") end
 function addon.Refresh()
@@ -13,10 +21,13 @@ function addon.Refresh()
 end
 core.RegisterFeature("bags", {
     defaults = { showButton = true, groupByCategory = false, display = "match", collapsedCategories = {},
+        windowScale = 1, frameStrata = "DIALOG",
         window = { width = 620, height = 510, x = 0, y = 0, locked = false } },
     normalize = function(settings)
         settings.showButton = settings.showButton ~= false
         settings.groupByCategory = settings.groupByCategory == true
+        settings.windowScale = ns.WindowScale(settings.windowScale)
+        settings.frameStrata = ns.WindowStrata(settings.frameStrata)
         local collapsed = {}
         if not ns.Secret(settings.collapsedCategories) and type(settings.collapsedCategories) == "table" then
             for key, value in pairs(settings.collapsedCategories) do

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add per-profile Window Scale (50–150%) and Frame Strata options for the snapshot viewer only, with scale-aware position persistence.
 - Add clickable List category headers with per-profile collapse persistence, stable category identities and matching stack counts.
 - Limit item-quality borders to the icon in List display instead of coloring the whole row.
 - Add matching EUI-style resize/lock icons together in the bottom-right footer, with double-click size reset and per-profile position/size locking.
