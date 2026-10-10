@@ -5,6 +5,7 @@ move-folders:
   EllesmereUIExtendNameplates/Nameplates: EllesmereUIExtendNameplates
 
 ignore:
+  - .agents
   - .github
   - .gitignore
   - .pkgmeta-nameplates

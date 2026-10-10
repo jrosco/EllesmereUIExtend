@@ -1,0 +1,108 @@
+name: Create addon releases
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Release channel
+        type: choice
+        options: [alpha, beta, stable]
+        default: alpha
+      verified:
+        description: Relevant tests and Retail/Forever in-game checks completed
+        type: boolean
+        default: false
+      preview:
+        description: Preview the release plan without publishing
+        type: boolean
+        default: true
+
+concurrency:
+  group: create-addon-releases
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      has_releases: ${{ steps.plan.outputs.has_releases }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require verification before publishing
+        if: ${{ !inputs.preview && !inputs.verified }}
+        run: |
+          echo '::error::Complete testing and both client checklists before publishing.'
+          exit 1
+      - name: Test release planner
+        run: python3 -m unittest discover -s tools/tests -p 'test_release_plan.py' -v
+      - name: Calculate feature releases
+        id: plan
+        env:
+          CHANNEL: ${{ inputs.channel }}
+        run: python3 tools/release_plan.py --channel "$CHANNEL" --output release-plan
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-plan
+          path: release-plan/
+
+  publish:
+    needs: plan
+    if: ${{ needs.plan.outputs.has_releases == 'true' && !inputs.preview }}
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      # Fetch only this commit, without other feature tags at the same SHA.
+      # The packager must see this feature's tag, not the other addon's tag.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ matrix.sha }}
+          fetch-depth: 1
+          fetch-tags: false
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-plan
+          path: release-plan
+      - name: Create release and prepare packaging
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FEATURE: ${{ matrix.feature }}
+          SOURCE: ${{ matrix.source }}
+          RELEASE_TAG: ${{ matrix.tag }}
+          RELEASE_VERSION: ${{ matrix.version }}
+          RELEASE_SHA: ${{ matrix.sha }}
+          PRERELEASE: ${{ matrix.prerelease }}
+          CF_PROJECT_ID: ${{ vars[matrix.project_variable] || '0' }}
+        run: |
+          set -euo pipefail
+          [[ "$CF_PROJECT_ID" =~ ^[0-9]+$ ]] || exit 1
+          # POST refuses an existing release; never silently re-upload on retry.
+          jq -n --arg tag "$RELEASE_TAG" --arg sha "$RELEASE_SHA" \
+            --arg title "$SOURCE $RELEASE_VERSION" \
+            --rawfile body "release-plan/$FEATURE.md" \
+            --argjson prerelease "$PRERELEASE" \
+            '{tag_name: $tag, target_commitish: $sha, name: $title, body: $body, prerelease: $prerelease, make_latest: "false"}' \
+            | gh api --method POST "repos/$GITHUB_REPOSITORY/releases" --input -
+          git tag "$RELEASE_TAG" "$RELEASE_SHA"
+          sed -i -E "s/^## Version:.*/## Version: $RELEASE_VERSION/" "$SOURCE/EllesmereUIExtend$SOURCE.toc"
+          cp "release-plan/$FEATURE.md" "docs/${FEATURE^^}-CHANGELOG.md"
+      # GITHUB_TOKEN-created releases do not trigger the release event workflows.
+      # Package directly in this job using the pinned packager and feature metadata.
+      - name: Package and publish
+        uses: BigWigsMods/packager@e50a250f8705041e40f2fa1ddcb280a686d65aa0
+        with:
+          pandoc: 'false'
+          args: -m .pkgmeta-${{ matrix.feature }} -p ${{ vars[matrix.project_variable] || '0' }} -n "{package-name}-${{ matrix.tag }}:{project-version} (Retail + Forever)"
+        env:
+          GH_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
