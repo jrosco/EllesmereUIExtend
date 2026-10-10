@@ -10,6 +10,8 @@ Release packages target **Retail 12.1.0** and **WoW Forever 1.60.1** with the sa
 
 For source installs, copy `QuestTracker/` into that addon folder and put `Core/Core.lua`, `Core/Sync.lua` and `Core/Options.lua` in its `Shared/` subfolder.
 
+The in-game AddOns list uses this extension's own icon from `Media/Icon.tga`, included in release packages and source installs.
+
 - `/eqtx`: opens settings outside combat.
 - `/eqtx status`: capabilities and quest-item diagnostics, including during combat.
 - `/eextend`: shared character profiles. Reset affects only this feature; protected updates still wait until combat ends. See [Core](../Core/README.md) for persistence and uninstall behavior.

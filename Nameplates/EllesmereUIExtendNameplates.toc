@@ -1,13 +1,13 @@
 ## Interface: 120100, 16001
-## Title: |cff0cd29fEllesmereUI|r Extend Nameplates
-## Category: |cff0cd29fEllesmere|rUI
+## Title: |cffadd8e6EllesmereUI|r Extend Nameplates
+## Category: |cffadd8e6Ellesmere|rUI
 ## Group: EllesmereUI
 ## Notes: Apply configurable visual rules to EllesmereUI nameplates.
 ## Author: jrosco
 ## Version: 0.1.3
 ## Dependencies: EllesmereUI, EllesmereUINameplates
 ## SavedVariables: EllesmereUIExtendNameplatesProfiles
-## IconTexture: Interface\AddOns\EllesmereUI\media\eg-logo.tga
+## IconTexture: Interface\AddOns\EllesmereUIExtendNameplates\Media\Icon.tga
 
 Shared/Core.lua
 Shared/Sync.lua
