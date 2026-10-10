@@ -1,11 +1,63 @@
-local _, ns = ...
+local addonName, ns = ...
 if not ns.Addon then return end
+local function BuildAboutPage(parent, yOffset)
+    local EUI, W, y = EllesmereUI, EllesmereUI.Widgets, yOffset
+    local prebuild = EUI.IsSearchPrebuild and EUI.IsSearchPrebuild()
+    local function Section(title, text)
+        local _, height = W:SectionHeader(parent, title, y)
+        y = y - height
+        if prebuild then
+            -- EUI's search absorber indexes DualRow text, not Spacer metadata.
+            _, height = W:DualRow(parent, y, { type = "spacer", text = text, tooltip = text })
+        elseif type(W.Spacer) == "function" and type(EUI.MakeFont) == "function" then
+            local row
+            row, height = W:Spacer(parent, y, 56)
+            local displayText = type(EUI.L) == "function" and EUI.L(text) or text
+            row._isSpacer, row._labelText = nil, text
+            row._labelTextLoc = displayText ~= text and displayText or nil
+            if not prebuild then
+                local pad = (ns.Number(EUI.CONTENT_PAD) or 12) + 20
+                local label = EUI.MakeFont(row, 13, nil, 1, 1, 1, 0.8)
+                local PP = EUI.PanelPP
+                if PP and type(PP.Point) == "function" then PP.Point(label, "TOPLEFT", row, "TOPLEFT", pad, -8)
+                else label:SetPoint("TOPLEFT", row, "TOPLEFT", pad, -8) end
+                label:SetWidth(math.max(100, parent:GetWidth() - pad * 2))
+                label:SetJustifyH("LEFT")
+                label:SetWordWrap(true)
+                label:SetText(displayText)
+                height = math.ceil(label:GetStringHeight()) + 20
+                if PP and type(PP.Size) == "function" then PP.Size(row, parent:GetWidth(), height)
+                else row:SetSize(parent:GetWidth(), height) end
+            end
+        else
+            -- Older EUI: retain informational text and search indexing without
+            -- requiring the newer font/spacer helpers or creating a viewer.
+            _, height = W:DualRow(parent, y, { type = "spacer", text = text, tooltip = text })
+        end
+        y = y - height
+    end
+    local metadata = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
+    local version = ns.String(ns.Read(metadata, addonName, "Version"))
+    Section("BAGS EXTENSION", (version and ("Version " .. version .. ". ") or "") ..
+        "Read-only personal bank snapshots for EllesmereUI Bags. Requires EllesmereUI and EllesmereUIBags; no other Extend addon or standalone Core installation is needed. Supports Retail and WoW Forever.")
+    Section("BANK SNAPSHOTS",
+        "Visit a banker on each character to capture personal bank tabs and supported reagent storage. Complete stable scans preserve the previous snapshot when reads are unavailable. Warband, guild storage and carried bags are excluded; snapshots may be outdated until your next banker visit. Snapshot items cannot be used or transferred.")
+    Section("VIEWER AND SEARCH",
+        "Use /ebags or the Bank Snapshot button below EUI bags. Opening selects your current character; missing snapshots show Visit the banker first. Browse characters, Tabs and Categories, and choose Grid, Compact or List. Search names or item IDs to see full-bank matching quantities beside character names; the x clears the search.")
+    Section("BANK STOCK TOOLTIPS",
+        "Enable Show bank stock in tooltips on Bank Snapshot (off by default). Bags show positive current/other-bank counts; opening the live bank or snapshot viewer shows named, class-coloured character counts. Only saved personal-bank stock is counted. Cached item-ID lookups avoid live container reads and carried-bag scanning; unknown classes use neutral grey until that character logs in.")
+    Section("PROFILES AND WINDOW",
+        "Extend profiles remember your display, grouping, category collapse, sidebar, window position/size, lock, scale, strata and tooltip settings. Drag the heading to move the viewer, use the bottom-right grip to resize, or lock both position and size. Profile changes and resets never erase captured bank inventory. Settings and window editing respect EUI Edit Mode.")
+    Section("HELP", "Use /eextend for shared profiles. See README.md for setup and snapshot details. Retail and Forever both require in-game verification of native tooltips, bank timing, rendering and secure behaviour.")
+    return math.abs(y - yOffset)
+end
 EllesmereUIExtend.RegisterModule({
-    key = "Bags", title = "Bags", pages = { "Bank Snapshot" },
-    buildPage = function(_, parent, yOffset)
+    key = "Bags", title = "Bags", pages = { "Bank Snapshot", "About" },
+    buildPage = function(page, parent, yOffset)
         if not EllesmereUI.IsSearchPrebuild or not EllesmereUI.IsSearchPrebuild() then
             if EllesmereUI.ClearContentHeader then EllesmereUI:ClearContentHeader() end
         end
+        if page == "About" then return BuildAboutPage(parent, yOffset) end
         local W, y = EllesmereUI.Widgets, yOffset
         local ownerSettings = ns.Addon.Settings()
         local _, height = W:SectionHeader(parent, "BANK SNAPSHOT", y)

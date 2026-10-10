@@ -1259,4 +1259,58 @@ ns.DB = nil
 ClearCountTip(bagItem); postHook(GameTooltip, { id = 100 })
 Check(#GameTooltip.lines == 0, "unsupported/missing snapshot database has no tooltip count")
 Check(inventoryReads == 0, "bank-stock tooltip hovers never query live bag or bank containers")
+-- About page is read-only, searchable and does not prebuild the snapshot viewer.
+Check(#modules.options.pages == 2 and modules.options.pages[1] == "Bank Snapshot" and modules.options.pages[2] == "About",
+    "Bags registers About after the existing default settings page")
+local aboutRows, aboutLabels, aboutHeaders = {}, {}, {}
+local oldSpacer, oldFont, oldSection = EllesmereUI.Widgets.Spacer, EllesmereUI.MakeFont, EllesmereUI.Widgets.SectionHeader
+local oldSettings, oldToggle = EllesmereUIExtend.GetSettings, ns.ToggleViewer
+EllesmereUIExtend.GetSettings = function() error("About must not build mutable settings") end
+ns.ToggleViewer = function() error("About must not construct or open viewer") end
+EllesmereUI.Widgets.Spacer = function(_, parent)
+    local row = { SetSize = function(self, width, height) self.width, self.height = width, height end }
+    aboutRows[#aboutRows + 1] = row
+    return row, 56
+end
+EllesmereUI.MakeFont = function(row)
+    local label = Widget("FontString", nil, row)
+    function label:GetStringHeight() return 50 end
+    aboutLabels[#aboutLabels + 1] = label
+    return label
+end
+EllesmereUI.Widgets.SectionHeader = function(_, _, text) aboutHeaders[#aboutHeaders + 1] = text; return {}, 30 end
+local headerClears = 0
+EllesmereUI.ClearContentHeader = function() headerClears = headerClears + 1 end
+C_AddOns = { GetAddOnMetadata = function(name, field)
+    Check(name == "EllesmereUIExtendBags" and field == "Version", "About reads installed addon TOC version")
+    return "9.8.7"
+end }
+EllesmereUI.IsSearchPrebuild = function() return true end
+rows = {}
+local beforeAboutFrames = #frames
+local aboutHeight = modules.options.buildPage("About", UIParent, 0)
+Check(#rows == 6 and #aboutHeaders == 6 and #aboutLabels == 0 and #frames == beforeAboutFrames
+    and headerClears == 0 and aboutHeight > 0, "About search prebuild indexes sections without fonts, viewer or header mutation")
+Check(rows[1].text:find("Version 9.8.7", 1, true) and rows[3].text:find("/ebags", 1, true)
+    and rows[4].text:find("Cached item-ID", 1, true) and rows[1].type == "spacer",
+    "About paragraphs expose version, commands and bank tooltip information to search")
+aboutRows, aboutLabels, aboutHeaders = {}, {}, {}
+EllesmereUI.IsSearchPrebuild = function() return false end
+aboutHeight = modules.options.buildPage("About", UIParent, -10)
+Check(#aboutLabels == 6 and headerClears == 1 and aboutRows[1].height == 70 and aboutHeight == 600,
+    "About renders auto-sized multiline paragraphs with surrounding extension styling")
+Check(aboutLabels[1].text:find("no other Extend addon", 1, true)
+    and aboutLabels[2].text:find("Warband", 1, true) and aboutLabels[5].text:find("never erase", 1, true),
+    "About describes independent dependencies, capture exclusions and profile/inventory separation")
+C_AddOns.GetAddOnMetadata = function() return secret end
+aboutRows = {}
+modules.options.buildPage("About", UIParent, 0)
+Check(not aboutRows[1]._labelText:find("Version", 1, true), "unreadable TOC version is omitted safely")
+EllesmereUI.Widgets.Spacer, EllesmereUI.MakeFont = nil, nil
+rows = {}
+modules.options.buildPage("About", UIParent, 0)
+Check(#rows == 6 and rows[1].type == "spacer" and rows[1].tooltip == rows[1].text,
+    "older EUI without paragraph helpers still exposes read-only About information")
+EllesmereUI.Widgets.Spacer, EllesmereUI.MakeFont, EllesmereUI.Widgets.SectionHeader = oldSpacer, oldFont, oldSection
+EllesmereUIExtend.GetSettings, ns.ToggleViewer = oldSettings, oldToggle
 print("PASS: " .. checks .. " Bags capture, capability, read-only viewer and UI checks")
