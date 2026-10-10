@@ -25,6 +25,8 @@ The planner generates matching feature tags and GitHub prerelease flags. Unsuppo
 
 Each ZIP contains **one** installed addon folder: `EllesmereUIExtendNameplates/` or `EllesmereUIExtendQuestTracker/`, including `Shared/Core.lua`, `Shared/Sync.lua`, `Shared/Options.lua`, its README and license. Neither bundles/requires the other extension or creates a standalone Core folder. Tests and upstream addons are excluded.
 
+Each feature also includes its own `Media/Icon.tga` for the in-game AddOns list. Local and release packaging preserve the feature's `Media/` directory; icons use uncompressed 32-bit, power-of-two TGA textures for both clients.
+
 Both declare **`ellesmereui`** as the required CurseForge dependency; enable its matching Nameplates/Quest Tracker module in game. Lua addon-folder names are not CurseForge slugs—do not add nonexistent module relations such as `ellesmereui-nameplates`.
 
 ## GitHub setup

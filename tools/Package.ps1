@@ -25,6 +25,13 @@ function Get-AddonFiles([string] $source, [string] $identity) {
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing package file: $path" }
         [pscustomobject] @{ Path = $path; Entry = "$identity/$file" }
     }
+    $media = Join-Path $directory 'Media'
+    if (Test-Path -LiteralPath $media -PathType Container) {
+        foreach ($file in Get-ChildItem -LiteralPath $media -File -Recurse) {
+            $relative = $file.FullName.Substring($directory.Length + 1).Replace('\', '/')
+            [pscustomobject] @{ Path = $file.FullName; Entry = "$identity/$relative" }
+        }
+    }
     [pscustomobject] @{ Path = (Join-Path $root 'LICENSE'); Entry = "$identity/LICENSE" }
 }
 

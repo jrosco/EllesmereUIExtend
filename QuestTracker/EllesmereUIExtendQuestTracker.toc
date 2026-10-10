@@ -1,13 +1,13 @@
 ## Interface: 120100, 16001
-## Title: |cff0cd29fEllesmereUI|r Extend Quest Tracker
-## Category: |cff0cd29fEllesmere|rUI
+## Title: |cffadd8e6EllesmereUI|r Extend Quest Tracker
+## Category: |cffadd8e6Ellesmere|rUI
 ## Group: EllesmereUI
 ## Notes: Wowhead links, objective colors, quest notifications and the navigation-tracked quest item.
 ## Author: jrosco
 ## Version: 0.1.2
 ## Dependencies: EllesmereUI, EllesmereUIQuestTracker
 ## SavedVariables: EllesmereUIExtendQuestTrackerProfiles
-## IconTexture: Interface\AddOns\EllesmereUI\media\eg-logo.tga
+## IconTexture: Interface\AddOns\EllesmereUIExtendQuestTracker\Media\Icon.tga
 
 Shared/Core.lua
 Shared/Sync.lua
