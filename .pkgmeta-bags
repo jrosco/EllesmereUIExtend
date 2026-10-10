@@ -26,5 +26,6 @@ manual-changelog:
   filename: docs/BAGS-CHANGELOG.md
   markup-type: markdown
 
-required-dependencies:
+optional-dependencies:
   - ellesmereui
+  - eui-bags

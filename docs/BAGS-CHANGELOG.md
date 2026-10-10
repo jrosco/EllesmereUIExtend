@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Support EUI Standalone Bags v9.4 alongside the full-suite Bags path, using private host APIs, categories/database, media and shared settings without global aliases. Respect upstream conflict guards and preserve saved snapshots when no host is active.
+
 - Use source TOC version `0.1.0`; select the release channel in the GitHub workflow, which applies the planned version only to distributed packages.
 
 - Keep sidebar category occupied-slot counts visible in separate right-aligned labels when category names are long.

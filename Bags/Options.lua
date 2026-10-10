@@ -1,5 +1,7 @@
 local addonName, ns = ...
 if not ns.Addon then return end
+local EllesmereUI = ns.GetHost()
+if not EllesmereUI then return end
 local function BuildAboutPage(parent, yOffset)
     local EUI, W, y = EllesmereUI, EllesmereUI.Widgets, yOffset
     local prebuild = EUI.IsSearchPrebuild and EUI.IsSearchPrebuild()
@@ -39,7 +41,7 @@ local function BuildAboutPage(parent, yOffset)
     local metadata = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
     local version = ns.String(ns.Read(metadata, addonName, "Version"))
     Section("BAGS EXTENSION", (version and ("Version " .. version .. ". ") or "") ..
-        "Read-only personal bank snapshots for EllesmereUI Bags. Requires EllesmereUI and EllesmereUIBags; no other Extend addon or standalone Core installation is needed. Supports Retail and WoW Forever.")
+        "Read-only personal bank snapshots for EllesmereUI Bags. Requires EllesmereUI with its Bags module, or EUI Standalone Bags; no other Extend addon or standalone Core installation is needed. Supports Retail and WoW Forever.")
     Section("BANK SNAPSHOTS",
         "Visit a banker on each character to capture personal bank tabs and supported reagent storage. Complete stable scans preserve the previous snapshot when reads are unavailable. Warband, guild storage and carried bags are excluded; snapshots may be outdated until your next banker visit. Snapshot items cannot be used or transferred.")
     Section("VIEWER AND SEARCH",

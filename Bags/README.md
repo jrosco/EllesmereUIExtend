@@ -1,10 +1,12 @@
 # EllesmereUI Extend Bags
 
-Read-only personal bank snapshots using the existing **EllesmereUIBags**, for Retail and WoW Forever.
+Read-only personal bank snapshots using **EllesmereUIBags** or **EUI Standalone Bags**, for Retail and WoW Forever.
 
 ## Install and open
 
-Install the ZIP as `Interface/AddOns/EllesmereUIExtendBags/`. Requires **EllesmereUI** and **EllesmereUIBags**, not another Extend addon or a separate Core addon. For source installs, copy `Bags/` to that folder and embed `Core/Core.lua`, `Core/Sync.lua` and `Core/Options.lua` under `Shared/`.
+Install the ZIP as `Interface/AddOns/EllesmereUIExtendBags/`. Enable either **EllesmereUI** and its **EllesmereUIBags** module, or **EllesmereUI: Standalone Bags** (`EUIStandaloneBags`, inspected against v9.4). No other Extend addon or separate Core addon is required. For source installs, copy `Bags/` to that folder and embed `Core/Core.lua`, `Core/Sync.lua` and `Core/Options.lua` under `Shared/`.
+
+Standalone Bags disables itself when the full suite or another EUI standalone is enabled; Extend respects that guard and prefers the full suite when present. Without an active Bags host, no viewer/button or bank capture starts, a login message explains the requirement, and saved profiles/inventory remain intact. Standalone settings, category assignments, media and scrollbar helpers are read from that host, without global aliases or native settings migration. Switching hosts preserves Extend's saved profiles and bank snapshots, but uses the new host's current categories/display preferences. Update installed Extend addons together so their embedded shared core supports the standalone settings hub.
 
 Includes its own icon for WoW's AddOns list in `Media/Icon.tga`.
 

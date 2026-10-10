@@ -34,8 +34,9 @@ function core.GetHost()
     if EUI_CLIENT_BLOCKED then return nil end
     if _G.EllesmereUI then return _G.EllesmereUI end
     if not _G.__EUISTANDALONE_NAMEPLATES_INERT then
-        return _G.EUICoreStandaloneNameplates
+        if _G.EUICoreStandaloneNameplates then return _G.EUICoreStandaloneNameplates end
     end
+    if not _G.__EUISTANDALONE_BAGS_INERT then return _G.EUICoreStandaloneBags end
 end
 
 local function Secret(value)

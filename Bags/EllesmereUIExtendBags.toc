@@ -5,7 +5,7 @@
 ## Notes: Read-only personal bank snapshots; opens on the current character with alt browsing.
 ## Author: jrosco
 ## Version: 0.1.0
-## Dependencies: EllesmereUI, EllesmereUIBags
+## OptionalDeps: EllesmereUI, EllesmereUIBags, EUIStandaloneBags
 ## SavedVariables: EllesmereUIExtendBagsProfiles, EllesmereUIExtendBagsDB
 ## IconTexture: Interface\AddOns\EllesmereUIExtendBags\Media\Icon.tga
 

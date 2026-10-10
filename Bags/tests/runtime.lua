@@ -1,3 +1,4 @@
+local standalone = ... == "standalone"
 SlashCmdList, UISpecialFrames = {}, {}
 local checks, frames, modules = 0, {}, {}
 local secret = {}
@@ -97,10 +98,14 @@ EllesmereUIExtend = {
     RegisterModule = function(spec) modules.options = spec end,
 }
 local rows, rightRows = {}, {}
-EllesmereUI = { IsUnlockModeActive = function() return editing end, Widgets = {
+local EllesmereUI = { IsUnlockModeActive = function() return editing end, Widgets = {
     SectionHeader = function() return {}, 30 end,
     DualRow = function(_, _, _, left, right) rows[#rows + 1] = left; if right then rightRows[#rightRows + 1] = right end; return {}, 40 end,
 } }
+if standalone then
+    _G.EllesmereUI = nil
+    EUICoreStandaloneBags = EllesmereUI
+else _G.EllesmereUI = EllesmereUI end
 local borders = 0
 EllesmereUI.MakeBorder = function(_, r, g, b, a)
     Check(r == 1 and g == 1 and b == 1 and a == 0.15, "bank skin uses native EUI border contract")
@@ -462,9 +467,11 @@ specialItem.quality = 0
 layouts = ns.Layout({ { item = specialItem } })
 Check(layouts.headings[1].text == "Junk", "junk precedes equipment set")
 EllesmereUIDB = { bagItemAssignments = { [200] = "Trade Goods" } }
+if standalone then EUICoreStandaloneBagsDB, EllesmereUIDB = EllesmereUIDB, nil end
 layouts = ns.Layout({ { item = specialItem } })
 Check(layouts.headings[1].text == "Materials", "current EUI assignment overrides captured special membership")
 EllesmereUIDB = nil
+EUICoreStandaloneBagsDB = nil
 EUI_CategoryManager = nil
 layouts = ns.Layout(entries)
 Check(layouts.headings[1].text == "Other", "missing category API retains every item in catch-all")
@@ -573,6 +580,10 @@ EllesmereUI._ModuleNS = { EllesmereUIBags = {
         return track, Widget("Texture", nil, track), function() updates = updates + 1 end
     end,
 } }
+if standalone then
+    EllesmereUI._ModuleNS.EUIStandaloneBags = EllesmereUI._ModuleNS.EllesmereUIBags
+    EllesmereUI._ModuleNS.EllesmereUIBags = nil
+end
 assert(loadfile("Bags/Viewer.lua"))("EllesmereUIExtendBags", ns)
 settings.display = "list"
 scan[1].numSlots = 100
@@ -1380,4 +1391,5 @@ Check(#rows == 6 and rows[1].type == "spacer" and rows[1].tooltip == rows[1].tex
     "older EUI without paragraph helpers still exposes read-only About information")
 EllesmereUI.Widgets.Spacer, EllesmereUI.MakeFont, EllesmereUI.Widgets.SectionHeader = oldSpacer, oldFont, oldSection
 EllesmereUIExtend.GetSettings, ns.ToggleViewer = oldSettings, oldToggle
+if standalone then _G.ExtendBagsTest = { ns = ns, frames = frames, host = EllesmereUI, options = modules.options } end
 print("PASS: " .. checks .. " Bags capture, capability, read-only viewer and UI checks")

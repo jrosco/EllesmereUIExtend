@@ -63,6 +63,7 @@ local function Poll(_, delta)
     if ns.Capture then ns.Capture() end
 end
 local function StartBank()
+    if not ns.GetHost() then return end
     ns.BankOpen, ns.Pending, ns.CapturedThisVisit = true, nil, false
     elapsed = 0
     frame:SetScript("OnUpdate", Poll)
@@ -76,12 +77,16 @@ for _, event in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_LOGOUT", "BANKF
     "BANK_TABS_CHANGED", "BANK_TAB_SETTINGS_UPDATED", "PLAYER_REGEN_ENABLED", "GET_ITEM_INFO_RECEIVED" }) do
     pcall(frame.RegisterEvent, frame, event)
 end
-if EllesmereUI and EllesmereUI.IS_FOREVER then pcall(frame.RegisterEvent, frame, "BAG_CONTAINER_UPDATE") end
+local host = ns.GetHost()
+if host and host.IS_FOREVER then pcall(frame.RegisterEvent, frame, "BAG_CONTAINER_UPDATE") end
 frame:SetScript("OnEvent", function(_, event, name)
     if event == "ADDON_LOADED" then
         if name == addonName and ns.InitializeDB then ns.InitializeDB() end
     elseif event == "PLAYER_LOGIN" then
         if ns.InitializeDB then ns.InitializeDB() end
+        if not ns.GetHost() and type(print) == "function" then
+            print("EllesmereUI Extend Bags: enable EllesmereUI and its Bags module, or EUI Standalone Bags. Saved snapshots are unchanged.")
+        end
         addon.Refresh()
     elseif event == "BANKFRAME_OPENED" then
         StartBank()

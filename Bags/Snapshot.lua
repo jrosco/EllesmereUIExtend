@@ -71,7 +71,8 @@ local function Discover()
         if not ok then return end
         -- Retail promises an array: nil means unavailable, not permission to
         -- invent a partial tab list. EUI's custom Forever adapter allows nil.
-        if data == nil and not (EllesmereUI and EllesmereUI.IS_FOREVER) then return end
+        local host = ns.GetHost()
+        if data == nil and not (host and host.IS_FOREVER) then return end
         metadata = data
     end
     if metadata ~= nil then

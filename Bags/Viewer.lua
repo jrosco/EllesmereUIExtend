@@ -1,5 +1,6 @@
 local _, ns = ...
 if not ns.Addon then return end
+local EllesmereUI = ns.GetHost() -- private adapter, never a global host alias
 local viewer, selectedCharacter, currentCharacter, selectedTab = nil, nil, nil, nil
 local selectedCategory
 local resetScroll = true
@@ -20,7 +21,8 @@ function ns.DisplayMode()
     return profile.bankCompactView == true and "compact" or "grid"
 end
 local function Category(item, cats, manager)
-    local assignments = EllesmereUIDB and EllesmereUIDB.bagItemAssignments
+    local hostDB = ns.HostDB()
+    local assignments = hostDB and hostDB.bagItemAssignments
     local assigned = assignments and assignments[item.itemID]
     for i, cat in ipairs(cats) do
         if assigned and cat._defaultName == assigned then return i end
@@ -188,7 +190,7 @@ end
 local function Skin(frame)
     local bg = frame:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
-    bg:SetTexture("Interface\\AddOns\\EllesmereUI\\media\\modern_blizz.png")
+    bg:SetTexture(ns.MediaPath("modern_blizz.png"))
     local overlay = frame:CreateTexture(nil, "BACKGROUND", nil, 1)
     overlay:SetAllPoints()
     overlay:SetColorTexture(0, 0, 0, 0.25)
@@ -339,7 +341,7 @@ local function Build()
     f.resize.icon:SetAllPoints()
     f.resize.icon:SetDesaturated(true)
     local resizeLoaded = ns.Read(f.resize.icon.SetTexture, f.resize.icon,
-        "Interface\\AddOns\\EllesmereUI\\media\\icons\\resize_element.png")
+        ns.MediaPath("icons\\resize_element.png"))
     f.resize.label:SetText(resizeLoaded == true and "" or "/")
     f.resize:SetScript("OnMouseDown", function(_, button)
         if button ~= "LeftButton" or ns.Editing() or WindowSettings().locked then return end
@@ -518,7 +520,7 @@ local function Build()
         if EllesmereUI and EllesmereUI.HideWidgetTooltip then EllesmereUI.HideWidgetTooltip() end
     end)
     local sidebarArt = ns.Read(f.sidebarToggle.icon.SetTexture, f.sidebarToggle.icon,
-        "Interface\\AddOns\\EllesmereUI\\media\\icons\\eui-arrow-left.png")
+        ns.MediaPath("icons\\eui-arrow-left.png"))
     f.sidebarToggle.hasArt = sidebarArt == true
     local sidebarSF = CreateFrame("ScrollFrame", nil, sidebar)
     sidebarSF:SetPoint("TOPLEFT", 0, -24)
@@ -589,7 +591,7 @@ local function Build()
     child:EnableMouse(false)
     sf:SetScrollChild(child)
     f.scrollFrame, f.scrollChild = sf, child
-    local module = EllesmereUI and EllesmereUI._ModuleNS and EllesmereUI._ModuleNS.EllesmereUIBags
+    local module = ns.HostModule()
     if module and type(module.AttachGridScrollbar) == "function" then
         -- Same helper/contract used by EUI_Bank; only our own frames are passed.
         local track, _, update = module.AttachGridScrollbar(f, sf, true, true)
@@ -722,7 +724,7 @@ function ns.RefreshViewer()
         f.geometrySettings, f.geometryWindow = settings, settings.window
     end
     local iconLoaded = ns.Read(f.lock.icon.SetTexture, f.lock.icon,
-        "Interface\\AddOns\\EllesmereUI\\media\\icons\\eui-lock-" .. (window.locked and "locked" or "unlocked") .. ".png")
+        ns.MediaPath("icons\\eui-lock-" .. (window.locked and "locked" or "unlocked") .. ".png"))
     f.lock.label:SetText(iconLoaded == true and "" or (window.locked and "L" or "U"))
     f.lock.tip = window.locked and "Unlock window position and size." or "Lock window position and size."
     f:SetMovable(not window.locked and not ns.Editing())
@@ -954,12 +956,17 @@ function ns.RefreshViewer()
 end
 
 function ns.ToggleViewer()
-    if ns.Editing() then return end
+    if not ns.GetHost() or ns.Editing() then return end
     local f = viewer or Build()
     if f:IsShown() then f:Hide() else f:Show(); f:Raise() end
 end
 
 function ns.AttachButton()
+    if not ns.GetHost() then
+        if ns.BagButton then ns.BagButton:Hide() end
+        if viewer then viewer:Hide() end
+        return
+    end
     if type(InCombatLockdown) == "function" then
         local combat, ok = ns.Read(InCombatLockdown)
         if not ok or combat ~= false then return end

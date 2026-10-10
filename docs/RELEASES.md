@@ -26,7 +26,7 @@ The planner generates matching feature tags and GitHub prerelease flags. Unsuppo
 
 Each ZIP contains **one** installed addon folder: `EllesmereUIExtendNameplates/`, `EllesmereUIExtendQuestTracker/` or `EllesmereUIExtendBags/`, including `Shared/Core.lua`, `Shared/Sync.lua`, `Shared/Options.lua`, its README and license. No feature bundles/requires another extension or creates a standalone Core folder. Tests and upstream addons are excluded.
 
-Quest Tracker and Bags declare **`ellesmereui`** as a required CurseForge dependency; enable the matching Quest Tracker/Bags module in game. Nameplates declares **`ellesmereui`** and **`eui-nameplates`** as optional alternative dependencies, since requiring the suite would disable upstream's standalone. Users must enable either the suite's Nameplates module or Standalone Nameplates; the TOC orders installed hosts before Extend. Lua addon-folder names are not CurseForge slugs—do not add nonexistent module relations such as `ellesmereui-nameplates`.
+Quest Tracker declares **`ellesmereui`** as a required CurseForge dependency; enable its Quest Tracker module in game. Nameplates declares **`ellesmereui`** and **`eui-nameplates`** as optional alternative dependencies; Bags similarly declares **`ellesmereui`** and **`eui-bags`**. Requiring the suite would disable upstream's standalone. Users must enable either the corresponding suite module or standalone addon; the TOCs order installed hosts before Extend. Upstream blocks multiple active EUI standalones; use the full suite for multiple modules. Lua addon-folder names are not CurseForge slugs—do not add nonexistent module relations such as `ellesmereui-nameplates`.
 
 Each feature also includes its own `Media/Icon.tga` for the in-game AddOns list. Local and release packaging preserve the feature's `Media/` directory; icons use uncompressed 32-bit, power-of-two TGA textures for both clients.
 
@@ -87,7 +87,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Package.ps1 -Featu
 
 ### Bags source version and release channels
 
-Build locally with `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Package.ps1 -Feature Bags`. The archive contains only `EllesmereUIExtendBags/`, its embedded Shared modules, README and license. Its TOC targets the same Retail/Forever interfaces and requires EllesmereUI plus EllesmereUIBags. Inventory uses `EllesmereUIExtendBagsDB`; shared settings use `EllesmereUIExtendBagsProfiles`.
+Build locally with `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Package.ps1 -Feature Bags`. The archive contains only `EllesmereUIExtendBags/`, its embedded Shared modules, README and license. Its TOC targets the same Retail/Forever interfaces and orders either EllesmereUI with EllesmereUIBags or EUIStandaloneBags before Extend using optional dependencies. A working Bags host is still required. Inventory uses `EllesmereUIExtendBagsDB`; shared settings use `EllesmereUIExtendBagsProfiles`.
 
 The release planner/workflow includes Bags using `bags-v...` tags, `.pkgmeta-bags`, generated `docs/BAGS-CHANGELOG.md` notes and optional `CURSEFORGE_BAGS_PROJECT_ID`. Leave that variable unset for GitHub-only publishing; configuring a CurseForge project and its repository variable is a separate operator action. Do not publish before both-client bank/viewer checks. Existing feature packaging metadata excludes Bags to preserve independent install ownership.
 

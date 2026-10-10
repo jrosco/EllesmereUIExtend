@@ -104,6 +104,15 @@ class ReleasePlanTests(unittest.TestCase):
         for feature in planner.FEATURES:
             self.assertIsNone(self.plan(feature))
 
+    def test_notes_describe_alternative_hosts_without_relaxing_questtracker(self):
+        self.commit("fix(shared): update embedded core", "Core/Core.lua")
+        for feature in ("nameplates", "bags"):
+            with self.subTest(feature=feature):
+                self.assertIn(f"or EUI Standalone {planner.FEATURES[feature]}", self.plan(feature)["notes"])
+        quest_notes = self.plan("questtracker")["notes"]
+        self.assertIn("Requires EllesmereUI and its matching feature module.", quest_notes)
+        self.assertNotIn("Standalone", quest_notes)
+
     def test_bags_first_release_channel_from_plain_source_version(self):
         self.git("tag", "-d", "bags-v1.0.0")
         toc = Path("Bags/EllesmereUIExtendBags.toc")

@@ -84,9 +84,11 @@ def notes_for(entries, feature, base, tag):
                 for line in entry["message"].splitlines():
                     if re.match(r"^BREAKING[ -]CHANGE: ", line):
                         groups[label].append("  - " + line.split(": ", 1)[1])
+    requirement = (f"Requires EllesmereUI with its {FEATURES[feature]} module, or EUI Standalone {FEATURES[feature]}."
+                   if feature in ("nameplates", "bags") else "Requires EllesmereUI and its matching feature module.")
     lines = [f"# {FEATURES[feature]} {tag.split('-v', 1)[1]}", "",
              "For Retail and WoW Forever. Shared Extend profiles are embedded.",
-             "Requires EllesmereUI and its matching feature module.", ""]
+             requirement, ""]
     if base:
         lines.extend([f"Changes since `{base}`.", ""])
     for label in ("Breaking changes", "Features", "Fixes", "Performance", "Other changes"):

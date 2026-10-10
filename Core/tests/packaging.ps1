@@ -23,13 +23,15 @@ foreach ($path in $archives) {
         $pkgmeta = Get-Content -LiteralPath (Join-Path $root ".pkgmeta-$pkgmetaName") -Raw
         Check ($pkgmeta -match '(?m)^\s+- \.agents\r?$') 'Release metadata excludes agent skills'
         $toc = Get-Content -LiteralPath (Join-Path $root "$name/$identity.toc") -Raw
-        if ($name -eq 'Nameplates') {
-            Check ($toc -match '(?m)^## OptionalDeps: EllesmereUI, EllesmereUINameplates, EUIStandaloneNameplates\r?$' -and
-                $toc -notmatch '(?m)^## Dependencies:') 'Either nameplate host loads first without requiring the full suite'
-            Check ($pkgmeta -match '(?m)^optional-dependencies:\r?$' -and $pkgmeta -match '(?m)^  - eui-nameplates\r?$' -and
+        if ($name -in @('Nameplates', 'Bags')) {
+            Check ($toc -match "(?m)^## OptionalDeps: EllesmereUI, EllesmereUI$name, EUIStandalone$name\r?`$" -and
+                $toc -notmatch '(?m)^## Dependencies:') 'Either feature host loads first without requiring the full suite'
+            $standaloneSlug = if ($name -eq 'Bags') { 'eui-bags' } else { 'eui-nameplates' }
+            Check ($pkgmeta -match '(?m)^optional-dependencies:\r?$' -and $pkgmeta -match "(?m)^  - $standaloneSlug\r?`$" -and
+                $pkgmeta -match '(?m)^  - ellesmereui\r?$' -and
                 $pkgmeta -notmatch '(?m)^required-dependencies:') 'Addon managers offer alternative hosts without forcing the conflicting suite'
         } else {
-            Check ($toc -match "## Dependencies: EllesmereUI, EllesmereUI$name\r?\n") 'Quest Tracker and Bags retain their corresponding upstream dependencies'
+            Check ($toc -match "## Dependencies: EllesmereUI, EllesmereUI$name\r?\n") 'Quest Tracker retains its corresponding upstream dependencies'
         }
         $savedVariables = if ($name -eq 'Bags') { "${identity}Profiles, ${identity}DB" } else { "${identity}Profiles" }
         Check ($toc -match "## SavedVariables: $savedVariables\r?\n") 'Each feature saves its own profile snapshot and only its own inventory database'

@@ -1,3 +1,4 @@
+local standalone = ... == "standalone"
 SlashCmdList = {}
 local frames, checks, registrations = {}, 0, 0
 local function Check(value, label) checks = checks + 1; assert(value, label) end
@@ -10,7 +11,8 @@ function CreateFrame()
     frames[#frames + 1] = f
     return f
 end
-EllesmereUI = { RegisterPlugin = function() registrations = registrations + 1; return true end }
+local host = { RegisterPlugin = function() registrations = registrations + 1; return true end }
+if standalone then EllesmereUI, EUICoreStandaloneBags = nil, host else EllesmereUI = host end
 local function Event(event, name)
     for _, f in ipairs(frames) do if f.events[event] and f.scripts.OnEvent then f.scripts.OnEvent(f, event, name) end end
 end

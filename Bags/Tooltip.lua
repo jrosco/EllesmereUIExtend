@@ -4,6 +4,7 @@ if not ns.Addon then return end
 local marked = setmetatable({}, { __mode = "k" })
 local hookedTooltip, processorInstalled, legacyInstalled
 local function Enabled()
+    if not ns.GetHost() then return false end
     local settings = ns.Addon.Settings()
     return settings and not ns.Secret(settings.tooltipBankCounts) and settings.tooltipBankCounts == true
 end
@@ -62,7 +63,7 @@ local function TooltipContext(tooltip)
     -- tooltips remain untouched; snapshot items append explicitly in Viewer.lua.
     for _ = 1, 12 do
         if not owner then return end
-        if owner == EUI_Bags or owner == EUI_ReagentBagFrame then return "bag" end
+        if owner == EUI_Bags or owner == EUI_ReagentBagFrame or owner == EUI_BagsReagent then return "bag" end
         if owner == EUI_BankFrame then return "bank" end
         owner = ns.Read(owner.GetParent, owner)
     end
@@ -86,6 +87,7 @@ local function LegacyItem(tooltip)
     if marked[tooltip] then ns.Read(tooltip.Show, tooltip) end
 end
 function ns.InstallCountTooltips()
+    if not ns.GetHost() then return end
     local tooltip = GameTooltip
     if not tooltip or type(tooltip.HookScript) ~= "function" then return end
     if hookedTooltip ~= tooltip then
