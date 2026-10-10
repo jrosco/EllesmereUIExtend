@@ -51,6 +51,9 @@ Check(startersByName["Non Target"].conditions.target.no == true
     and startersByName["Non Target"].conditions.target.yes == nil,
     "starter non-target selects other units and no selected target, never current target")
 assert(api.SelectProfile("Default"))
+Check(startersByName["Non Target"].style.healthEnabled == false, "starter non-target disables health-bar override")
+Check(startersByName["Non Target"].style.opacity == 75, "starter non-target uses 75% opacity")
+Check(startersByName["Non Target"].style.scale == 100, "starter non-target uses 100% size")
 CheckTargets("switch")
 -- Model serialization/reload with a fresh root and fresh runtime locals.
 EllesmereUIExtendDB = Copy(EllesmereUIExtendDB)
