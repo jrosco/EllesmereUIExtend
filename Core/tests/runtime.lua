@@ -25,7 +25,7 @@ local invalidated, rebuilds = {}, 0
 EllesmereUI = {
     RegisterPlugin = function(id, spec)
         Check(id == "EllesmereUIExtend", "one shared plugin ID")
-        Check(spec.label == "Extend" and not spec.label:lower():find("^ellesmere")
+        Check(spec.label == "Extend Addons" and not spec.label:lower():find("^ellesmere")
             and not spec.label:lower():find("^eui"), "shared label respects EUI's reserved-label policy")
         registrations, registered = registrations + 1, spec
         return true

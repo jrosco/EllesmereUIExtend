@@ -12,7 +12,7 @@ function CreateFrame()
     return frame
 end
 EllesmereUI = { RegisterPlugin = function(id, spec)
-    assert(id == "EllesmereUIExtend" and spec.label == "Extend")
+    assert(id == "EllesmereUIExtend" and spec.label == "Extend Addons")
     registrations = registrations + 1
     return true
 end }

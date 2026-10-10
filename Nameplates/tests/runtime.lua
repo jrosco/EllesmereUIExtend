@@ -611,7 +611,7 @@ assert(loadfile("Nameplates/Preview.lua"))("EllesmereUIExtendNameplates", namesp
 assert(loadfile("Nameplates/Options.lua"))("EllesmereUIExtendNameplates", namespace)
 Fire("PLAYER_LOGIN")
 assert(registeredID == "EllesmereUIExtend")
-assert(spec.label == "Extend")
+assert(spec.label == "Extend Addons")
 assert(spec.modules[1].key == "NameplateStyle" and spec.modules[1].title == "Nameplate")
 assert(spec.modules[1].pages[1] == "Style", "Nameplate must open on its Style tab")
 assert(spec.modules[1].pages[2] == "Sharing" and spec.modules[2].key == "Profiles")

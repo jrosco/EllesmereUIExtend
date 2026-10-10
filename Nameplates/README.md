@@ -1,6 +1,6 @@
 # EllesmereUI Extend Nameplates
 
-Rule-based styling for EllesmereUI nameplates on Retail and WoW Forever, configured under **Extend > Nameplate > Style**. This is a separate extension page, not a replacement for EUI's built-in Nameplates settings.
+Rule-based styling for EllesmereUI nameplates on Retail and WoW Forever, configured under **Extend Addons > Nameplate > Style**. This is a separate extension page, not a replacement for EUI's built-in Nameplates settings.
 
 ## Install and open
 
@@ -55,7 +55,7 @@ State checkboxes require EUI or Classic WoW UI nameplate style; Blizzard/WoW For
 
 ## Profiles, sharing and commands
 
-**Extend > Profiles** or `/eextend` manages character-assigned profiles shared with other installed extensions. **Reset Nameplate** resets only this feature's active section. Persistence, independent edits and uninstall behavior are described in [Core](../Core/README.md); old standalone/legacy databases remain untouched.
+**Extend Addons > Profiles** or `/eextend` manages character-assigned profiles shared with other installed extensions. **Reset Nameplate** resets only this feature's active section. Persistence, independent edits and uninstall behavior are described in [Core](../Core/README.md); old standalone/legacy databases remain untouched.
 
 **Sharing > Export/Import Rule Set** copies rules only. Import replaces the active profile's rules and selects the first; it does not change assignments or the global enable toggle. Only current `!EUI_NPEX_RULES2!` codes are supported, separate from EUI full-profile exports; older development formats are not converted.
 
