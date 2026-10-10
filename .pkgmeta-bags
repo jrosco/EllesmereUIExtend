@@ -1,0 +1,31 @@
+package-as: EllesmereUIExtendBags
+
+move-folders:
+  EllesmereUIExtendBags/Core: EllesmereUIExtendBags/Bags/Shared
+  EllesmereUIExtendBags/Bags: EllesmereUIExtendBags
+
+ignore:
+  - .agents
+  - .github
+  - .gitignore
+  - .pkgmeta-nameplates
+  - .pkgmeta-questtracker
+  - .pkgmeta-bags
+  - AGENTS.md
+  - README.md
+  - TESTING.md
+  - Nameplates
+  - QuestTracker
+  - tools
+  - docs
+  - dist
+  - Core/tests
+  - Bags/tests
+
+manual-changelog:
+  filename: docs/BAGS-CHANGELOG.md
+  markup-type: markdown
+
+optional-dependencies:
+  - ellesmereui
+  - eui-bags

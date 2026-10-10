@@ -12,6 +12,8 @@ Release packages target **Retail 12.1.0** and **WoW Forever 1.60.1** with the sa
 
 For source installs, copy `Nameplates/` into that addon folder and put `Core/Core.lua`, `Core/Sync.lua` and `Core/Options.lua` in its `Shared/` subfolder.
 
+Source TOCs use the placeholder version `0.0.0`; published addon ZIPs receive the planned release version. See [Releases](../docs/RELEASES.md) for packaging details.
+
 The in-game AddOns list uses this extension's own icon from `Media/Icon.tga`, included in release packages and source installs.
 
 ## Rules and matching

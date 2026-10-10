@@ -19,7 +19,9 @@ TOC, and any nested guidance before changing tests or runtime code.
    restoration, missing/throwing/secret APIs, capability gates and stale UI
    callbacks as applicable. Do not weaken assertions to conceal a failure.
 4. For shared settings or persistence changes, include `Core/tests/runtime.lua`
-   and `Core/tests/persistence.lua`. Test each feature alone and both load orders.
+   and `Core/tests/persistence.lua`. Include `Bags/tests/profiles.lua` for Bags
+   ownership and all three-feature load orders. Test each feature alone, relevant
+   pairs in both orders, and all six orders when all three are affected.
 5. Include packaging checks when changing TOCs, load order, shared embedding,
    dependencies, source layout or release metadata.
 
@@ -32,6 +34,8 @@ Use native Lua when available; otherwise on Windows use `npx.cmd`, not
 npx.cmd --yes --package fengari-node-cli fengari Core/tests/persistence.lua
 npx.cmd --yes --package fengari-node-cli fengari Nameplates/tests/runtime.lua
 npx.cmd --yes --package fengari-node-cli fengari QuestTracker/tests/runtime.lua
+npx.cmd --yes --package fengari-node-cli fengari Bags/tests/runtime.lua
+npx.cmd --yes --package fengari-node-cli fengari Bags/tests/profiles.lua
 ```
 
 For an aggregate mock-only run:
@@ -55,6 +59,20 @@ before use if its behavior has changed. Packaging checks rebuild local ZIPs.
 `-UnitOnly` excludes the upstream integration suites listed in `TESTING.md`;
 report these as skipped, not passed. Never edit upstream files to make tests pass.
 
+## Bags coverage
+
+- `Bags/tests/runtime.lua` covers bank access boundaries, stable complete scans,
+  empty storage, deposits/withdrawals, detached saved data, restricted/missing/
+  throwing getters, personal-only capture, Forever fallbacks, current-character opening and alt browsing,
+  tab/search/pagination, saved-link tooltips, read-only icons and editor locks.
+- `Bags/tests/profiles.lua` covers Bags alone, pairs, all six three-feature load
+  orders, independent profile persistence, reset isolation and Bags-alone reload.
+- Both suites are mock-only and included in `tools/Test.ps1`. Packaging is covered
+  by `Core/tests/packaging.ps1`, which rebuilds all three independent ZIPs.
+- Preserve inventory across UI profile changes/reset and retain the last good
+  snapshot on incomplete scans. Test that closing the bank stops polling without
+  querying containers after access closes; rapid close can retain an older scan.
+
 ## Interpret results
 
 - Fengari may print a Lua failure while exiting successfully. Require the
@@ -72,6 +90,17 @@ Mocks cannot reproduce Retail's secret-value VM, native rendering, secure
 hardware clicks or EUI's native menu/mover behavior. Select relevant checks from
 `TESTING.md` for both Retail and Forever, including unsupported-API fallbacks,
 combat transitions, pooled frame reuse, restoration and editor locks.
+
+For Bags, verify banker visits, every supported personal tab/bag and reagent
+storage, empty banks, character relogs, timestamps, item names/IDs, pagination,
+tooltips and non-actionable icons. Verify uncaptured characters see an empty
+viewer with **Visit the banker first** on opening, can arrow to captured alts and
+back, and that reopening always restores the current character. Refreshes must
+preserve an intentionally selected alt; the button remains clickable.
+Exclude portable Warband/guild/carried reagent
+storage. Check the attached button at screen edges/scales and all EUI bag modes,
+combat, Edit Mode and native taint on both clients. See the Bags checklist in
+`TESTING.md`; mocks do not prove live bank timing or rendering.
 
 Report exact commands, observed PASS/failure output, skipped suites, dependency
 blockers and remaining in-game checks. Distinguish automated results from

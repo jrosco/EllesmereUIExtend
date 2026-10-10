@@ -22,6 +22,8 @@ function core.RegisterOwner(name)
         owners[name] = "EllesmereUIExtendNameplatesProfiles"
     elseif name == "EllesmereUIExtendQuestTracker" then
         owners[name] = "EllesmereUIExtendQuestTrackerProfiles"
+    elseif name == "EllesmereUIExtendBags" then
+        owners[name] = "EllesmereUIExtendBagsProfiles"
     end
 end
 core.RegisterOwner(addonName)
@@ -32,8 +34,9 @@ function core.GetHost()
     if EUI_CLIENT_BLOCKED then return nil end
     if _G.EllesmereUI then return _G.EllesmereUI end
     if not _G.__EUISTANDALONE_NAMEPLATES_INERT then
-        return _G.EUICoreStandaloneNameplates
+        if _G.EUICoreStandaloneNameplates then return _G.EUICoreStandaloneNameplates end
     end
+    if not _G.__EUISTANDALONE_BAGS_INERT then return _G.EUICoreStandaloneBags end
 end
 
 local function Secret(value)

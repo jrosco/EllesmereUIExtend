@@ -49,6 +49,23 @@ persistence issues.
 
 ## Fix only when authorized
 
+### Bags snapshot failures
+
+- Trace access gates and bank-open/close events before inspecting captured data.
+  Reproduce staged versus committed scans, asynchronous tab/slot/link readiness,
+  empty storage and updates during the visit. A stopped poller after close is
+  intentional; do not query closed bank containers to make a test pass.
+- Distinguish `EllesmereUIExtendBagsDB` inventory from
+  `EllesmereUIExtendBagsProfiles` shared settings. Inspect both when debugging
+  reload/profile issues, but never merge inventory into profile synchronization.
+- Compare Retail metadata handling with Forever's capability fallback; missing
+  tab data must not silently replace a good snapshot or include account storage.
+- Use `Bags/tests/runtime.lua` for capture/viewer/client gates and
+  `Bags/tests/profiles.lua` for owner persistence and install/load-order cases.
+  Mock passes are not evidence of native banker timing or taint-safe rendering.
+
+### Authorized fixes
+
 1. Propose or implement the smallest change that addresses the demonstrated
    root cause while preserving supported Retail and Forever behavior.
 2. For a runtime defect, add a focused regression that fails before the fix and

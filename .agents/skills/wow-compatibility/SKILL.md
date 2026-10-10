@@ -60,6 +60,28 @@ before editing and preserve unrelated work.
 
 ## Validation and report
 
+### Bank snapshot compatibility
+
+- Use `Bags/Compatibility.lua` guards and verify `C_Container` slot/item getters,
+  `C_Bank` access/tab metadata, `Enum.BagIndex`, interaction types, bank events,
+  identity and clock APIs through MCP and actual upstream EUI bank discovery.
+  Do not equate Retail API documentation with Forever's custom implementation.
+- Discover only exposed personal bank tabs/bags and separate reagent storage;
+  never guess numeric bag IDs or include carried reagent bags, Warband or guild
+  storage. Gate portable account-only access even when bank-open events fire.
+- Bank data is asynchronous. Require complete stable scans, distinguish valid
+  empty storage from missing counts/links, and retain prior data on restricted,
+  throwing or unavailable reads. Check readability before copying/formatting
+  item fields, bank metadata, character keys, permissions or timestamps.
+- Retail nil tab metadata is unavailable data. The current Forever adapter can
+  fall back to exposed enums; enum-only scans must not silently drop previously
+  captured tabs. Preserve these client-specific gates and verify them in game.
+- Stop scanning on bank close/logout; never query bank containers afterward to
+  fabricate a final snapshot. Stored-link tooltips must not read current live
+  container locations. Viewer icons must remain non-actionable in and out of combat.
+
+### Verification
+
 Use the `addon-testing` skill when available to select regressions for readable,
 secret, missing and throwing APIs; restoration/reuse; capability gates; stale
 callbacks; and combat recovery. Run relevant suites and `git diff --check`.

@@ -3,8 +3,20 @@ name: Create addon releases
 on:
   workflow_dispatch:
     inputs:
+      nameplates:
+        description: Release Nameplates
+        type: boolean
+        default: true
+      questtracker:
+        description: Release Quest Tracker
+        type: boolean
+        default: true
+      bags:
+        description: Release Bags
+        type: boolean
+        default: true
       channel:
-        description: Release channel
+        description: Release channel for selected eligible addons
         type: choice
         options: [alpha, beta, stable]
         default: alpha
@@ -41,11 +53,24 @@ jobs:
           exit 1
       - name: Test release planner
         run: python3 -m unittest discover -s tools/tests -p 'test_release_plan.py' -v
-      - name: Calculate feature releases
+      - name: Calculate selected addon releases
         id: plan
         env:
           CHANNEL: ${{ inputs.channel }}
-        run: python3 tools/release_plan.py --channel "$CHANNEL" --output release-plan
+          SELECT_NAMEPLATES: ${{ inputs.nameplates }}
+          SELECT_QUESTTRACKER: ${{ inputs.questtracker }}
+          SELECT_BAGS: ${{ inputs.bags }}
+        run: |
+          set -euo pipefail
+          features=()
+          if [[ "$SELECT_NAMEPLATES" == 'true' ]]; then features+=(nameplates); fi
+          if [[ "$SELECT_QUESTTRACKER" == 'true' ]]; then features+=(questtracker); fi
+          if [[ "$SELECT_BAGS" == 'true' ]]; then features+=(bags); fi
+          if (( ${#features[@]} == 0 )); then
+            echo '::error::Select at least one addon to release.'
+            exit 1
+          fi
+          python3 tools/release_plan.py --channel "$CHANNEL" --features "${features[@]}" --output release-plan
       - uses: actions/upload-artifact@v4
         with:
           name: release-plan
@@ -62,7 +87,7 @@ jobs:
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       # Fetch only this commit, without other feature tags at the same SHA.
-      # The packager must see this feature's tag, not the other addon's tag.
+      # The packager must see this feature's tag, not another addon's tag.
       - uses: actions/checkout@v7
         with:
           ref: ${{ matrix.sha }}
