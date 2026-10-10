@@ -102,7 +102,7 @@ Mocks do not reproduce Retail's secret-value VM, native rendering/menu/mover eng
 
 ### Shared profiles
 
-- Install each feature alone, then both; verify one Extend hub, correct sections and `/eextend`.
+- Install each feature alone, then both; verify one Extend Addons hub, correct sections and `/eextend`.
 - Create/select/rename/delete profiles across characters; reset one feature without changing the other. Check Edit Mode locks and open-popup profile changes.
 - Reload/logout, edit each feature in separate sessions with the other disabled, then enable both. Verify merged edits, renames, deletions and absent sections; test uninstall/reinstall and same-name creations.
 

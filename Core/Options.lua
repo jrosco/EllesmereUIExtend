@@ -96,10 +96,10 @@ function core.RegisterOptions()
         return a.key < b.key
     end)
     local ok, result = pcall(EllesmereUI.RegisterPlugin, core.PluginID,
-        { label = "Extend", modules = specs })
+        { label = "Extend Addons", modules = specs })
     core.pluginRegistered = ok and result == true
     core.pluginRegistrationError = core.pluginRegistered and nil
-        or (ok and "EUI rejected the Extend settings hub." or tostring(result))
+        or (ok and "EUI rejected the Extend Addons settings hub." or tostring(result))
     return core.pluginRegistered
 end
 
