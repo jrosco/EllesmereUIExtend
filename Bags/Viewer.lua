@@ -615,9 +615,9 @@ local function Build()
             local entry = self.entry
             if not entry or not GameTooltip then return end
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            if ns.ClearCountTooltip then ns.ClearCountTooltip(GameTooltip) end
             if not pcall(GameTooltip.SetHyperlink, GameTooltip, entry.item.link) then HideTooltip(); return end
-            GameTooltip:AddLine("Snapshot: " .. entry.tab .. " | Slot " .. entry.slot, 0.05, 0.82, 0.62)
-            GameTooltip:AddLine("Read only — visit a banker to move items.", 0.7, 0.7, 0.7)
+            if ns.AddBankSnapshotCount then ns.AddBankSnapshotCount(GameTooltip, entry.item.itemID, true) end
             GameTooltip:Show()
         end)
         button:SetScript("OnLeave", HideTooltip)
@@ -631,12 +631,14 @@ local function Build()
     f.total:SetPoint("BOTTOM", 70, 18)
     f:SetScript("OnHide", function()
         CloseCharacterMenu()
+        if ns.RefreshCountTooltips then ns.RefreshCountTooltips() end
         search:ClearFocus(); f:StopMovingOrSizing(); SaveGeometry(); f.gestureSettings = nil; HideTooltip()
         f.geometrySettings, f.geometryWindow = nil, nil
         local stop = f.scrollTrack:GetScript("OnMouseUp")
         if stop then stop(f.scrollTrack) end
     end)
     f:SetScript("OnShow", function()
+        if ns.RefreshCountTooltips then ns.RefreshCountTooltips() end
         currentCharacter = ns.CharacterKey()
         selectedCharacter, selectedTab, resetScroll = currentCharacter, nil, true
         selectedCategory = nil

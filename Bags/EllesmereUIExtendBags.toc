@@ -15,5 +15,6 @@ Shared/Options.lua
 Compatibility.lua
 Bags.lua
 Snapshot.lua
+Tooltip.lua
 Viewer.lua
 Options.lua

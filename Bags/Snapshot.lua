@@ -8,6 +8,8 @@ function ns.InitializeDB()
     if db == nil then db = { format = 1, characters = {} }; EllesmereUIExtendBagsDB = db end
     -- Unsupported data is preserved, not silently migrated or overwritten.
     if type(db) == "table" and db.format == 1 and type(db.characters) == "table" then ns.DB = db end
+    if ns.InvalidateBankCounts then ns.InvalidateBankCounts() end
+    if ns.RememberCharacterClass then ns.RememberCharacterClass() end
 end
 
 local function Integer(value, min, max)
@@ -155,6 +157,8 @@ function ns.Capture()
     if ns.ValidSnapshot(previous) and Equal(previous.tabs, tabs) and ns.CapturedThisVisit then return false end
     local at = Integer(ns.Read(GetServerTime), 0, 9007199254740990)
     ns.DB.characters[key] = { tabs = tabs, updatedAt = at }
+    ns.InvalidateBankCounts()
+    ns.RememberCharacterClass()
     ns.CapturedThisVisit = true
     ns.Addon.Refresh() -- Refresh the viewer and current-character first-visit tooltip.
     return true
@@ -171,6 +175,53 @@ function ns.Characters()
     end
     table.sort(keys)
     return keys
+end
+
+local bankIndex, indexedDB
+function ns.InvalidateBankCounts() bankIndex, indexedDB = nil, nil end
+function ns.RememberCharacterClass()
+    local key = ns.CharacterKey()
+    if not key or not ns.DB or type(UnitClass) ~= "function" then return end
+    local ok, _, token = pcall(UnitClass, "player")
+    token = ok and ns.String(token) or nil
+    if not token then return end
+    if ns.DB.classes ~= nil and type(ns.DB.classes) ~= "table" then return end
+    ns.DB.classes = ns.DB.classes or {}
+    ns.DB.classes[key] = token
+end
+function ns.BankStock(itemID)
+    itemID = Integer(itemID, 1, 2147483647)
+    if not itemID or not ns.DB then return end
+    if not bankIndex or indexedDB ~= ns.DB then
+        bankIndex, indexedDB = {}, ns.DB
+        local keys = {}
+        for key in pairs(ns.DB.characters) do if ns.String(key) then keys[#keys + 1] = key end end
+        table.sort(keys)
+        -- Build once on demand after load/capture. Hovers subsequently read only
+        -- this item-ID index, never live bags or every stored inventory again.
+        for _, key in ipairs(keys) do
+            local snapshot = ns.DB.characters[key]
+            local valid, ok = ns.Read(ns.ValidSnapshot, snapshot)
+            if ok and valid == true then
+                local counts = {}
+                for _, tab in ipairs(snapshot.tabs) do
+                    for _, item in pairs(tab.items) do counts[item.itemID] = (counts[item.itemID] or 0) + item.count end
+                end
+                for id, count in pairs(counts) do
+                    local entry = bankIndex[id] or { total = 0, characters = {} }
+                    bankIndex[id] = entry
+                    entry.total = entry.total + count
+                    entry.characters[#entry.characters + 1] = { key = key, count = count }
+                end
+            end
+        end
+    end
+    local entry = bankIndex[itemID]
+    if entry and entry.total <= 9007199254740990 then return entry end
+end
+function ns.BankSnapshotCount(itemID)
+    local entry = ns.BankStock(itemID)
+    return entry and entry.total or 0
 end
 
 function ns.Items(snapshot, tabID, query)

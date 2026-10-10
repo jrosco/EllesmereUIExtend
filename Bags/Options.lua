@@ -7,6 +7,7 @@ EllesmereUIExtend.RegisterModule({
             if EllesmereUI.ClearContentHeader then EllesmereUI:ClearContentHeader() end
         end
         local W, y = EllesmereUI.Widgets, yOffset
+        local ownerSettings = ns.Addon.Settings()
         local _, height = W:SectionHeader(parent, "BANK SNAPSHOT", y)
         y = y - height
         _, height = W:DualRow(parent, y, {
@@ -63,10 +64,19 @@ EllesmereUIExtend.RegisterModule({
                 ns.Addon.Settings().showButton = value == true
                 ns.Addon.Refresh()
             end,
+        }, {
+            type = "toggle", text = "Show bank stock in tooltips",
+            tooltip = "Show current/other saved bank counts in EUI bags. While the live bank or snapshot viewer is open, list stock by character with class-coloured names. Only positive saved personal-bank quantities are shown; snapshots may be outdated. No bag scanning, Warband or guild storage.",
+            getValue = function() return ns.Addon.Settings().tooltipBankCounts == true end,
+            setValue = function(value)
+                if ns.Editing() or ns.Secret(value) or ownerSettings ~= ns.Addon.Settings() then return end
+                ns.Addon.Settings().tooltipBankCounts = value == true
+                ns.Addon.Refresh()
+            end,
         })
         y = y - height
         _, height = W:DualRow(parent, y, { type = "spacer", text = "Visit a banker to capture personal storage.",
-            tooltip = "Opens on your current character, showing Visit the banker first before capture. Use character arrows to browse other captured banks. Snapshots update during banker visits; profile resets never clear inventory. No Warband storage." })
+            tooltip = "Opens on your current character, showing Visit the banker first before capture. Use the character dropdown to browse other captured banks. Snapshots update during banker visits; profile resets never clear inventory. No Warband storage." })
         return math.abs(y - height)
     end,
 })

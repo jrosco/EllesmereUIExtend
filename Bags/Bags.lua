@@ -16,17 +16,19 @@ end
 
 function addon.Settings() return core.GetSettings("bags") end
 function addon.Refresh()
+    if ns.RefreshCountTooltips then ns.RefreshCountTooltips() end
     if ns.AttachButton then ns.AttachButton() end
     if ns.RefreshViewer then ns.RefreshViewer() end
 end
 core.RegisterFeature("bags", {
     defaults = { showButton = true, groupByCategory = false, display = "match", collapsedCategories = {},
-        windowScale = 1, frameStrata = "DIALOG", sidebarCollapsed = false,
+        windowScale = 1, frameStrata = "DIALOG", sidebarCollapsed = false, tooltipBankCounts = false,
         window = { width = 620, height = 510, x = 0, y = 0, locked = false } },
     normalize = function(settings)
         settings.showButton = settings.showButton ~= false
         settings.groupByCategory = settings.groupByCategory == true
         settings.sidebarCollapsed = not ns.Secret(settings.sidebarCollapsed) and settings.sidebarCollapsed == true
+        settings.tooltipBankCounts = not ns.Secret(settings.tooltipBankCounts) and settings.tooltipBankCounts == true
         settings.windowScale = ns.WindowScale(settings.windowScale)
         settings.frameStrata = ns.WindowStrata(settings.frameStrata)
         local collapsed = {}
@@ -83,9 +85,11 @@ frame:SetScript("OnEvent", function(_, event, name)
         addon.Refresh()
     elseif event == "BANKFRAME_OPENED" then
         StartBank()
+        if ns.RefreshCountTooltips then ns.RefreshCountTooltips() end
     elseif event == "BANKFRAME_CLOSED" or event == "PLAYER_LOGOUT" then
         -- Never query bank containers after access closes, even to do a final scan.
         StopBank()
+        if ns.RefreshCountTooltips then ns.RefreshCountTooltips() end
     elseif event == "PLAYER_REGEN_ENABLED" then
         addon.Refresh()
     elseif event == "GET_ITEM_INFO_RECEIVED" then

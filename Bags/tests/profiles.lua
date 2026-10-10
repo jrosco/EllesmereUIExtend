@@ -20,7 +20,9 @@ local orders = { { "bags" }, { "bags", "nameplates" }, { "nameplates", "bags" },
     { "bags", "nameplates", "questTracker" }, { "bags", "questTracker", "nameplates" },
     { "nameplates", "bags", "questTracker" }, { "nameplates", "questTracker", "bags" },
     { "questTracker", "bags", "nameplates" }, { "questTracker", "nameplates", "bags" } }
-local bank = { format = 1, characters = { ["Player - Realm"] = { inventoryMarker = true } } }
+local bank = { format = 1, characters = { ["Player - Realm"] = { inventoryMarker = true } },
+    classes = { ["Player - Realm"] = "MAGE" },
+    bags = { ["Player - Realm"] = { carriedInventoryMarker = true } } }
 for _, order in ipairs(orders) do
     frames, registrations = {}, 0
     EllesmereUIExtend, EllesmereUIExtendDB = nil, nil
@@ -43,6 +45,7 @@ for _, order in ipairs(orders) do
     Check(core.CreateProfile("Other"), "Bags can create shared profile")
     core.GetSettings("bags").showButton = false
     core.GetSettings("bags").sidebarCollapsed = true
+    core.GetSettings("bags").tooltipBankCounts = true
     core.GetSettings("bags").windowScale, core.GetSettings("bags").frameStrata = 1.25, "HIGH"
     core.GetSettings("bags").collapsedCategories["category:Trade Goods"] = true
     local otherWindow = core.GetSettings("bags").window
@@ -50,6 +53,7 @@ for _, order in ipairs(orders) do
     Check(core.SelectProfile("Default"), "Bags can switch shared profiles")
     Check(core.GetSettings("bags").showButton, "Bags settings isolated by profile")
     Check(not core.GetSettings("bags").sidebarCollapsed, "sidebar starts expanded independently per profile")
+    Check(not core.GetSettings("bags").tooltipBankCounts, "bank tooltip counts default off in each profile")
     Check(core.GetSettings("bags").windowScale == 1 and core.GetSettings("bags").frameStrata == "DIALOG",
         "window scale and strata default independently in each profile")
     Check(not core.GetSettings("bags").collapsedCategories["category:Trade Goods"], "category collapse maps are isolated by profile")
@@ -58,6 +62,7 @@ for _, order in ipairs(orders) do
     Check(core.SelectProfile("Other"), "restore selected profile")
     Check(not core.GetSettings("bags").showButton, "selected profile retains settings")
     Check(core.GetSettings("bags").sidebarCollapsed, "profile restores sidebar collapse")
+    Check(core.GetSettings("bags").tooltipBankCounts, "profile restores optional tooltip counts")
     Check(core.GetSettings("bags").windowScale == 1.25 and core.GetSettings("bags").frameStrata == "HIGH",
         "profile switching restores window appearance")
     Check(core.GetSettings("bags").collapsedCategories["category:Trade Goods"], "selected profile retains category collapse state")
@@ -66,6 +71,8 @@ for _, order in ipairs(orders) do
     core.ResetFeature("bags")
     Check(core.GetSettings("bags").showButton and EllesmereUIExtendBagsDB == bank, "reset does not touch inventory")
     Check(not core.GetSettings("bags").sidebarCollapsed, "Bags reset expands sidebar without touching inventory")
+    Check(not core.GetSettings("bags").tooltipBankCounts, "reset disables bank tooltip counts without clearing inventory")
+    core.GetSettings("bags").tooltipBankCounts = true
     core.GetSettings("bags").sidebarCollapsed = true
     Check(core.GetSettings("bags").windowScale == 1 and core.GetSettings("bags").frameStrata == "DIALOG",
         "Bags reset restores default viewer appearance")
@@ -96,7 +103,12 @@ for _, order in ipairs(orders) do
     Event("PLAYER_LOGIN")
     Check(EllesmereUIExtend.GetProfileInfo().active == "Other", "Bags-alone reload preserves shared assignments")
     Check(EllesmereUIExtendBagsDB == bank, "inventory survives uninstall/reload and profile restoration")
+    Check(EllesmereUIExtendBagsDB.bags["Player - Realm"].carriedInventoryMarker,
+        "carried snapshots survive profile/reset/logout/reload independently from settings")
+    Check(EllesmereUIExtendBagsDB.classes["Player - Realm"] == "MAGE",
+        "character class metadata survives independently from shared profiles and feature reset")
     Check(EllesmereUIExtend.GetSettings("bags").sidebarCollapsed, "reload retains collapsed sidebar")
+    Check(EllesmereUIExtend.GetSettings("bags").tooltipBankCounts, "reload retains optional tooltip counts")
     Check(EllesmereUIExtend.GetSettings("bags").windowScale == 0.75 and EllesmereUIExtend.GetSettings("bags").frameStrata == "LOW",
         "Bags-alone reload retains profile scale and strata")
     Check(EllesmereUIExtend.GetSettings("bags").collapsedCategories["category:Trade Goods"], "Bags-alone reload preserves collapsed categories")

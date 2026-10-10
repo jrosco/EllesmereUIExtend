@@ -121,7 +121,7 @@ local tooltips = 0
 GameTooltip = { SetOwner = Noop, SetHyperlink = function(_, link) tooltips = tooltips + 1; Check(type(link) == "string", "tooltip uses saved link") end,
     AddLine = Noop, Show = Noop, Hide = Noop }
 local ns = {}
-for _, file in ipairs({ "Compatibility", "Bags", "Snapshot", "Viewer", "Options" }) do
+for _, file in ipairs({ "Compatibility", "Bags", "Snapshot", "Tooltip", "Viewer", "Options" }) do
     assert(loadfile("Bags/" .. file .. ".lua"))("EllesmereUIExtendBags", ns)
 end
 local function Event(event, ...)
@@ -486,7 +486,8 @@ Check(settings.display == "match", "viewer cycles to Match EUI bank persistently
 viewer.grouping.scripts.OnClick()
 Check(not settings.groupByCategory, "viewer grouping changes saved setting")
 modules.options.buildPage(nil, UIParent, 0)
-local displayControl = rightRows[#rightRows]
+local displayControl
+for _, row in ipairs(rightRows) do if row.text == "Bank display" then displayControl = row end end
 Check(displayControl.text == "Bank display", "settings exposes four-choice display dropdown")
 editing = true
 displayControl.setValue("compact")
@@ -923,4 +924,240 @@ native.characterDropdown.scripts.OnClick(native.characterDropdown)
 Check(native.characterMenu:IsShown(), "older EUI offers addon-owned character dropdown")
 native.characterDropdown.scripts.OnClick(native.characterDropdown)
 Check(not native.characterMenu:IsShown(), "fallback selector toggles menu closed")
+-- Optional snapshot counts: combined quantities by ID, never live inventory.
+settings = modules.feature.normalize({ showButton = true })
+native:Hide()
+local function CountItem(id, count, link) return { itemID = id, count = count, link = link or ("item:" .. id) } end
+local function CountTab(id, items) return { bagID = id, name = "Saved bank", numSlots = 10, items = items } end
+ns.DB = { format = 1, characters = {
+    [ns.CharacterKey()] = { tabs = { CountTab(6, { CountItem(100, 2), CountItem(100, 3, "item:100:variant") }) } },
+    ["Count Alt - Realm"] = { tabs = { CountTab(6, { CountItem(100, 4), CountItem(101, 9) }),
+        CountTab(-3, { [5] = CountItem(100, 7) }) } },
+    ["Empty - Realm"] = { tabs = {} },
+    ["Broken - Realm"] = { tabs = { CountTab(6, { CountItem(100, secret) }) } },
+} }
+Check(ns.BankSnapshotCount(100) == 16 and ns.BankSnapshotCount(101) == 9,
+    "snapshot totals combine stack quantities and item variants across characters and reagent storage")
+Check(ns.BankSnapshotCount(999) == 0 and ns.BankSnapshotCount(secret) == 0 and ns.BankSnapshotCount(-1) == 0,
+    "missing stock and unreadable/invalid item IDs add no counts")
+local inventoryReads = 0
+C_Container.GetContainerItemInfo = function() inventoryReads = inventoryReads + 1; error("no live reads for tooltip totals") end
+Check(ns.BankSnapshotCount(100) == 16 and inventoryReads == 0, "totals use saved snapshots outside bank access")
+ns.DB.bags = { [ns.CharacterKey()] = { preservedCarriedData = true } }
+local savedBagData = ns.DB.bags
+ns.DB.classes = { [ns.CharacterKey()] = "MAGE", ["Count Alt - Realm"] = "WARRIOR" }
+RAID_CLASS_COLORS = { MAGE = { r = 0.25, g = 0.78, b = 0.92 }, WARRIOR = { r = 0.78, g = 0.61, b = 0.43 } }
+Check(not ns.ScanBags and not ns.CaptureBags and not ns.InventoryEventFrame,
+    "bank-only tooltip design has no carried-bag scanner, captures or polling frame")
+local countControl
+rows, rightRows = {}, {}
+modules.options.buildPage("Bank Snapshot", {}, 0)
+for _, row in ipairs(rightRows) do if row.text == "Show bank stock in tooltips" then countControl = row end end
+Check(countControl and not countControl.getValue() and countControl.tooltip:find("outdated", 1, true),
+    "optional tooltip control is discoverable, off by default and explains snapshot freshness")
+editing = true; countControl.setValue(true)
+Check(not settings.tooltipBankCounts, "new count toggle honors Edit Mode")
+editing = false
+local countProfile = settings
+settings = modules.feature.normalize({ showButton = true })
+countControl.setValue(true)
+Check(not settings.tooltipBankCounts, "stale count toggle cannot mutate another profile")
+settings = countProfile
+countControl.setValue(secret)
+Check(not settings.tooltipBankCounts, "count toggle rejects secret booleans")
+
+GameTooltip = Widget("GameTooltip")
+GameTooltip.lines = {}
+function GameTooltip:SetOwner(owner) self.owner = owner end
+function GameTooltip:GetOwner() return self.owner end
+function GameTooltip:GetItem() return "Saved item", self.link end
+function GameTooltip:AddLine(text, r, g, b) self.lines[#self.lines + 1] = text; self.colors[#self.lines] = { r, g, b } end
+function GameTooltip:AddDoubleLine(left, right, r, g, b, rr, rg, rb)
+    self.lines[#self.lines + 1] = left .. ": " .. right
+    self.colors[#self.lines] = { r, g, b, rr, rg, rb }
+end
+function GameTooltip:SetHyperlink(link) self.link = link end
+local function ClearCountTip(owner, link)
+    GameTooltip.lines, GameTooltip.colors, GameTooltip.owner, GameTooltip.link = {}, {}, owner, link or "item:100"
+    for _, hook in ipairs(GameTooltip.hooks.OnTooltipCleared or {}) do hook(GameTooltip) end
+end
+local bagParent = Widget("Frame", nil, EUI_Bags)
+local bagItem = Widget("Button", nil, bagParent)
+function bagParent:GetParent() return self.parent end
+function bagItem:GetParent() return self.parent end
+TooltipDataProcessor = nil
+ns.InstallCountTooltips(); ns.InstallCountTooltips()
+Check(#GameTooltip.hooks.OnTooltipCleared == 1 and #GameTooltip.hooks.OnTooltipSetItem == 1,
+    "legacy tooltip hooks install once without altering item buttons")
+local legacyHook = GameTooltip.hooks.OnTooltipSetItem[1]
+ClearCountTip(bagItem)
+legacyHook(GameTooltip)
+Check(#GameTooltip.lines == 0, "default-off tooltip feature adds no bank stock lines")
+countControl.setValue(true)
+legacyHook(GameTooltip); legacyHook(GameTooltip)
+Check(#GameTooltip.lines == 4 and GameTooltip.lines[2] == "Bank stock (snapshots)"
+    and GameTooltip.lines[3] == "Current bank: 5" and GameTooltip.lines[4] == "Other banks: 11",
+    "Forever legacy bag tooltip shows compact positive current/other bank stock")
+Check(GameTooltip.colors[2][1] == 1 and GameTooltip.colors[3][1] ~= GameTooltip.colors[4][1]
+    and GameTooltip.colors[3][4] == 1, "gold heading, varied muted labels and bright counts separate the tooltip visually")
+ClearCountTip(bagItem, "item:999"); legacyHook(GameTooltip)
+Check(#GameTooltip.lines == 0, "zero stock has no tooltip line")
+ClearCountTip(bagItem, secret); legacyHook(GameTooltip)
+Check(#GameTooltip.lines == 0, "secret legacy link fails closed")
+local originalGetItem = GameTooltip.GetItem
+GameTooltip.GetItem = function() error("restricted") end
+legacyHook(GameTooltip)
+Check(#GameTooltip.lines == 0, "throwing legacy getter fails closed")
+GameTooltip.GetItem = originalGetItem
+
+local postHook, postInstalls = nil, 0
+Enum.TooltipDataType = { Item = 0 }
+TooltipDataProcessor = { AddTooltipPostCall = function(kind, callback)
+    Check(kind == 0, "Retail registers only item tooltip processing")
+    postHook, postInstalls = callback, postInstalls + 1
+end }
+ns.InstallCountTooltips(); ns.InstallCountTooltips()
+Check(postInstalls == 1, "Retail item processor installs only once")
+ClearCountTip(bagItem)
+postHook(GameTooltip, { id = 100 }); legacyHook(GameTooltip); postHook(GameTooltip, { id = 100 })
+Check(#GameTooltip.lines == 4, "Retail processing and old fallback never duplicate four stock rows")
+ClearCountTip(bagItem)
+postHook(GameTooltip, { id = secret }); postHook(GameTooltip, secret); postHook(GameTooltip, nil)
+Check(#GameTooltip.lines == 0, "secret and missing Retail item data fail closed without guessing")
+for _, owner in ipairs({ UIParent, Widget("Button", nil, UIParent) }) do
+    ClearCountTip(owner)
+    postHook(GameTooltip, { id = 100 })
+    Check(#GameTooltip.lines == 0, "non-bag tooltip owner is excluded")
+end
+ClearCountTip(bagItem)
+local comparison = Widget("GameTooltip")
+comparison.owner = bagItem; comparison.lines = {}
+comparison.colors = {}
+comparison.GetOwner, comparison.AddLine = GameTooltip.GetOwner, GameTooltip.AddLine
+postHook(comparison, { id = 100 })
+Check(#comparison.lines == 0, "shopping/comparison tooltip is excluded even with bag ownership")
+local originalOwner = GameTooltip.GetOwner
+GameTooltip.GetOwner = function() return secret end
+postHook(GameTooltip, { id = 100 })
+Check(#GameTooltip.lines == 0, "secret tooltip owner fails closed")
+GameTooltip.GetOwner = originalOwner
+native:Show()
+ClearCountTip(native.slots[1])
+native.slots[1].scripts.OnEnter(native.slots[1])
+Check(GameTooltip.lines[3] == ns.CharacterKey() .. " (you): 5" and GameTooltip.lines[4] == "Count Alt - Realm: 11",
+    "snapshot viewer lists named bank stock with current character first")
+Check(GameTooltip.colors[3][1] == RAID_CLASS_COLORS.MAGE.r and GameTooltip.colors[4][1] == RAID_CLASS_COLORS.WARRIOR.r,
+    "current player and alts use their saved class colours")
+Check(#GameTooltip.lines == 4, "snapshot item tooltip has stock rows without tab/slot or read-only footer text")
+local beforePost = #GameTooltip.lines
+postHook(GameTooltip, { id = 100 })
+Check(#GameTooltip.lines == beforePost, "global hook does not duplicate snapshot viewer's explicit count")
+countControl.setValue(false)
+Check(not GameTooltip:IsShown(), "disabling counts removes already-visible added stock via tooltip dismissal")
+ClearCountTip(native.slots[1])
+native.slots[1].scripts.OnEnter(native.slots[1])
+Check(#GameTooltip.lines == 0, "disabled stock counts leave snapshot item tooltip with native item content only")
+ClearCountTip(bagItem); postHook(GameTooltip, { id = 100 })
+Check(#GameTooltip.lines == 0, "disable takes effect in existing native callbacks")
+settings.tooltipBankCounts = true
+ClearCountTip(bagItem); postHook(GameTooltip, { id = 100 })
+Check(#GameTooltip.lines == 4, "count enabled for updated snapshot test")
+ns.DB.characters["Count Alt - Realm"].tabs[1].items[1].count = 14
+ns.InvalidateBankCounts()
+ns.Addon.Refresh()
+ClearCountTip(bagItem); postHook(GameTooltip, { id = 100 })
+Check(GameTooltip.lines[4] == "Count Alt - Realm: 21", "updated bank snapshots rebuild cached named counts")
+native:Hide()
+ClearCountTip(bagItem); postHook(GameTooltip, { id = 100 })
+Check(GameTooltip.lines[3] == "Current bank: 5" and GameTooltip.lines[4] == "Other banks: 21",
+    "closing snapshot viewer returns bag tooltips to compact rows")
+ns.DB.characters[ns.CharacterKey()] = nil
+ns.InvalidateBankCounts()
+ClearCountTip(bagItem); postHook(GameTooltip, { id = 100 })
+Check(#GameTooltip.lines == 3 and GameTooltip.lines[3] == "Other banks: 21", "missing own bank omits the current bank row")
+ns.DB.characters[ns.CharacterKey()] = { tabs = { CountTab(6, { CountItem(100, 5) }) } }
+ns.DB.characters["Count Alt - Realm"] = { tabs = {} }
+ns.InvalidateBankCounts()
+ClearCountTip(bagItem); postHook(GameTooltip, { id = 100 })
+Check(#GameTooltip.lines == 3 and GameTooltip.lines[3] == "Current bank: 5", "zero other-bank stock omits the other banks row")
+local ownSnapshot = ns.DB.characters[ns.CharacterKey()]
+ns.DB.characters[ns.CharacterKey()] = { tabs = {} }
+ns.InvalidateBankCounts()
+ClearCountTip(bagItem); postHook(GameTooltip, { id = 100 })
+Check(#GameTooltip.lines == 0, "no stock in any captured bank adds no heading or rows")
+ns.DB.characters[ns.CharacterKey()] = ownSnapshot
+ns.DB.characters["Count Alt - Realm"] = { tabs = { CountTab(6, { CountItem(100, 11) }) } }
+ns.InvalidateBankCounts()
+EUI_ReagentBagFrame = Widget("Frame", nil, UIParent)
+local detached = Widget("Button", nil, EUI_ReagentBagFrame)
+function detached:GetParent() return self.parent end
+ClearCountTip(detached); postHook(GameTooltip, { id = 100 })
+Check(GameTooltip.lines[4] == "Other banks: 11", "detached EUI reagent-bag tooltips use bank-only compact stock")
+EUI_BankFrame = Widget("Frame", nil, UIParent)
+local bankItem = Widget("Button", nil, EUI_BankFrame)
+function bankItem:GetParent() return self.parent end
+ClearCountTip(bankItem); postHook(GameTooltip, { id = 100 })
+Check(GameTooltip.lines[3] == ns.CharacterKey() .. " (you): 5" and GameTooltip.lines[4] == "Count Alt - Realm: 11",
+    "live EUI bank item tooltips show named stock without actionable item overrides")
+ClearCountTip(bagItem); postHook(GameTooltip, { id = 100 })
+Check(GameTooltip.lines[4] == "Count Alt - Realm: 11", "bag tooltips use named character rows while live bank window is open")
+EUI_BankFrame:Hide()
+ns.BankOpen = true
+ClearCountTip(bagItem); postHook(GameTooltip, { id = 100 })
+Check(GameTooltip.lines[4] == "Count Alt - Realm: 11", "bank access event supports named mode before EUI bank shows")
+ns.BankOpen = false
+ns.DB.classes["Count Alt - Realm"] = nil
+ClearCountTip(bankItem); postHook(GameTooltip, { id = 100 })
+Check(GameTooltip.colors[4][1] == 0.75, "missing alt class information uses neutral colour without guessing")
+function UnitClass() return "Mage", "MAGE", 8 end
+ns.RememberCharacterClass()
+Check(ns.DB.classes[ns.CharacterKey()] == "MAGE", "login/capture metadata can learn current class independently from bank inventory")
+UnitClass = function() return "Restricted", secret, secret end
+ns.RememberCharacterClass()
+Check(ns.DB.classes[ns.CharacterKey()] == "MAGE", "secret class token cannot overwrite saved readable metadata")
+UnitClass = function() error("restricted") end
+ns.RememberCharacterClass()
+Check(ns.DB.classes[ns.CharacterKey()] == "MAGE", "throwing class getter preserves latest readable class metadata")
+UnitClass = function() return "Mage", "MAGE", 8 end
+C_ClassColor = { GetClassColor = function() return { r = secret, g = 0.5, b = 0.5 } end }
+ClearCountTip(bankItem); postHook(GameTooltip, { id = 100 })
+Check(GameTooltip.colors[3][1] == 0.75, "unreadable native class colour is never compared or formatted")
+C_ClassColor = nil
+local originalValidation, validations = ns.ValidSnapshot, 0
+ns.ValidSnapshot = function(snapshot) validations = validations + 1; return originalValidation(snapshot) end
+ns.InvalidateBankCounts()
+ClearCountTip(bagItem); postHook(GameTooltip, { id = 100 })
+local firstValidations = validations
+for _ = 1, 20 do ClearCountTip(bagItem); postHook(GameTooltip, { id = 100 }) end
+Check(firstValidations > 0 and validations == firstValidations, "repeated tooltip hovers reuse item index without revalidating every inventory")
+settings.tooltipBankCounts = false
+ns.RefreshCountTooltips()
+settings.tooltipBankCounts = true
+ClearCountTip(bagItem); postHook(GameTooltip, { id = 100 })
+Check(validations > firstValidations, "disabling releases cached bank index, rebuilt lazily on re-enable")
+ns.ValidSnapshot = originalValidation
+local originalScan = ns.Scan
+ns.Scan = function() return ns.DB.characters[ns.CharacterKey()].tabs end
+ns.Pending, ns.CapturedThisVisit, ns.BankOpen = nil, false, true
+ns.DB.characters[ns.CharacterKey()].tabs[1].items[1].count = 15
+Check(not ns.Capture() and ns.Capture() and ns.BankSnapshotCount(100) == 26,
+    "successful bank capture automatically invalidates the tooltip count index")
+ns.Scan, ns.BankOpen = originalScan, false
+local doubleLine = GameTooltip.AddDoubleLine
+GameTooltip.AddDoubleLine = nil
+ClearCountTip(bankItem); postHook(GameTooltip, { id = 100 })
+Check(GameTooltip.lines[4]:find("Count Alt - Realm", 1, true) and GameTooltip.lines[4]:find("|cffffebb8", 1, true),
+    "older tooltip without double-line support keeps coloured labels and bright counts")
+GameTooltip.AddDoubleLine = doubleLine
+local oldPlayer = player
+player = secret
+ClearCountTip(bagItem); postHook(GameTooltip, { id = 100 })
+Check(#GameTooltip.lines == 0, "unreadable current identity cannot misclassify current versus other stock")
+player = oldPlayer
+Check(ns.DB.bags == savedBagData and ns.DB.bags[oldPlayer .. " - Realm"].preservedCarriedData,
+    "stopping bag capture preserves old stored carried data without counting or deleting it")
+ns.DB = nil
+ClearCountTip(bagItem); postHook(GameTooltip, { id = 100 })
+Check(#GameTooltip.lines == 0, "unsupported/missing snapshot database has no tooltip count")
+Check(inventoryReads == 0, "bank-stock tooltip hovers never query live bag or bank containers")
 print("PASS: " .. checks .. " Bags capture, capability, read-only viewer and UI checks")
