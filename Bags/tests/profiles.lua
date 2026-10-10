@@ -42,12 +42,14 @@ for _, order in ipairs(orders) do
     Check(core.GetSettings("bags").showButton == true, "Bags defaults available")
     Check(core.CreateProfile("Other"), "Bags can create shared profile")
     core.GetSettings("bags").showButton = false
+    core.GetSettings("bags").sidebarCollapsed = true
     core.GetSettings("bags").windowScale, core.GetSettings("bags").frameStrata = 1.25, "HIGH"
     core.GetSettings("bags").collapsedCategories["category:Trade Goods"] = true
     local otherWindow = core.GetSettings("bags").window
     otherWindow.width, otherWindow.height, otherWindow.x, otherWindow.y, otherWindow.locked = 900, 700, 50, -25, true
     Check(core.SelectProfile("Default"), "Bags can switch shared profiles")
     Check(core.GetSettings("bags").showButton, "Bags settings isolated by profile")
+    Check(not core.GetSettings("bags").sidebarCollapsed, "sidebar starts expanded independently per profile")
     Check(core.GetSettings("bags").windowScale == 1 and core.GetSettings("bags").frameStrata == "DIALOG",
         "window scale and strata default independently in each profile")
     Check(not core.GetSettings("bags").collapsedCategories["category:Trade Goods"], "category collapse maps are isolated by profile")
@@ -55,6 +57,7 @@ for _, order in ipairs(orders) do
         "window defaults are independently copied for every profile")
     Check(core.SelectProfile("Other"), "restore selected profile")
     Check(not core.GetSettings("bags").showButton, "selected profile retains settings")
+    Check(core.GetSettings("bags").sidebarCollapsed, "profile restores sidebar collapse")
     Check(core.GetSettings("bags").windowScale == 1.25 and core.GetSettings("bags").frameStrata == "HIGH",
         "profile switching restores window appearance")
     Check(core.GetSettings("bags").collapsedCategories["category:Trade Goods"], "selected profile retains category collapse state")
@@ -62,6 +65,8 @@ for _, order in ipairs(orders) do
         "profile switch retains saved geometry and lock state")
     core.ResetFeature("bags")
     Check(core.GetSettings("bags").showButton and EllesmereUIExtendBagsDB == bank, "reset does not touch inventory")
+    Check(not core.GetSettings("bags").sidebarCollapsed, "Bags reset expands sidebar without touching inventory")
+    core.GetSettings("bags").sidebarCollapsed = true
     Check(core.GetSettings("bags").windowScale == 1 and core.GetSettings("bags").frameStrata == "DIALOG",
         "Bags reset restores default viewer appearance")
     core.GetSettings("bags").windowScale, core.GetSettings("bags").frameStrata = 0.75, "LOW"
@@ -91,6 +96,7 @@ for _, order in ipairs(orders) do
     Event("PLAYER_LOGIN")
     Check(EllesmereUIExtend.GetProfileInfo().active == "Other", "Bags-alone reload preserves shared assignments")
     Check(EllesmereUIExtendBagsDB == bank, "inventory survives uninstall/reload and profile restoration")
+    Check(EllesmereUIExtend.GetSettings("bags").sidebarCollapsed, "reload retains collapsed sidebar")
     Check(EllesmereUIExtend.GetSettings("bags").windowScale == 0.75 and EllesmereUIExtend.GetSettings("bags").frameStrata == "LOW",
         "Bags-alone reload retains profile scale and strata")
     Check(EllesmereUIExtend.GetSettings("bags").collapsedCategories["category:Trade Goods"], "Bags-alone reload preserves collapsed categories")

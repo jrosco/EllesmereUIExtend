@@ -1,6 +1,7 @@
 local _, ns = ...
 if not ns.Addon then return end
 local viewer, selectedCharacter, currentCharacter, selectedTab = nil, nil, nil, nil
+local selectedCategory
 local resetScroll = true
 local function ViewHeight(f) return math.max(1, f:GetHeight() - 180) end
 local function WindowSettings()
@@ -98,33 +99,55 @@ function ns.ListValues(item)
     -- Upgrade tracks and uncaptured binding state must not be guessed.
     return values
 end
-function ns.Layout(items, columns)
-    columns = columns or 10
-    local mode, groups = ns.DisplayMode(), {}
+function ns.CategoryGroups(items)
+    local groups = {}
     local manager = EUI_CategoryManager
     local cats = manager and ns.Read(manager.GetCategories, manager)
     if type(cats) ~= "table" then cats = {} end
-    if ns.Addon.Settings().groupByCategory then
-        local buckets = {}
-        for _, entry in ipairs(items) do
-            local index = Category(entry.item, cats, manager)
-            local cat = cats[index]
-            local disabled = EUIProfile().bagDisabledCategories or {}
-            if cat and (disabled[cat._defaultName] or (cat.isEquipSet and disabled["Item Set Gear"])) then
-                index = 0
-                for i, candidate in ipairs(cats) do if candidate.isCatchAll then index = i; break end end
-            end
-            buckets[index] = buckets[index] or {}
-            table.insert(buckets[index], entry)
+    local buckets = {}
+    for _, entry in ipairs(items) do
+        local index = Category(entry.item, cats, manager)
+        local cat = cats[index]
+        local disabled = EUIProfile().bagDisabledCategories or {}
+        if cat and (disabled[cat._defaultName] or (cat.isEquipSet and disabled["Item Set Gear"])) then
+            index = 0
+            for i, candidate in ipairs(cats) do if candidate.isCatchAll then index = i; break end end
         end
-        for i = 0, #cats do
-            if buckets[i] then
-                local cat = cats[i]
-                groups[#groups + 1] = { name = i == 0 and "Other" or cat.name, items = buckets[i],
-                    key = i == 0 and "fallback:other" or ("category:" .. (ns.String(cat._defaultName) or ns.String(cat.name) or tostring(i))) }
-            end
+        buckets[index] = buckets[index] or {}
+        table.insert(buckets[index], entry)
+    end
+    for i = 0, #cats do
+        if buckets[i] then
+            local cat = cats[i]
+            groups[#groups + 1] = { name = i == 0 and "Other" or cat.name, items = buckets[i],
+                icon = cat and (ns.Number(cat.icon) or ns.String(cat.icon)),
+                isAtlas = cat and not ns.Secret(cat.isAtlas) and cat.isAtlas == true,
+                key = i == 0 and "fallback:other" or ("category:" .. (ns.String(cat._defaultName) or ns.String(cat.name) or tostring(i))) }
         end
-    else groups[1] = { items = items } end
+    end
+    return groups
+end
+function ns.PaintCategoryIcon(texture, icon, isAtlas)
+    if isAtlas and ns.String(icon) and type(texture.SetAtlas) == "function" then
+        local available = true
+        if C_Texture and type(C_Texture.GetAtlasInfo) == "function" then
+            available = type(ns.Read(C_Texture.GetAtlasInfo, icon)) == "table"
+        end
+        if available then
+            local _, ok = ns.Read(texture.SetAtlas, texture, icon)
+            if ok then texture:SetTexCoord(0, 1, 0, 1); return end
+        end
+        icon = 134400 -- Never treat an unavailable atlas name as a texture path.
+    elseif isAtlas then icon = 134400 end
+    icon = ns.Number(icon) or ns.String(icon) or 134400
+    local mapped = ns.Read(EllesmereUI and EllesmereUI.ClientIcon, icon)
+    texture:SetTexture(ns.Number(mapped) or ns.String(mapped) or icon)
+    texture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+end
+function ns.Layout(items, columns)
+    columns = columns or 10
+    local mode = ns.DisplayMode()
+    local groups = ns.Addon.Settings().groupByCategory and ns.CategoryGroups(items) or { { items = items } }
     local layout, x, y, band = { slots = {}, headings = {}, height = 0 }, 0, 0, 0
     for _, group in ipairs(groups) do
         local collapsed = mode == "list" and group.key and (ns.Addon.Settings().collapsedCategories or {})[group.key] == true
@@ -222,6 +245,7 @@ local function ChangeCharacter(direction)
     for i, key in ipairs(keys) do if key == selectedCharacter then index = i; break end end
     selectedCharacter = keys[((index - 1 + direction) % #keys) + 1]
     selectedTab, resetScroll = nil, true
+    selectedCategory = nil
     HideTooltip()
     ns.RefreshViewer()
 end
@@ -382,6 +406,76 @@ local function Build()
     f.message:SetJustifyH("LEFT")
     f.message:SetWordWrap(true)
     f.tabs, f.slots, f.headings = {}, {}, {}
+    f.categoryButtons = {}
+    local sidebar = CreateFrame("Frame", nil, f)
+    sidebar:SetPoint("TOPLEFT", 12, -94)
+    f.sidebar = sidebar
+    f.sidebarTitle = Font(sidebar, "Storage", 10)
+    f.sidebarTitle:SetPoint("TOPLEFT", 4, -4)
+    f.sidebarToggle = Button(sidebar, "<", 18, function()
+        if ns.Editing() then return end
+        local settings = ns.Addon.Settings()
+        settings.sidebarCollapsed = not settings.sidebarCollapsed
+        ns.Addon.Refresh()
+    end, "Collapse sidebar", "header")
+    f.sidebarToggle:SetSize(12, 12)
+    f.sidebarToggle:SetPoint("TOPRIGHT", -4, -4)
+    f.sidebarToggle.icon = f.sidebarToggle:CreateTexture(nil, "ARTWORK")
+    f.sidebarToggle.icon:SetAllPoints()
+    f.sidebarToggle.icon:SetAlpha(0.4)
+    f.sidebarToggle:SetScript("OnEnter", function(self)
+        self.icon:SetAlpha(0.9)
+        if EllesmereUI and EllesmereUI.ShowWidgetTooltip then EllesmereUI.ShowWidgetTooltip(self, self.tip) end
+    end)
+    f.sidebarToggle:SetScript("OnLeave", function(self)
+        self.icon:SetAlpha(0.4)
+        if EllesmereUI and EllesmereUI.HideWidgetTooltip then EllesmereUI.HideWidgetTooltip() end
+    end)
+    local sidebarArt = ns.Read(f.sidebarToggle.icon.SetTexture, f.sidebarToggle.icon,
+        "Interface\\AddOns\\EllesmereUI\\media\\icons\\eui-arrow-left.png")
+    f.sidebarToggle.hasArt = sidebarArt == true
+    local sidebarSF = CreateFrame("ScrollFrame", nil, sidebar)
+    sidebarSF:SetPoint("TOPLEFT", 0, -24)
+    sidebarSF:EnableMouseWheel(true)
+    local sidebarChild = CreateFrame("Frame", nil, sidebarSF)
+    sidebarChild:SetSize(145, 1)
+    sidebarChild:EnableMouse(false)
+    sidebarSF:SetScrollChild(sidebarChild)
+    f.sidebarScroll, f.sidebarChild = sidebarSF, sidebarChild
+    local function SidebarWheel(_, delta)
+        local range = math.max(0, sidebarChild:GetHeight() - sidebarSF:GetHeight())
+        sidebarSF:SetVerticalScroll(math.max(0, math.min(range, sidebarSF:GetVerticalScroll() - delta * 28)))
+    end
+    sidebarSF:SetScript("OnMouseWheel", SidebarWheel)
+    sidebar:EnableMouseWheel(true)
+    sidebar:SetScript("OnMouseWheel", SidebarWheel)
+    f.tabsTitle = Font(sidebarChild, "Tabs", 10)
+    f.tabsTitle:SetPoint("TOPLEFT", 4, 0)
+    f.categoriesTitle = Font(sidebarChild, "Categories", 10)
+    f.StyleNavigation = function(button, y, text, icon, active, isAtlas)
+        local collapsed = ns.Addon.Settings().sidebarCollapsed == true
+        button:ClearAllPoints()
+        button:SetPoint("TOPLEFT", 0, -y)
+        button:SetSize(collapsed and 32 or 145, 24)
+        if not button.navIcon then
+            button.navIcon = button:CreateTexture(nil, "ARTWORK")
+            button.navIcon:SetSize(20, 20)
+            button.navIcon:SetPoint("LEFT", 6, 0)
+            button.label:ClearAllPoints()
+            button.label:SetPoint("LEFT", 32, 0)
+            button.label:SetWordWrap(false)
+            button.label:SetJustifyH("LEFT")
+            button:EnableMouseWheel(true)
+            button:SetScript("OnMouseWheel", SidebarWheel)
+        end
+        ns.PaintCategoryIcon(button.navIcon, icon, isAtlas)
+        button.label:SetWidth(109)
+        button.label:SetText(text)
+        button.label:SetShown(not collapsed)
+        button.label:SetTextColor(active and 0.05 or 0.9, active and 0.82 or 0.9, active and 0.62 or 0.9)
+        button.navIcon:SetAlpha(active and 1 or 0.75)
+        button:Show()
+    end
     local sf = CreateFrame("ScrollFrame", nil, f)
     sf:SetPoint("TOPLEFT", 170, -142)
     sf:SetSize(420, ViewHeight(f))
@@ -477,6 +571,8 @@ local function Build()
     f:SetScript("OnShow", function()
         currentCharacter = ns.CharacterKey()
         selectedCharacter, selectedTab, resetScroll = currentCharacter, nil, true
+        selectedCategory = nil
+        f.sidebarScroll:SetVerticalScroll(0)
         HideTooltip()
         -- Reopening must not retain an alt's tab, scroll or search filter.
         if search:GetText() ~= "" then search:SetText("") else ns.RefreshViewer() end
@@ -537,6 +633,7 @@ function ns.RefreshViewer()
     if currentCharacter ~= current or (selectedCharacter ~= current and not ns.ValidSnapshot(snapshot)) then
         currentCharacter = current
         selectedCharacter, selectedTab, resetScroll = current, nil, true
+        selectedCategory = nil
         HideTooltip()
     end
     snapshot = ns.DB and selectedCharacter and ns.DB.characters[selectedCharacter]
@@ -549,6 +646,21 @@ function ns.RefreshViewer()
     local formatted = timestamp and ns.String(ns.Read(date, "%Y-%m-%d %H:%M", timestamp))
     f.updated:SetText("Last updated: " .. (formatted or (snapshot and "time unavailable" or "never")))
     for _, button in ipairs(f.tabs) do button:Hide() end
+    local collapsed = settings.sidebarCollapsed == true
+    local sidebarWidth, contentLeft = collapsed and 32 or 145, collapsed and 56 or 170
+    f.sidebar:SetSize(sidebarWidth, f:GetHeight() - 132)
+    f.sidebarScroll:SetSize(sidebarWidth, f:GetHeight() - 156)
+    f.sidebarTitle:SetShown(not collapsed)
+    f.sidebarToggle.tip = collapsed and "Expand sidebar" or "Collapse sidebar"
+    f.sidebarToggle.label:SetText(f.sidebarToggle.hasArt and "" or (collapsed and ">" or "<"))
+    f.sidebarToggle.icon:SetRotation(collapsed and math.pi or 0)
+    f.tabsTitle:SetText(collapsed and "T" or "Tabs")
+    f.categoriesTitle:SetText(collapsed and "C" or "Categories")
+    f.grouping:ClearAllPoints(); f.grouping:SetPoint("TOPLEFT", contentLeft, -94)
+    f.display:ClearAllPoints(); f.display:SetPoint("TOPLEFT", contentLeft + 225, -94)
+    f.message:ClearAllPoints(); f.message:SetPoint("TOPLEFT", contentLeft, -142)
+    f.scrollFrame:ClearAllPoints(); f.scrollFrame:SetPoint("TOPLEFT", contentLeft, -142)
+    if f.categoryOwner ~= settings then selectedCategory = nil; f.categoryOwner = settings end
     local tabs = snapshot and snapshot.tabs or {}
     local found = selectedTab == nil
     for _, tab in ipairs(tabs) do if tab.bagID == selectedTab then found = true end end
@@ -557,24 +669,54 @@ function ns.RefreshViewer()
         local index, id = i + 1, i > 0 and tabs[i].bagID or nil
         local button = f.tabs[index]
         if not button then
-            button = Button(f, "", 145, function(self)
+            button = Button(f.sidebarChild, "", 145, function(self)
+                if ns.Editing() or not self:IsShown() or self.ownerSettings ~= ns.Addon.Settings() then return end
                 selectedTab, resetScroll = self.tabID, true
                 HideTooltip()
                 ns.RefreshViewer()
             end)
-            button:SetPoint("TOPLEFT", 12, -110 - i * 28)
-            button.label:SetWidth(135)
-            button.label:SetWordWrap(false)
             f.tabs[index] = button
         end
         button.tabID = id
-        button.tip = i == 0 and "All captured personal storage" or tabs[i].name
-        button.label:SetText(i == 0 and "All tabs" or tabs[i].name)
-        button.label:SetTextColor(selectedTab == id and 0.05 or 0.9, selectedTab == id and 0.82 or 0.9, selectedTab == id and 0.62 or 0.9)
-        button:Show()
+        button.ownerSettings = settings
+        button.tip = nil -- Sidebar tabs intentionally have no hover tooltip.
+        local title = i == 0 and "All tabs" or tabs[i].name
+        f.StyleNavigation(button, 20 + i * 28, title, "Interface\\Icons\\INV_Misc_Bag_10", selectedTab == id)
     end
+    local groups = ns.CategoryGroups(ns.Items(snapshot, selectedTab, ""))
+    local categoryFound = selectedCategory == nil
+    for _, group in ipairs(groups) do if group.key == selectedCategory then categoryFound = true end end
+    if not categoryFound then selectedCategory, resetScroll = nil, true end
+    for _, button in ipairs(f.categoryButtons) do button:Hide() end
+    local categoryTop = 24 + (#tabs + 1) * 28
+    f.categoriesTitle:ClearAllPoints(); f.categoriesTitle:SetPoint("TOPLEFT", 4, -categoryTop)
+    for i = 0, #groups do
+        local group, index = groups[i], i + 1
+        local button = f.categoryButtons[index]
+        if not button then
+            button = Button(f.sidebarChild, "", 145, function(self)
+                if ns.Editing() or not self:IsShown() or self.ownerSettings ~= ns.Addon.Settings() then return end
+                selectedCategory, resetScroll = self.categoryKey, true
+                HideTooltip(); ns.RefreshViewer()
+            end)
+            f.categoryButtons[index] = button
+        end
+        button.categoryKey, button.ownerSettings = group and group.key, settings
+        local title = group and ((group.name or "Other") .. " (" .. #group.items .. ")") or "All categories"
+        button.tip = nil -- Sidebar categories intentionally have no hover tooltip.
+        f.StyleNavigation(button, categoryTop + 20 + i * 28, title, group and (group.icon or 134400)
+            or 133633, selectedCategory == button.categoryKey, group and group.isAtlas)
+    end
+    f.sidebarChild:SetSize(sidebarWidth, categoryTop + 20 + (#groups + 1) * 28)
+    f.sidebarScroll:SetVerticalScroll(math.min(f.sidebarScroll:GetVerticalScroll(),
+        math.max(0, f.sidebarChild:GetHeight() - f.sidebarScroll:GetHeight())))
     local items = ns.Items(snapshot, selectedTab, f.search:GetText())
-    local availableWidth = math.max(420, f:GetWidth() - 200)
+    if selectedCategory then
+        local filtered = {}
+        for _, group in ipairs(ns.CategoryGroups(items)) do if group.key == selectedCategory then filtered = group.items; break end end
+        items = filtered
+    end
+    local availableWidth = math.max(420, f:GetWidth() - contentLeft - 30)
     local layout, mode = ns.Layout(items, math.max(1, math.floor(availableWidth / 42)))
     local layoutKey = mode .. ":" .. tostring(ns.Addon.Settings().groupByCategory == true)
     if f.layoutKey ~= layoutKey then resetScroll = true; f.layoutKey = layoutKey end
@@ -633,7 +775,7 @@ function ns.RefreshViewer()
             local label = f.columnLabels[i] or Font(f, "", 10)
             f.columnLabels[i] = label
             label:ClearAllPoints()
-            label:SetPoint("TOPLEFT", 170 + offsets[i], -124)
+            label:SetPoint("TOPLEFT", contentLeft + offsets[i], -124)
             label:SetWidth(widths[i] - 4)
             label:SetJustifyH("LEFT")
             label:SetText(COLUMN_NAMES[key]); label:Show()

@@ -21,11 +21,12 @@ function addon.Refresh()
 end
 core.RegisterFeature("bags", {
     defaults = { showButton = true, groupByCategory = false, display = "match", collapsedCategories = {},
-        windowScale = 1, frameStrata = "DIALOG",
+        windowScale = 1, frameStrata = "DIALOG", sidebarCollapsed = false,
         window = { width = 620, height = 510, x = 0, y = 0, locked = false } },
     normalize = function(settings)
         settings.showButton = settings.showButton ~= false
         settings.groupByCategory = settings.groupByCategory == true
+        settings.sidebarCollapsed = not ns.Secret(settings.sidebarCollapsed) and settings.sidebarCollapsed == true
         settings.windowScale = ns.WindowScale(settings.windowScale)
         settings.frameStrata = ns.WindowStrata(settings.frameStrata)
         local collapsed = {}

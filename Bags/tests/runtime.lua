@@ -11,7 +11,7 @@ local methods = { SetSize = Noop, SetHeight = Noop, SetWidth = Noop, SetPoint = 
     SetFontObject = Noop, SetTextInsets = Noop, SetMaxLetters = Noop, SetJustifyH = Noop,
     SetWordWrap = Noop, SetTexCoord = Noop, Raise = Noop, ClearFocus = Noop, ClearAllPoints = Noop,
     EnableMouseWheel = Noop, SetOrientation = Noop, SetValueStep = Noop, SetThumbTexture = Noop,
-    SetResizable = Noop, SetResizeBounds = Noop, SetDesaturated = Noop }
+    SetResizable = Noop, SetResizeBounds = Noop, SetDesaturated = Noop, SetRotation = Noop }
 local function Widget(kind, name, parent, template)
     Check(template == nil, "no secure/container templates")
     local f = { kind = kind, name = name, parent = parent, scripts = {}, events = {}, shown = true,
@@ -71,7 +71,9 @@ local function Widget(kind, name, parent, template)
         self.value = value
         if self.scripts.OnValueChanged then self.scripts.OnValueChanged(self, value) end
     end
-    function f:SetTexture(texture) self.texture = texture end
+    function f:SetTexture(texture) self.texture, self.atlas = texture, nil end
+    function f:SetAtlas(atlas) self.atlas = atlas; self.texture = nil end
+    function f:SetTexCoord(...) self.coords = { ... } end
     function f:CreateFontString() return Widget("FontString", nil, self) end
     function f:CreateTexture() return Widget("Texture", nil, self) end
     frames[#frames + 1] = f
@@ -785,4 +787,94 @@ Check(invalidAppearance.windowScale == 1 and invalidAppearance.frameStrata == "D
     "unreadable appearance values safely default")
 Check(ns.WindowScale(5) == 1.5 and ns.WindowScale(0.1) == 0.5 and ns.WindowScale(1.23) == 1.25,
     "scale normalization clamps and snaps to five-percent steps")
+-- Combined Tabs/Categories sidebar and independent profile-owned collapse state.
+settings = modules.feature.normalize({ showButton = true, display = "grid" })
+local function SavedItem(id) return { itemID = id, count = 1, link = "item:" .. id } end
+ns.DB = { format = 1, characters = { [ns.CharacterKey()] = { tabs = {
+    { bagID = 6, name = "Tab One", numSlots = 2, items = { SavedItem(100), SavedItem(200) } },
+    { bagID = 7, name = "Tab Two", numSlots = 1, items = { SavedItem(100) } },
+} } } }
+EUI_CategoryManager = {
+    GetCategories = function() return cats end,
+    ClassifyItem = function(_, _, id) return id == 100 and 1 or 5 end,
+}
+ns.Addon.Refresh()
+Check(native.tabs[2]:IsShown() and native.categoryButtons[2]:IsShown() and native.tabsTitle.text == "Tabs"
+    and native.categoriesTitle.text == "Categories", "both navigation sections visible together")
+native.categoryButtons[2].scripts.OnClick(native.categoryButtons[2])
+Check(native.total.text == "2 stacks" and native.slots[1].entry.item.itemID == 100, "category filters all selected tabs")
+native.tabs[2].scripts.OnClick(native.tabs[2])
+Check(native.total.text == "1 stacks" and native.slots[1].entry.tab == "Tab One", "category selection filters within selected bank tab")
+native.categoryButtons[3].scripts.OnClick(native.categoryButtons[3])
+Check(native.slots[1].entry.item.itemID == 200 and native.total.text == "1 stacks", "category navigation works without grouping")
+native.tabs[3].scripts.OnClick(native.tabs[3])
+Check(native.slots[1].entry.item.itemID == 100 and native.categoryButtons[1].navIcon.alpha == 1,
+    "missing category in new tab returns to All categories")
+local widthBeforeCollapse = native.scrollFrame:GetWidth()
+native.sidebarToggle.scripts.OnClick()
+Check(settings.sidebarCollapsed and native.sidebar:GetWidth() == 32 and not native.tabs[2].label:IsShown()
+    and native.tabs[2].navIcon.texture and not native.categoryButtons[2].tip,
+    "collapse retains icon-only navigation without category tooltips")
+local oldWidgetTooltip, sidebarTips = EllesmereUI.ShowWidgetTooltip, 0
+EllesmereUI.ShowWidgetTooltip = function() sidebarTips = sidebarTips + 1 end
+for _, button in ipairs(native.categoryButtons) do button.scripts.OnEnter() end
+Check(sidebarTips == 0, "sidebar category buttons never show tooltips")
+for _, button in ipairs(native.tabs) do button.scripts.OnEnter() end
+Check(sidebarTips == 0, "sidebar tab buttons never show tooltips")
+EllesmereUI.ShowWidgetTooltip = oldWidgetTooltip
+Check(native.scrollFrame:GetWidth() > widthBeforeCollapse and native.scrollFrame.point[2] == 56,
+    "collapsed sidebar releases width for item layout")
+native:Hide(); ns.ToggleViewer()
+Check(settings.sidebarCollapsed and native.tabs[1].navIcon.alpha == 1 and native.categoryButtons[1].navIcon.alpha == 1,
+    "reopening remembers sidebar collapse but resets tab/category selection")
+local railProfile = settings
+settings = modules.feature.normalize({ showButton = true })
+ns.Addon.Refresh()
+Check(not settings.sidebarCollapsed and native.sidebar:GetWidth() == 145, "new profile starts expanded")
+settings = railProfile
+ns.Addon.Refresh()
+Check(native.sidebar:GetWidth() == 32, "switching profiles restores sidebar collapse")
+editing = true
+native.sidebarToggle.scripts.OnClick()
+native.categoryButtons[2].scripts.OnClick(native.categoryButtons[2])
+Check(settings.sidebarCollapsed and native.categoryButtons[1].navIcon.alpha == 1, "sidebar controls honor Edit Mode")
+editing = false
+local manyCats, manyItems = {}, {}
+for i = 1, 35 do
+    manyCats[i] = { name = "Category " .. i, _defaultName = "Custom " .. i, icon = i }
+    manyItems[i] = SavedItem(100 + i)
+end
+ns.DB.characters[ns.CharacterKey()].tabs = { { bagID = 6, name = "Many", numSlots = 35, items = manyItems } }
+EUI_CategoryManager = { GetCategories = function() return manyCats end,
+    ClassifyItem = function(_, _, id) return id - 100 end }
+ns.Addon.Refresh()
+native.sidebarScroll.scripts.OnMouseWheel(native.sidebarScroll, -100)
+Check(native.sidebarScroll:GetVerticalScroll() == native.sidebarScroll:GetVerticalScrollRange()
+    and native.sidebarScroll:GetVerticalScroll() > 0, "long sidebar scrolls and clamps within separate clipped region")
+native.sidebarToggle.scripts.OnClick()
+Check(not settings.sidebarCollapsed and native.tabs[1].label:IsShown(), "expanding restores navigation labels")
+-- Use EUI category atlas metadata and its client-specific texture substitutions.
+local iconWidget = Widget("Texture")
+C_Texture = { GetAtlasInfo = function(name) return name == "category-atlas" and {} or nil end }
+EllesmereUI.ClientIcon = function(icon) return icon == 7548911 and 133975 or icon end
+ns.PaintCategoryIcon(iconWidget, "category-atlas", true)
+Check(iconWidget.atlas == "category-atlas" and iconWidget.coords[1] == 0 and iconWidget.coords[2] == 1,
+    "EUI atlas category icons use native atlas rendering without icon crop")
+ns.PaintCategoryIcon(iconWidget, 7548911, false)
+Check(iconWidget.texture == 133975 and iconWidget.coords[1] == 0.08,
+    "texture category icons reuse EUI Forever mapping and crop")
+ns.PaintCategoryIcon(iconWidget, "missing-atlas", true)
+Check(iconWidget.texture == 134400, "unavailable atlas has safe texture fallback")
+local setAtlas = iconWidget.SetAtlas
+iconWidget.SetAtlas = nil
+ns.PaintCategoryIcon(iconWidget, "category-atlas", true)
+Check(iconWidget.texture == 134400, "older client without atlas setter falls back safely")
+iconWidget.SetAtlas = setAtlas
+manyCats[1].icon, manyCats[1].isAtlas = "category-atlas", true
+ns.Addon.Refresh()
+Check(native.categoryButtons[2].navIcon.atlas == "category-atlas", "sidebar preserves EUI category atlas flag")
+manyCats[1].icon, manyCats[1].isAtlas = 7548911, nil
+ns.Addon.Refresh()
+Check(native.categoryButtons[2].navIcon.texture == 133975 and native.categoryButtons[1].navIcon.texture == 133633,
+    "sidebar matches EUI category and All Items icon values")
 print("PASS: " .. checks .. " Bags capture, capability, read-only viewer and UI checks")

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Match EUI sidebar category icons, including atlases, texture cropping and Forever icon substitutions.
+- Keep sidebar tab and category buttons tooltip-free while retaining item tooltips.
+- Add a combined Tabs/Categories sidebar with selected-tab category filtering, an icon-only collapsed rail and per-profile collapse persistence.
 - Add per-profile Window Scale (50–150%) and Frame Strata options for the snapshot viewer only, with scale-aware position persistence.
 - Add clickable List category headers with per-profile collapse persistence, stable category identities and matching stack counts.
 - Limit item-quality borders to the icon in List display instead of coloring the whole row.
