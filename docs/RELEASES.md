@@ -85,13 +85,15 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Package.ps1 -Featu
 
 `-Feature` accepts Nameplates, QuestTracker, Bags or All (default, all three). `-Version` and `-Interface` override only packaged TOCs, not source; versions may include `-alpha.N` or `-beta.N`. `-OutputDirectory` changes the destination. Local filenames use `<addon identity>-<version>.zip`; GitHub workflows use `<addon identity>-<full feature tag>.zip`. Rebuild all packages when shared source changes and maintain embedded API compatibility across independently updated releases.
 
-### Bags initial alpha
+### Bags source version and release channels
 
 Build locally with `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Package.ps1 -Feature Bags`. The archive contains only `EllesmereUIExtendBags/`, its embedded Shared modules, README and license. Its TOC targets the same Retail/Forever interfaces and requires EllesmereUI plus EllesmereUIBags. Inventory uses `EllesmereUIExtendBagsDB`; shared settings use `EllesmereUIExtendBagsProfiles`.
 
 The release planner/workflow includes Bags using `bags-v...` tags, `.pkgmeta-bags`, generated `docs/BAGS-CHANGELOG.md` notes and optional `CURSEFORGE_BAGS_PROJECT_ID`. Leave that variable unset for GitHub-only publishing; configuring a CurseForge project and its repository variable is a separate operator action. Do not publish before both-client bank/viewer checks. Existing feature packaging metadata excludes Bags to preserve independent install ownership.
 
-Before any Bags tag exists, its source `0.1.0-alpha.1` is treated as base `0.1.0`; the qualifying feature introduction bumps minor, so the first alpha plan can be `bags-v0.2.0-alpha.1`. Preview the actual history-derived plan rather than assuming it will match the local ZIP version. Existing feature histories/versions remain independent.
+Bags' source TOC version is `0.1.0`, so a default local build produces `EllesmereUIExtendBags-0.1.0.zip`. Choose **alpha**, **beta** or **stable** in the GitHub workflow; the planner determines the release version from qualifying history and the workflow writes it into the packaged TOC without changing the source TOC. A plain source version does not declare an in-game-verified stable release.
+
+Before any Bags tag exists, the planner starts from source base `0.1.0`; a qualifying feature introduction bumps minor, so initial plans can be `bags-v0.2.0-alpha.1`, `bags-v0.2.0-beta.1` or `bags-v0.2.0`, depending on the selected channel. Once tags exist, Bags' independent release history governs version progression. Preview the actual plan rather than assuming it will match the local ZIP version. Existing feature histories/versions remain independent.
 
 ## Upgrades and distribution caveats
 

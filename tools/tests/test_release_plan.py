@@ -104,7 +104,20 @@ class ReleasePlanTests(unittest.TestCase):
         for feature in planner.FEATURES:
             self.assertIsNone(self.plan(feature))
 
-    def test_bags_first_release_from_alpha_source_version(self):
+    def test_bags_first_release_channel_from_plain_source_version(self):
+        self.git("tag", "-d", "bags-v1.0.0")
+        toc = Path("Bags/EllesmereUIExtendBags.toc")
+        toc.write_text("## Version: 0.1.0\n", encoding="utf-8")
+        self.commit("feat(bags): add bank snapshots", "Bags/Bags.lua")
+        for channel, expected in (("alpha", "0.2.0-alpha.1"), ("beta", "0.2.0-beta.1"), ("stable", "0.2.0")):
+            with self.subTest(channel=channel):
+                result = self.plan("bags", channel)
+                self.assertEqual(result["tag"], "bags-v" + expected)
+                self.assertEqual(result["version"], expected)
+                self.assertEqual(result["prerelease"], channel != "stable")
+                self.assertEqual(toc.read_text(encoding="utf-8"), "## Version: 0.1.0\n")
+
+    def test_bags_historical_alpha_source_version_remains_supported(self):
         self.git("tag", "-d", "bags-v1.0.0")
         Path("Bags/EllesmereUIExtendBags.toc").write_text("## Version: 0.1.0-alpha.1\n", encoding="utf-8")
         self.commit("feat(bags): add bank snapshots", "Bags/Bags.lua")

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Use source TOC version `0.1.0`; select the release channel in the GitHub workflow, which applies the planned version only to distributed packages.
+
 - Keep sidebar category occupied-slot counts visible in separate right-aligned labels when category names are long.
 
 - Show occupied bank slots beside the selected character and dropdown choices when search is empty; searching shows matching slot counts instead. Remove the bottom stacks-count label.

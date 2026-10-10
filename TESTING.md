@@ -39,7 +39,7 @@ python -m unittest discover -s tools/tests -p 'test_release_plan.py' -v
 
 Run these after changing `tools/release_plan.py` or the manual release workflow.
 They cover all three feature identities, isolated scopes/history, shared Core
-releases, Bags' initial alpha version, promotion, addon selection and matrix/notes
+releases, Bags' plain source version with all three release channels (and historical alpha source compatibility), promotion, addon selection and matrix/notes
 artifacts. They are separate from `tools/Test.ps1`. Also run both packaging suites for
 workflow/metadata changes. Preview the workflow on GitHub before first publishing;
 offline tests do not verify GitHub permissions, packager uploads or CurseForge.
