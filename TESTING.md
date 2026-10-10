@@ -67,7 +67,7 @@ Paths below are relative to each addon's `tests/` directory.
 | --- | --- |
 | `runtime.lua` | Real feature adapters; either/both installs; profiles, assignments, defaults/reset isolation, UI locks, stale popups, secret identity and one combined UI. |
 | `persistence.lua` | Both load orders, reload, uninstall/reinstall, independent edits, renames, deletion tombstones, same-name creations, invalid snapshots and clock fallback. |
-| `packaging.ps1` | Single-folder ZIP ownership, every TOC entry, identical embedded modules/load order, dependencies, SavedVariables, dual-client TOC/workflow metadata and non-mutating alpha/interface overrides. |
+| `packaging.ps1` | Single-folder ZIP ownership, every TOC entry, identical embedded modules/load order, dependencies, SavedVariables, custom addon-list icon paths/bytes/TGA format, dual-client TOC/workflow metadata and non-mutating alpha/interface overrides. |
 
 ### Nameplates
 
@@ -99,6 +99,8 @@ Paths below are relative to each addon's `tests/` directory.
 ## In-game verification: Retail and Forever
 
 Mocks do not reproduce Retail's secret-value VM, native rendering/menu/mover engines or secure hardware clicks. Verify changed behavior on **both clients**, including missing-API fallbacks. Passing mock tests does not establish release support; see [Releases](docs/RELEASES.md) for the current target.
+
+- After installing the updated packages and restarting each client, open the AddOns list and confirm Nameplates displays the turquoise artwork and Quest Tracker displays the beige/blue artwork, including when each extension is disabled. Check for missing/green textures and unwanted cropping. Clients without native addon-list icon support may omit the icon; no custom list hooks are installed.
 
 ### Shared profiles
 
