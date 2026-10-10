@@ -53,6 +53,8 @@ local function Widget(kind, name, parent, template)
     function f:SetScale(scale) self.scale = scale end
     function f:GetEffectiveScale() return (self.scale or 1) * (self.parent and self.parent:GetEffectiveScale() or 1) end
     function f:SetFrameStrata(strata) self.strata = strata end
+    function f:GetFrameLevel() return self.level or 1 end
+    function f:SetFrameLevel(level) self.level = level end
     function f:SetAlpha(alpha) self.alpha = alpha end
     function f:SetPoint(...) self.point = { ... } end
     function f:StartMoving() self.moving = true end
@@ -255,9 +257,17 @@ ns.BagButton.scripts.OnEnter()
 Check(shownTip == "Visit the banker first", "button explains current-character banker prerequisite")
 ns.BagButton.scripts.OnClick()
 local viewer = EllesmereUIExtendBagsViewer
+local function PickCharacter(key)
+    local host = EllesmereUIExtendBagsViewer
+    host.characterDropdown.scripts.OnClick(host.characterDropdown)
+    for _, row in ipairs(host.characterMenu.rows) do
+        if row:IsShown() and row.label.text == key then row.scripts.OnClick(); return end
+    end
+    error("missing dropdown character " .. key)
+end
 Check(viewer:IsShown() and viewer.message.text == "Visit the banker first", "button opens first-visit empty bank")
 Check(viewer.character.text == "Fallback - Realm", "uncaptured current character still labels empty bank")
-Check(not viewer.previousCharacter.enabled and not viewer.nextCharacter.enabled, "no alt snapshots disables character arrows")
+Check(viewer.characterDropdown.enabled, "current character remains selectable without snapshots")
 for _, slot in ipairs(viewer.slots) do Check(not slot:IsShown() and slot.entry == nil, "uncaptured bank has no item icons") end
 Event("BANKFRAME_OPENED"); Tick(); Tick()
 Check(viewer.slots[1]:IsShown() and viewer.message.text == "", "first capture fills open viewer without reopening bags")
@@ -268,16 +278,16 @@ player = "Uncaptured"
 ns.Addon.Refresh(); ns.Addon.Refresh()
 Check(ns.BagButton.enabled and viewer.message.text == "Visit the banker first", "uncaptured player never falls back to alt snapshot")
 Check(viewer.character.text == "Uncaptured - Realm" and not viewer.slots[1]:IsShown(), "current player owns empty viewer despite saved alts")
-Check(viewer.nextCharacter.enabled and viewer.previousCharacter.enabled, "uncaptured player can browse saved alts")
-viewer.nextCharacter.scripts.OnClick()
+Check(viewer.characterDropdown.enabled, "uncaptured player can browse saved alts")
+PickCharacter("Alt - Realm")
 Check(viewer.character.text == "Alt - Realm" and viewer.slots[1]:IsShown(), "right arrow browses captured alt from empty current bank")
 ns.Addon.Refresh()
 Event("GET_ITEM_INFO_RECEIVED")
 Check(viewer.character.text == "Alt - Realm", "refresh and item data arrival preserve selected alt")
-viewer.previousCharacter.scripts.OnClick()
+PickCharacter("Uncaptured - Realm")
 Check(viewer.character.text == "Uncaptured - Realm" and viewer.message.text == "Visit the banker first",
     "left arrow returns to uncaptured current player")
-viewer.nextCharacter.scripts.OnClick()
+PickCharacter("Alt - Realm")
 viewer:Hide()
 SlashCmdList.ELLESMEREUIEXTENDBAGS()
 Check(viewer.character.text == "Uncaptured - Realm" and viewer.message.text == "Visit the banker first",
@@ -298,9 +308,9 @@ Check(#slots > 0 and slots[1].entry and viewer.scrollFrame.scrollChild == viewer
     "snapshot items render inside clipped scroll child")
 slots[1].scripts.OnEnter(slots[1])
 Check(tooltips == 1, "stored-link tooltip shown")
-Check(viewer.character.text == "Fallback - Realm" and viewer.previousCharacter and viewer.nextCharacter,
-    "viewer opens on current player and retains character arrows")
-viewer.nextCharacter.scripts.OnClick()
+Check(viewer.character.text == "Fallback - Realm" and viewer.characterDropdown and not viewer.previousCharacter and not viewer.nextCharacter,
+    "viewer opens on current player with dropdown replacing arrows")
+PickCharacter("Alt - Realm")
 Check(viewer.character.text == "Alt - Realm", "right arrow browses other captured character")
 Event("BANKFRAME_OPENED"); Tick(); Tick()
 Check(viewer.character.text == "Alt - Realm", "current player's capture preserves intentionally browsed alt")
@@ -570,8 +580,8 @@ ns.Addon.Refresh()
 Check(native.scrollFrame:GetVerticalScroll() == 0, "grouping changes reset scroll")
 native.scripts.OnMouseWheel(native, -2)
 ns.DB.characters["Browse - Realm"] = { tabs = scan }
-native.nextCharacter.scripts.OnClick()
-Check(native.scrollFrame:GetVerticalScroll() == 0, "character arrows reset scroll")
+PickCharacter("Browse - Realm")
+Check(native.scrollFrame:GetVerticalScroll() == 0, "character dropdown resets scroll")
 local priorStops = stops
 native:Hide()
 Check(stops == priorStops + 1, "hiding viewer releases shared scrollbar drag state")
@@ -877,4 +887,40 @@ manyCats[1].icon, manyCats[1].isAtlas = 7548911, nil
 ns.Addon.Refresh()
 Check(native.categoryButtons[2].navIcon.texture == 133975 and native.categoryButtons[1].navIcon.texture == 133633,
     "sidebar matches EUI category and All Items icon values")
+-- Character dropdown: verified EUI menu contract and stale-callback guards.
+local menuItems, menuOptions, menuAnchor
+EllesmereUI.ShowContextMenu = function(anchor, items, options)
+    menuAnchor, menuItems, menuOptions = anchor, items, options
+end
+ns.DB.characters["Dropdown Alt - Realm"] = { tabs = {} }
+native.characterDropdown.scripts.OnClick(native.characterDropdown)
+Check(menuAnchor == native.characterDropdown and menuOptions.below and menuOptions.minWidth == 364
+    and menuItems[1].text == ns.CharacterKey() and menuItems[1].isActive,
+    "EUI character dropdown anchors below selector and includes uncaptured current player first")
+local altChoice
+for _, item in ipairs(menuItems) do if item.text == "Dropdown Alt - Realm" then altChoice = item.onClick end end
+Check(altChoice ~= nil, "dropdown includes captured alts by name and realm")
+editing = true
+altChoice()
+Check(native.character.text == ns.CharacterKey(), "already-open character dropdown honors Edit Mode")
+editing = false
+local menuProfile = settings
+settings = modules.feature.normalize({ showButton = true })
+altChoice()
+Check(native.character.text == ns.CharacterKey(), "stale dropdown cannot select after profile switch")
+settings = menuProfile
+native:Hide(); ns.ToggleViewer()
+altChoice()
+Check(native.character.text == ns.CharacterKey(), "reopening invalidates prior character menu callbacks")
+native.characterDropdown.scripts.OnClick(native.characterDropdown)
+for _, item in ipairs(menuItems) do if item.text == "Dropdown Alt - Realm" then altChoice = item.onClick end end
+altChoice()
+Check(native.character.text == "Dropdown Alt - Realm", "EUI dropdown directly selects requested alt")
+native:Hide(); ns.ToggleViewer()
+Check(native.character.text == ns.CharacterKey(), "dropdown preserves current-character opening contract")
+EllesmereUI.ShowContextMenu = nil
+native.characterDropdown.scripts.OnClick(native.characterDropdown)
+Check(native.characterMenu:IsShown(), "older EUI offers addon-owned character dropdown")
+native.characterDropdown.scripts.OnClick(native.characterDropdown)
+Check(not native.characterMenu:IsShown(), "fallback selector toggles menu closed")
 print("PASS: " .. checks .. " Bags capture, capability, read-only viewer and UI checks")

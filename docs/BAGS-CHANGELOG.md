@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Replace character-browsing arrows with a character dropdown, keeping the current character first and selected on opening.
 - Match EUI sidebar category icons, including atlases, texture cropping and Forever icon substitutions.
 - Keep sidebar tab and category buttons tooltip-free while retaining item tooltips.
 - Add a combined Tabs/Categories sidebar with selected-tab category filtering, an icon-only collapsed rail and per-profile collapse persistence.

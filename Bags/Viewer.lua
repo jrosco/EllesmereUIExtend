@@ -238,12 +238,11 @@ local function CharacterChoices()
     end
     return keys
 end
-local function ChangeCharacter(direction)
-    local keys = CharacterChoices()
-    if #keys < 2 then return end
-    local index = 1
-    for i, key in ipairs(keys) do if key == selectedCharacter then index = i; break end end
-    selectedCharacter = keys[((index - 1 + direction) % #keys) + 1]
+local function SelectCharacter(key)
+    local found = false
+    for _, choice in ipairs(CharacterChoices()) do if choice == key then found = true; break end end
+    if not found then return end
+    selectedCharacter = key
     selectedTab, resetScroll = nil, true
     selectedCategory = nil
     HideTooltip()
@@ -348,15 +347,83 @@ local function Build()
     f:SetScript("OnSizeChanged", function()
         if not f.applyingGeometry and f:IsShown() and f.scrollFrame then ns.RefreshViewer() end
     end)
-    f.previousCharacter = Button(f, "<", 24, function() ChangeCharacter(-1) end, "Previous character's bank")
-    f.previousCharacter:SetPoint("TOPLEFT", 12, -40)
-    f.nextCharacter = Button(f, ">", 24, function() ChangeCharacter(1) end, "Next character's bank")
-    f.nextCharacter:SetPoint("TOPLEFT", 352, -40)
-    f.character = Font(f)
-    f.character:SetPoint("LEFT", f.previousCharacter, "RIGHT", 8, 0)
-    f.character:SetWidth(300)
+    local function CloseCharacterMenu()
+        f.characterMenuToken = nil
+        if f.characterMenu then f.characterMenu:Hide() end
+        if EllesmereUI and EllesmereUI.ContextMenuOwner and EllesmereUI.CloseContextMenu
+            and EllesmereUI.ContextMenuOwner() == f.characterDropdown then EllesmereUI.CloseContextMenu() end
+    end
+    f.CloseCharacterMenu = CloseCharacterMenu
+    f.characterDropdown = Button(f, "", 364, function(self)
+        if ns.Editing() then return end
+        if f.characterMenu and f.characterMenu:IsShown() then CloseCharacterMenu(); return end
+        local owner, identity, token = ns.Addon.Settings(), ns.CharacterKey(), {}
+        f.characterMenuToken = token
+        f.characterMenuSettings, f.characterMenuIdentity = owner, identity
+        local items = {}
+        for _, key in ipairs(CharacterChoices()) do
+            local choice = key
+            items[#items + 1] = { text = choice, isActive = choice == selectedCharacter, onClick = function()
+                if ns.Editing() or not f:IsShown() or f.characterMenuToken ~= token
+                    or ns.Addon.Settings() ~= owner or ns.CharacterKey() ~= identity then return end
+                CloseCharacterMenu()
+                SelectCharacter(choice)
+            end }
+        end
+        if EllesmereUI and type(EllesmereUI.ShowContextMenu) == "function" then
+            EllesmereUI.ShowContextMenu(self, items, { below = true, minWidth = 364 })
+            return
+        end
+        -- Older EUI: addon-owned, clipped and scrollable dropdown, no live item actions.
+        if not f.characterMenu then
+            local menu = CreateFrame("Frame", nil, f)
+            menu:SetPoint("TOPLEFT", self, "BOTTOMLEFT", 0, -2)
+            menu:SetFrameLevel(f:GetFrameLevel() + 20)
+            menu:SetClampedToScreen(true)
+            Skin(menu)
+            local scroll = CreateFrame("ScrollFrame", nil, menu)
+            scroll:SetPoint("TOPLEFT", 4, -4)
+            local child = CreateFrame("Frame", nil, scroll)
+            scroll:SetScrollChild(child)
+            scroll:EnableMouseWheel(true)
+            scroll:SetScript("OnMouseWheel", function(_, delta)
+                scroll:SetVerticalScroll(math.max(0, math.min(math.max(0, child:GetHeight() - scroll:GetHeight()),
+                    scroll:GetVerticalScroll() - delta * 26)))
+            end)
+            menu.scroll, menu.child, menu.rows = scroll, child, {}
+            f.characterMenu = menu
+        end
+        local menu = f.characterMenu
+        for _, row in ipairs(menu.rows) do row:Hide() end
+        local height = math.min(260, #items * 26)
+        menu:SetSize(364, height + 8)
+        menu.scroll:SetSize(356, height)
+        menu.child:SetSize(356, math.max(1, #items * 26))
+        menu.scroll:SetVerticalScroll(0)
+        for i, item in ipairs(items) do
+            local row = menu.rows[i]
+            if not row then
+                row = Button(menu.child, "", 356, nil)
+                row:SetPoint("TOPLEFT", 0, -(i - 1) * 26)
+                row.label:SetWidth(340); row.label:SetWordWrap(false)
+                menu.rows[i] = row
+            end
+            row.label:SetText(item.text)
+            row.label:SetTextColor(item.isActive and 0.05 or 0.9, item.isActive and 0.82 or 0.9, item.isActive and 0.62 or 0.9)
+            row:SetScript("OnClick", item.onClick)
+            row:Show()
+        end
+        menu:Show()
+    end)
+    f.characterDropdown:SetPoint("TOPLEFT", 12, -40)
+    f.character = f.characterDropdown.label
+    f.character:ClearAllPoints()
+    f.character:SetPoint("LEFT", 8, 0)
+    f.character:SetWidth(332)
     f.character:SetJustifyH("LEFT")
     f.character:SetWordWrap(false)
+    local characterArrow = Font(f.characterDropdown, "v", 11)
+    characterArrow:SetPoint("RIGHT", -8, 0)
     local search = CreateFrame("EditBox", nil, f)
     search:SetSize(220, 24)
     search:SetPoint("TOPRIGHT", -12, -40)
@@ -563,6 +630,7 @@ local function Build()
     f.total = Font(f)
     f.total:SetPoint("BOTTOM", 70, 18)
     f:SetScript("OnHide", function()
+        CloseCharacterMenu()
         search:ClearFocus(); f:StopMovingOrSizing(); SaveGeometry(); f.gestureSettings = nil; HideTooltip()
         f.geometrySettings, f.geometryWindow = nil, nil
         local stop = f.scrollTrack:GetScript("OnMouseUp")
@@ -586,6 +654,8 @@ function ns.RefreshViewer()
     if not viewer or not viewer:IsShown() then return end
     local f = viewer
     local settings = ns.Addon.Settings()
+    if f.characterMenuToken and (ns.Editing() or f.characterMenuSettings ~= settings
+        or f.characterMenuIdentity ~= ns.CharacterKey()) then f.CloseCharacterMenu() end
     local window = WindowSettings()
     local scale, strata = ns.WindowScale(settings.windowScale), ns.WindowStrata(settings.frameStrata)
     local appearanceChanged = f.appliedScale ~= scale or f.appliedStrata ~= strata
@@ -639,9 +709,7 @@ function ns.RefreshViewer()
     snapshot = ns.DB and selectedCharacter and ns.DB.characters[selectedCharacter]
     if not ns.ValidSnapshot(snapshot) then snapshot = nil end
     f.character:SetText(selectedCharacter or "Current character unavailable")
-    local keys = CharacterChoices()
-    f.previousCharacter:SetEnabled(#keys > 1)
-    f.nextCharacter:SetEnabled(#keys > 1)
+    f.characterDropdown:SetEnabled(not ns.Editing() and #CharacterChoices() > 0)
     local timestamp = snapshot and snapshot.updatedAt
     local formatted = timestamp and ns.String(ns.Read(date, "%Y-%m-%d %H:%M", timestamp))
     f.updated:SetText("Last updated: " .. (formatted or (snapshot and "time unavailable" or "never")))
