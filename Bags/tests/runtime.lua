@@ -9,7 +9,7 @@ local methods = { SetSize = Noop, SetHeight = Noop, SetWidth = Noop, SetPoint = 
     SetFrameStrata = Noop, SetClampedToScreen = Noop, SetMovable = Noop, EnableMouse = Noop,
     RegisterForDrag = Noop, StartMoving = Noop, StopMovingOrSizing = Noop, SetAutoFocus = Noop,
     SetFontObject = Noop, SetTextInsets = Noop, SetMaxLetters = Noop, SetJustifyH = Noop,
-    SetWordWrap = Noop, SetTexCoord = Noop, Raise = Noop, ClearFocus = Noop }
+    SetWordWrap = Noop, SetTexCoord = Noop, Raise = Noop, ClearFocus = Noop, ClearAllPoints = Noop }
 local function Widget(kind, name, parent, template)
     Check(template == nil, "no secure/container templates")
     local f = { kind = kind, name = name, parent = parent, scripts = {}, events = {}, shown = true,
@@ -59,11 +59,17 @@ EllesmereUIExtend = {
     GetSettings = function() return settings end,
     RegisterModule = function(spec) modules.options = spec end,
 }
-local rows = {}
+local rows, rightRows = {}, {}
 EllesmereUI = { IsUnlockModeActive = function() return editing end, Widgets = {
     SectionHeader = function() return {}, 30 end,
-    DualRow = function(_, _, _, left) rows[#rows + 1] = left; return {}, 40 end,
+    DualRow = function(_, _, _, left, right) rows[#rows + 1] = left; if right then rightRows[#rightRows + 1] = right end; return {}, 40 end,
 } }
+local borders = 0
+EllesmereUI.MakeBorder = function(_, r, g, b, a)
+    Check(r == 1 and g == 1 and b == 1 and a == 0.15, "bank skin uses native EUI border contract")
+    borders = borders + 1
+    return { SetColor = Noop }
+end
 Enum = { BagIndex = { CharacterBankTab_1 = 6, CharacterBankTab_2 = 7, AccountBankTab_1 = 12,
     Reagentbank = -3, ReagentBag = 5 }, BankType = { Character = 0, Account = 2 } }
 local sizes, contents, metadata = {}, {}, { { name = "Main" }, { name = "Materials" } }
@@ -331,4 +337,155 @@ Check(viewer.character.text == "Current character unavailable" and viewer.messag
 Check(not viewer.slots[1]:IsShown(), "unreadable identity clears prior icons")
 UnitFullName = fullName
 Check(ns.DB.characters["Alt - Realm"] ~= nil, "viewer preserves other stored character data")
+-- Snapshot layouts use current EUI configuration without querying live containers.
+modules.feature.normalize(settings)
+Check(settings.display == "match" and settings.groupByCategory == false, "new settings normalize to EUI display and ungrouped")
+EllesmereUI._bagsDB = { profile = { bankCompactView = true } }
+Check(ns.DisplayMode() == "compact", "match follows EUI compact bank")
+EllesmereUI._bagsDB.profile.bankListView = true
+Check(ns.DisplayMode() == "list", "EUI list wins when both native switches are set")
+settings.display = "grid"
+Check(ns.DisplayMode() == "grid", "explicit override ignores native bank mode")
+local cats = { { name = "Materials", _defaultName = "Trade Goods" },
+    { name = "Quests", types = { 12 } }, { name = "Set Gear", isSetGear = true },
+    { name = "Junk", isJunk = true }, { name = "Other", isCatchAll = true } }
+EUI_CategoryManager = {
+    GetCategories = function() return cats end,
+    ClassifyItem = function(_, link, id, bag, slot)
+        Check(bag == nil and slot == nil, "snapshot classifier never sees live bag coordinates")
+        return id == 100 and 1 or 5
+    end,
+    GetSetGearLookup = function() return { [6001] = 42 } end,
+}
+local entries = {}
+for i = 1, 100 do entries[i] = { item = { itemID = i % 2 == 0 and 100 or 200, link = "item:100", count = 2, quality = 2 } } end
+settings.groupByCategory = true
+for _, mode in ipairs({ "grid", "compact", "list" }) do
+    settings.display = mode
+    local layouts, resolved = ns.Layout(entries)
+    local total, seen = 0, {}
+    for _, layout in ipairs(layouts) do
+        Check(#layout.slots <= 80, "layouts fit bounded read-only icon pool")
+        for _, placement in ipairs(layout.slots) do
+            total = total + 1
+            Check(placement.x >= 0 and placement.x < 420 and placement.y >= 0
+                and placement.y + (mode == "list" and 24 or 40) <= 320, "layout fits content bounds")
+            Check(not seen[placement.entry], "pagination never duplicates a stack")
+            seen[placement.entry] = true
+        end
+    end
+    Check(total == 100 and resolved == mode, "all stacks survive category pagination in " .. mode)
+    Check(layouts[1].headings[1].text == "Materials", "EUI names and order reused")
+end
+EllesmereUI._bagsDB.profile.bagDisabledCategories = { ["Trade Goods"] = true }
+local layouts = ns.Layout({ entries[2] })
+Check(layouts[1].headings[1].text == "Other", "disabled EUI categories route to catch-all")
+EllesmereUI._bagsDB.profile.bagDisabledCategories = nil
+local specialItem = { itemID = 200, link = "item:200", count = 1, quality = 2, quest = true, setID = 42 }
+layouts = ns.Layout({ { item = specialItem } })
+Check(layouts[1].headings[1].text == "Quests", "captured quest status precedes equipment set")
+specialItem.quest = nil
+layouts = ns.Layout({ { item = specialItem } })
+Check(layouts[1].headings[1].text == "Set Gear", "captured equipment membership supports alt grouping")
+specialItem.quality = 0
+layouts = ns.Layout({ { item = specialItem } })
+Check(layouts[1].headings[1].text == "Junk", "junk precedes equipment set")
+EllesmereUIDB = { bagItemAssignments = { [200] = "Trade Goods" } }
+layouts = ns.Layout({ { item = specialItem } })
+Check(layouts[1].headings[1].text == "Materials", "current EUI assignment overrides captured special membership")
+EllesmereUIDB = nil
+EUI_CategoryManager = nil
+layouts = ns.Layout(entries)
+Check(layouts[1].headings[1].text == "Other", "missing category API retains every item in catch-all")
+EUI_CategoryManager = { GetCategories = function() error("unavailable") end }
+Check(#ns.Layout(entries) > 0, "throwing category API has safe fallback")
+EllesmereUI._bagsDB.profile.bagListColumns = { "name", "track", "count", "unknown", "name", "bind" }
+local columns = ns.ListColumns()
+Check(#columns == 4 and columns[1] == "name" and columns[4] == "bind", "EUI column order retained, unknowns and duplicates omitted")
+local oldInfo = C_Item.GetItemInfo
+Enum.ItemBind = { OnEquip = 2, ToBnetAccount = 8 }
+C_Item.GetItemInfo = function() return "Named Item", nil, 2, 40, 10, "Armor", "Plate", nil, nil, nil, 12345, nil, nil, 2 end
+C_Item.GetDetailedItemLevelInfo = function() return 42 end
+local values = ns.ListValues({ link = "item:100", count = 2, bound = true })
+Check(values.name == "Named Item" and values.ilvl == "42" and values.type == "Plate" and values.bind == "SB", "available list metadata resolved from stored links")
+Check(values.sell == "2g 46s 90c" and not values.track, "stack vendor value computed, unknown track blank")
+C_Item.GetItemInfo = function() return "Named Item", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 8 end
+Check(ns.ListValues({ link = "item:100", count = 1, bound = true }).bind == "WB", "account-bound items are not mislabeled soulbound")
+C_Item.GetItemInfo = function() return secret, nil, secret, secret, secret, secret, secret, nil, nil, nil, secret end
+C_Item.GetDetailedItemLevelInfo = function() return secret end
+values = ns.ListValues({ link = "item:100", count = 1 })
+Check(values.name == "item:100" and values.ilvl == "" and not values.sell, "secret metadata left blank without arithmetic")
+C_Item.GetItemInfo = oldInfo
+settings.display = "list"
+ns.RefreshViewer()
+Check(viewer.display.label.text == "List", "viewer reflects persistent mode")
+editing = true
+viewer.display.scripts.OnClick(); viewer.grouping.scripts.OnClick()
+Check(settings.display == "list" and settings.groupByCategory, "stale viewer controls honor editor lock")
+editing = false
+viewer.display.scripts.OnClick()
+Check(settings.display == "match", "viewer cycles to Match EUI bank persistently")
+viewer.grouping.scripts.OnClick()
+Check(not settings.groupByCategory, "viewer grouping changes saved setting")
+modules.options.buildPage(nil, UIParent, 0)
+local displayControl = rightRows[#rightRows]
+Check(displayControl.text == "Bank display", "settings exposes four-choice display dropdown")
+editing = true
+displayControl.setValue("compact")
+Check(settings.display == "match", "stale settings dropdown honors editor lock")
+editing = false
+displayControl.setValue("compact")
+Check(settings.display == "compact", "settings dropdown applies persistent override")
+EUI_CategoryManager = { GetSetGearLookup = function() return { [6001] = 42 } end }
+C_Container.GetContainerItemQuestInfo = function() return { isQuestItem = true } end
+sizes, contents = { [6] = 1, [7] = 1 }, { [6] = { Item(100, 1) } }
+contents[6][1].isBound = true
+Event("BANKFRAME_OPENED")
+local scan = ns.Scan()
+Check(scan[1].items[1].quest and scan[1].items[1].setID == 42 and scan[1].items[1].bound,
+    "banker scan captures quest, equipment membership and binding")
+Event("BANKFRAME_CLOSED")
+ns.DB = { format = 1, characters = { [ns.CharacterKey()] = { tabs = scan } } }
+settings.display, settings.groupByCategory = "list", false
+C_Item.GetItemInfo = function() return "Silver Ore", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 2 end
+viewer:Hide()
+SlashCmdList.ELLESMEREUIEXTENDBAGS()
+ns.RefreshViewer()
+Check(viewer.slots[1]:IsShown() and viewer.slots[1].cells[1].text == "Silver Ore",
+    "list draws current EUI name column from stored link")
+Check(viewer.slots[1].cells[2].text == "" and viewer.slots[1].cells[3].text == "1",
+    "list draws blank track and stack count")
+Check(viewer.slots[1].cells[4].text == "SB" and not viewer.slots[1].icon:IsShown(),
+    "list supports captured binding and omitted icon column")
+Check(borders > 80, "window and plain item buttons reuse native EUI border styling")
+settings.display = "grid"
+ns.RefreshViewer()
+Check(viewer.slots[1].icon:IsShown() and not viewer.slots[1].cells[1]:IsShown(),
+    "switching back to grid clears pooled list cells")
+Check(viewer.slots[1]:GetScript("OnClick") == nil and viewer.slots[1]:GetScript("OnDragStart") == nil,
+    "list and grid retain non-actionable snapshot icons")
+-- The native default puts the icon first, leaving cells[1] absent on fresh rows.
+scan[1].numSlots = 2
+scan[1].items[2] = { itemID = 200, link = "item:200", count = 3, quality = 2 }
+EllesmereUI._bagsDB.profile.bagListColumns = nil
+C_Item.GetItemInfo = function() return "Silver Ore", nil, 2, 42, nil, nil, nil, nil, nil, nil, 10000 end
+C_Item.GetDetailedItemLevelInfo = function() return 42 end
+for _, target in ipairs({ "grid", "compact" }) do
+    settings.display = "list"
+    ns.RefreshViewer()
+    local fresh = viewer.slots[2]
+    Check(fresh.cells[1] == nil and fresh.cells[3]:IsShown() and fresh.cells[5]:IsShown(),
+        "icon-first List has sparse text cells for item level and vendor price")
+    settings.display = target
+    ns.RefreshViewer()
+    Check(fresh.icon:IsShown(), "icon restored after List to " .. target)
+    for _, button in ipairs(viewer.slots) do
+        for _, cell in pairs(button.cells) do
+            Check(not cell:IsShown(), "all sparse List cells hidden after switching to " .. target)
+        end
+    end
+    for _, label in ipairs(viewer.columnLabels) do
+        Check(not label:IsShown(), "List headers hidden outside List")
+    end
+end
 print("PASS: " .. checks .. " Bags capture, capability, read-only viewer and UI checks")

@@ -12,9 +12,13 @@ function addon.Refresh()
     if ns.RefreshViewer then ns.RefreshViewer() end
 end
 core.RegisterFeature("bags", {
-    defaults = { showButton = true },
+    defaults = { showButton = true, groupByCategory = false, display = "match" },
     normalize = function(settings)
         settings.showButton = settings.showButton ~= false
+        settings.groupByCategory = settings.groupByCategory == true
+        if settings.display ~= "grid" and settings.display ~= "compact" and settings.display ~= "list" then
+            settings.display = "match"
+        end
         return settings
     end,
     refresh = addon.Refresh,

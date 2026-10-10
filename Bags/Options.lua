@@ -10,6 +10,29 @@ EllesmereUIExtend.RegisterModule({
         local _, height = W:SectionHeader(parent, "BANK SNAPSHOT", y)
         y = y - height
         _, height = W:DualRow(parent, y, {
+            type = "toggle", text = "Group by Category",
+            tooltip = "Use the current EUI bag categories within the selected bank tabs.",
+            getValue = function() return ns.Addon.Settings().groupByCategory == true end,
+            setValue = function(value)
+                if ns.Editing() then return end
+                ns.Addon.Settings().groupByCategory = value == true
+                ns.Addon.Refresh()
+            end,
+        }, {
+            type = "dropdown", text = "Bank display",
+            values = { match = "Match EUI bank", grid = "Grid", compact = "Compact", list = "List" },
+            order = { "match", "grid", "compact", "list" },
+            tooltip = "Match EUI's bank display or choose a read-only snapshot layout.",
+            getValue = function() return ns.Addon.Settings().display or "match" end,
+            setValue = function(value)
+                if ns.Editing() then return end
+                if value ~= "match" and value ~= "grid" and value ~= "compact" and value ~= "list" then return end
+                ns.Addon.Settings().display = value
+                ns.Addon.Refresh()
+            end,
+        })
+        y = y - height
+        _, height = W:DualRow(parent, y, {
             type = "toggle", text = "Show Bank Snapshot button",
             tooltip = "Add a read-only bank viewer button below the EUI bag window. /ebags also opens the viewer.",
             getValue = function() return ns.Addon.Settings().showButton end,

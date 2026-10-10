@@ -36,6 +36,11 @@ function ns.ValidSnapshot(snapshot)
                 or not Integer(item.itemID, 1, 2147483647) or not Integer(item.count, 1, 2147483647)
                 or not ns.String(item.link) then return false end
             if item.icon ~= nil and not ns.Number(item.icon) and not ns.String(item.icon) then return false end
+            if item.quality ~= nil and not Integer(item.quality, 0, 8) then return false end
+            if item.setID ~= nil and not Integer(item.setID, 0, 2147483647) then return false end
+            for _, field in ipairs({ "quest", "bound" }) do
+                if ns.Secret(item[field]) or (item[field] ~= nil and type(item[field]) ~= "boolean") then return false end
+            end
         end
     end
     return true
@@ -104,6 +109,8 @@ function ns.Scan()
     if not ns.CanCapture() then return end
     local tabs = Discover()
     if not tabs then return end
+    local manager = EUI_CategoryManager
+    local lookup = manager and ns.Read(manager.GetSetGearLookup, manager)
     for _, tab in ipairs(tabs) do
         for slot = 1, tab.numSlots do
             local info, ok = ns.Read(C_Container.GetContainerItemInfo, tab.bagID, slot)
@@ -122,6 +129,14 @@ function ns.Scan()
                 tab.items[slot] = { itemID = id, count = count, link = link,
                     icon = ns.Number(info.iconFileID) or ns.String(info.iconFileID),
                     quality = Integer(info.quality, 0, 8) }
+                local item = tab.items[slot]
+                if not ns.Secret(info.isBound) and type(info.isBound) == "boolean" then item.bound = info.isBound end
+                local quest = ns.Read(C_Container.GetContainerItemQuestInfo, tab.bagID, slot)
+                if type(quest) == "table" then
+                    if not ns.Secret(quest.isQuestItem) and quest.isQuestItem == true then item.quest = true end
+                    if ns.Number(quest.questID) then item.quest = true end
+                end
+                if type(lookup) == "table" then item.setID = Integer(lookup[tab.bagID * 1000 + slot], 0, 2147483647) end
             end
         end
     end

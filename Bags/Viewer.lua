@@ -2,6 +2,150 @@ local _, ns = ...
 if not ns.Addon then return end
 local viewer, selectedCharacter, currentCharacter, selectedTab, page = nil, nil, nil, nil, 1
 local PAGE_SIZE = 80
+local DISPLAY_ORDER = { "match", "grid", "compact", "list" }
+local DISPLAY_NAMES = { match = "Match EUI bank", grid = "Grid", compact = "Compact", list = "List" }
+local function EUIProfile()
+    return (EllesmereUI and EllesmereUI._bagsDB and EllesmereUI._bagsDB.profile) or {}
+end
+function ns.DisplayMode()
+    local mode = ns.Addon.Settings().display
+    if mode == "grid" or mode == "compact" or mode == "list" then return mode end
+    local profile = EUIProfile()
+    if profile.bankListView == true then return "list" end
+    return profile.bankCompactView == true and "compact" or "grid"
+end
+local function Category(item, cats, manager)
+    local assignments = EllesmereUIDB and EllesmereUIDB.bagItemAssignments
+    local assigned = assignments and assignments[item.itemID]
+    for i, cat in ipairs(cats) do
+        if assigned and cat._defaultName == assigned then return i end
+    end
+    for i, cat in ipairs(cats) do
+        if cat.itemIDs and cat.itemIDs[item.itemID] then return i end
+    end
+    if item.quest then
+        local questClass = Enum and Enum.ItemClass and Enum.ItemClass.Questitem or 12
+        for i, cat in ipairs(cats) do
+            for _, class in ipairs(cat.types or {}) do if class == questClass then return i end end
+        end
+    end
+    if item.quality == 0 then
+        for i, cat in ipairs(cats) do if cat.isJunk then return i end end
+    end
+    if item.quality ~= 0 and item.setID then
+        if selectedCharacter == ns.CharacterKey() then
+            for i, cat in ipairs(cats) do if cat.isEquipSet and cat.equipSetID == item.setID then return i end end
+        end
+        for i, cat in ipairs(cats) do if cat.isSetGear and not cat.isEquipSet then return i end end
+    end
+    -- Never pass stored bag/slot coordinates to a classifier querying live containers.
+    local index = manager and ns.Number(ns.Read(manager.ClassifyItem, manager, item.link, item.itemID, nil, nil, item.quality))
+    if index and cats[index] then return index end
+    for i, cat in ipairs(cats) do if cat.isCatchAll then return i end end
+    return 0
+end
+local COLUMN_NAMES = { icon = "", name = "Name", ilvl = "iLvl", reqlvl = "Req", type = "Type",
+    bind = "Bind", track = "Track", count = "#", sell = "Sell Price" }
+local COLUMN_WIDTHS = { icon = 26, ilvl = 36, reqlvl = 32, type = 96, bind = 40, track = 40, count = 40, sell = 100 }
+function ns.ListColumns()
+    local configured = EUIProfile().bagListColumns or { "icon", "name", "ilvl", "count", "sell" }
+    local columns, seen = {}, {}
+    for _, key in ipairs(configured) do
+        if COLUMN_NAMES[key] and not seen[key] then columns[#columns + 1] = key; seen[key] = true end
+    end
+    if #columns == 0 then return { "icon", "name", "count" } end
+    return columns
+end
+function ns.ListValues(item)
+    local values = { name = ns.String(item.name) or item.link, count = tostring(item.count), bind = "" }
+    local getter = C_Item and C_Item.GetItemInfo or GetItemInfo
+    if type(getter) == "function" then
+        local data = { pcall(getter, item.link) }
+        if data[1] then
+            values.name = ns.String(data[2]) or values.name
+            values.reqlvl = ns.Number(data[6]) and tostring(data[6]) or ""
+            values.type = ns.String(data[8]) or ""
+            local binding = ns.Number(data[15])
+            local binds = Enum and Enum.ItemBind
+            if binding and binds then
+                local labels = { OnAcquire = "BoP", OnEquip = "BoE", OnUse = "BoU", Quest = "Quest",
+                    ToWoWAccount = "BoA", ToBnetAccount = "WB", ToBnetAccountUntilEquipped = "WuE" }
+                for key, label in pairs(labels) do
+                    if binds[key] == binding then
+                        values.bind = label
+                        if item.bound and (key == "OnEquip" or key == "OnUse" or key == "ToBnetAccountUntilEquipped") then
+                            values.bind = "SB"
+                        elseif item.bound == nil and (key == "OnEquip" or key == "OnUse" or key == "ToBnetAccountUntilEquipped") then
+                            values.bind = ""
+                        end
+                        break
+                    end
+                end
+            end
+            local price = ns.Number(data[12])
+            if price and price >= 0 and price * item.count < 9007199254740991 then
+                local copper = math.floor(price * item.count)
+                values.sell = math.floor(copper / 10000) .. "g " .. math.floor(copper / 100) % 100 .. "s " .. copper % 100 .. "c"
+            end
+        end
+    end
+    local level = ns.Number(ns.Read(C_Item and C_Item.GetDetailedItemLevelInfo, item.link))
+    values.ilvl = level and tostring(level) or ""
+    -- Upgrade tracks and uncaptured binding state must not be guessed.
+    return values
+end
+function ns.Layout(items)
+    local mode, groups = ns.DisplayMode(), {}
+    local manager = EUI_CategoryManager
+    local cats = manager and ns.Read(manager.GetCategories, manager)
+    if type(cats) ~= "table" then cats = {} end
+    if ns.Addon.Settings().groupByCategory then
+        local buckets = {}
+        for _, entry in ipairs(items) do
+            local index = Category(entry.item, cats, manager)
+            local cat = cats[index]
+            local disabled = EUIProfile().bagDisabledCategories or {}
+            if cat and (disabled[cat._defaultName] or (cat.isEquipSet and disabled["Item Set Gear"])) then
+                index = 0
+                for i, candidate in ipairs(cats) do if candidate.isCatchAll then index = i; break end end
+            end
+            buckets[index] = buckets[index] or {}
+            table.insert(buckets[index], entry)
+        end
+        for i = 0, #cats do
+            if buckets[i] then groups[#groups + 1] = { name = i == 0 and "Other" or cats[i].name, items = buckets[i] } end
+        end
+    else groups[1] = { items = items } end
+    local pages, x, y, band = { { slots = {}, headings = {} } }, 0, 0, 0
+    local function NewPage() pages[#pages + 1] = { slots = {}, headings = {} }; x, y, band = 0, 0, 0 end
+    for _, group in ipairs(groups) do
+        local width = mode == "compact" and math.min(10, math.max(1, math.ceil(math.sqrt(#group.items)))) or 10
+        local cellHeight = mode == "list" and 24 or 40
+        local rows = math.ceil(#group.items / (mode == "list" and 1 or width))
+        local height = rows * cellHeight + (group.name and 20 or 0)
+        if mode ~= "compact" or x + width > 10 or height > 320 then y, x = y + band, 0; band = 0 end
+        if y + math.min(height, 320) > 320 then NewPage() end
+        local function Heading()
+            if group.name then
+                table.insert(pages[#pages].headings, { text = group.name, x = x * 42, y = y, width = width * 42 })
+                return 20
+            end
+            return 0
+        end
+        local offset, row = Heading(), 0
+        for i, entry in ipairs(group.items) do
+            local column = mode == "list" and 0 or (i - 1) % width
+            if i > 1 and column == 0 then row = row + 1 end
+            if y + offset + (row + 1) * cellHeight > 320 then
+                NewPage(); offset, row = Heading(), 0
+            end
+            table.insert(pages[#pages].slots, { entry = entry, x = x * 42 + column * 42, y = y + offset + row * cellHeight })
+        end
+        if mode == "compact" then x = x + width; band = math.max(band, offset + (row + 1) * cellHeight)
+        else y = y + offset + (row + 1) * cellHeight; band = 0 end
+    end
+    return pages, mode
+end
 
 local function Font(parent, text, size)
     local label = parent:CreateFontString(nil, "OVERLAY")
@@ -14,9 +158,14 @@ end
 local function Skin(frame)
     local bg = frame:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
-    bg:SetColorTexture(0.035, 0.035, 0.035, 0.97)
+    bg:SetTexture("Interface\\AddOns\\EllesmereUI\\media\\modern_blizz.png")
+    local overlay = frame:CreateTexture(nil, "BACKGROUND", nil, 1)
+    overlay:SetAllPoints()
+    overlay:SetColorTexture(0, 0, 0, 0.25)
     local pp = EllesmereUI and EllesmereUI.PanelPP
-    if pp and type(pp.CreateBorder) == "function" then pp.CreateBorder(frame, 0.25, 0.25, 0.25, 1, 1) end
+    if EllesmereUI and type(EllesmereUI.MakeBorder) == "function" then
+        frame.snapshotBorder = EllesmereUI.MakeBorder(frame, 1, 1, 1, 0.15, EllesmereUI.PP)
+    elseif pp and type(pp.CreateBorder) == "function" then pp.CreateBorder(frame, 0.25, 0.25, 0.25, 1, 1) end
 end
 local function Button(parent, text, width, click, tip)
     local button = CreateFrame("Button", nil, parent)
@@ -70,7 +219,7 @@ end
 local function Build()
     local f = CreateFrame("Frame", "EllesmereUIExtendBagsViewer", UIParent)
     viewer = f
-    f:SetSize(620, 470)
+    f:SetSize(620, 510)
     f:SetPoint("CENTER")
     f:SetFrameStrata("DIALOG")
     f:SetClampedToScreen(true)
@@ -81,6 +230,9 @@ local function Build()
     header:SetPoint("TOPLEFT", 0, 0)
     header:SetPoint("TOPRIGHT", 0, 0)
     header:SetHeight(34)
+    local headerBG = header:CreateTexture(nil, "BACKGROUND")
+    headerBG:SetAllPoints()
+    headerBG:SetColorTexture(0, 0, 0, 0.5)
     header:EnableMouse(true)
     header:RegisterForDrag("LeftButton")
     header:SetScript("OnDragStart", function() if not ns.Editing() then f:StartMoving() end end)
@@ -119,12 +271,32 @@ local function Build()
     search:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
     f.updated = Font(f, "Last updated: never", 11)
     f.updated:SetPoint("TOPLEFT", 12, -74)
+    f.grouping = Button(f, "Group by Category", 170, function()
+        if ns.Editing() then return end
+        local settings = ns.Addon.Settings()
+        settings.groupByCategory = not settings.groupByCategory
+        page = 1
+        ns.Addon.Refresh()
+    end, "Group the selected tabs using the current EUI bag categories.")
+    f.grouping:SetPoint("TOPLEFT", 170, -94)
+    f.grouping.label:SetWidth(160)
+    f.grouping.label:SetWordWrap(false)
+    f.display = Button(f, "", 225, function()
+        if ns.Editing() then return end
+        local settings = ns.Addon.Settings()
+        local index = 1
+        for i, mode in ipairs(DISPLAY_ORDER) do if settings.display == mode then index = i end end
+        settings.display = DISPLAY_ORDER[index % #DISPLAY_ORDER + 1]
+        page = 1
+        ns.Addon.Refresh()
+    end, "Cycle Match EUI bank, Grid, Compact and List.")
+    f.display:SetPoint("TOPLEFT", 350, -94)
     f.message = Font(f)
-    f.message:SetPoint("TOPLEFT", 170, -110)
+    f.message:SetPoint("TOPLEFT", 170, -142)
     f.message:SetWidth(425)
     f.message:SetJustifyH("LEFT")
     f.message:SetWordWrap(true)
-    f.tabs, f.slots = {}, {}
+    f.tabs, f.slots, f.headings = {}, {}, {}
     -- A bounded grid: no live container templates or secure item actions.
     for i = 1, PAGE_SIZE do
         local button = CreateFrame("Button", nil, f)
@@ -214,14 +386,87 @@ function ns.RefreshViewer()
         button:Show()
     end
     local items = ns.Items(snapshot, selectedTab, f.search:GetText())
-    local pages = math.max(1, math.ceil(#items / PAGE_SIZE))
+    local layout, mode = ns.Layout(items)
+    local pages = #layout
     page = math.min(page, pages)
+    f.grouping.label:SetText("Group by Category: " .. (ns.Addon.Settings().groupByCategory and "On" or "Off"))
+    f.display.label:SetText(DISPLAY_NAMES[ns.Addon.Settings().display or "match"] or DISPLAY_NAMES.match)
+    for _, heading in ipairs(f.headings) do heading:Hide() end
+    for i, data in ipairs(layout[page].headings) do
+        local heading = f.headings[i] or Font(f, "", 11)
+        f.headings[i] = heading
+        heading:ClearAllPoints()
+        heading:SetPoint("TOPLEFT", 170 + data.x, -142 - data.y)
+        heading:SetWidth(data.width)
+        heading:SetWordWrap(false)
+        heading:SetJustifyH("LEFT")
+        heading:SetText(data.text or "Other")
+        heading:Show()
+    end
+    local columns = ns.ListColumns()
+    local fixed, widths, offsets, offset = 0, {}, {}, 0
+    for _, key in ipairs(columns) do fixed = fixed + (COLUMN_WIDTHS[key] or 0) end
+    local contentWidth = math.max(420, fixed + 160)
+    for i, key in ipairs(columns) do
+        widths[i], offsets[i] = COLUMN_WIDTHS[key] or (contentWidth - fixed), offset
+        offset = offset + widths[i]
+    end
+    f:SetSize(mode == "list" and contentWidth + 200 or 620, 510)
+    f.columnLabels = f.columnLabels or {}
+    for _, label in ipairs(f.columnLabels) do label:Hide() end
+    if mode == "list" then
+        for i, key in ipairs(columns) do
+            local label = f.columnLabels[i] or Font(f, "", 10)
+            f.columnLabels[i] = label
+            label:ClearAllPoints()
+            label:SetPoint("TOPLEFT", 170 + offsets[i], -124)
+            label:SetWidth(widths[i] - 4)
+            label:SetJustifyH("LEFT")
+            label:SetText(COLUMN_NAMES[key]); label:Show()
+        end
+    end
     for i, button in ipairs(f.slots) do
-        local entry = items[(page - 1) * PAGE_SIZE + i]
+        local placement = layout[page].slots[i]
+        local entry = placement and placement.entry
         button.entry = entry
+        button.cells = button.cells or {}
+        -- Icon columns have no text cell, so this table can have gaps.
+        for _, cell in pairs(button.cells) do cell:Hide() end
         if entry then
+            button:ClearAllPoints()
+            button:SetPoint("TOPLEFT", 170 + placement.x, -142 - placement.y)
+            button:SetSize(mode == "list" and contentWidth or 36, mode == "list" and 22 or 36)
+            button.icon:ClearAllPoints()
+            button.icon:SetPoint("TOPLEFT", 2, -2)
+            button.icon:SetSize(mode == "list" and 18 or 32, mode == "list" and 18 or 32)
+            local zoom = ns.Number(EUIProfile().bagItemIconZoom) or 0.08
+            zoom = math.max(0, math.min(0.45, zoom))
+            button.icon:SetTexCoord(zoom, 1 - zoom, zoom, 1 - zoom)
             button.icon:SetTexture(entry.item.icon or 134400)
+            local color = ITEM_QUALITY_COLORS and entry.item.quality and ITEM_QUALITY_COLORS[entry.item.quality]
+            if button.snapshotBorder and type(button.snapshotBorder.SetColor) == "function" then
+                button.snapshotBorder:SetColor(color and color.r or 1, color and color.g or 1, color and color.b or 1, color and 0.8 or 0.15)
+            end
             button.count:SetText(entry.item.count > 1 and tostring(entry.item.count) or "")
+            button.count:SetShown(mode ~= "list")
+            button.icon:SetShown(mode ~= "list")
+            if mode == "list" then
+                local values = ns.ListValues(entry.item)
+                for column, key in ipairs(columns) do
+                    if key == "icon" then
+                        button.icon:ClearAllPoints()
+                        button.icon:SetPoint("TOPLEFT", offsets[column] + 2, -2)
+                        button.icon:Show()
+                    else
+                        local cell = button.cells[column] or Font(button, "", 10)
+                        button.cells[column] = cell
+                        cell:ClearAllPoints()
+                        cell:SetPoint("LEFT", button, "LEFT", offsets[column], 0)
+                        cell:SetWidth(widths[column] - 4); cell:SetWordWrap(false); cell:SetJustifyH("LEFT")
+                        cell:SetText(values[key] or ""); cell:Show()
+                    end
+                end
+            end
             button:Show()
         else button:Hide() end
     end
