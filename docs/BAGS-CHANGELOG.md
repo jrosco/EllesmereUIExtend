@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add custom Bags artwork for WoW's AddOns list, included in distributed ZIPs.
+
 - Add a Bags About tab with installed version, feature overview, snapshot limits, profiles and commands.
 - Add an adjacent search-clear button that preserves character and tab/category selection.
 - Show full-bank matching item quantities next to character dropdown names during searches, keeping zero-match characters and distinguishing missing snapshots. Character switches retain search and reset tab/category filters.

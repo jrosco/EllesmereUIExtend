@@ -6,6 +6,8 @@ Read-only personal bank snapshots using the existing **EllesmereUIBags**, for Re
 
 Install the ZIP as `Interface/AddOns/EllesmereUIExtendBags/`. Requires **EllesmereUI** and **EllesmereUIBags**, not another Extend addon or a separate Core addon. For source installs, copy `Bags/` to that folder and embed `Core/Core.lua`, `Core/Sync.lua` and `Core/Options.lua` under `Shared/`.
 
+Includes its own icon for WoW's AddOns list in `Media/Icon.tga`.
+
 - Open normal EUI bags and click the attached **Bank Snapshot** button below the window, or use `/ebags`.
 - The button remains clickable before your first capture. Every time the viewer opens, it starts on the current character and clears the previous tab, scroll position and search. Without their snapshot, it opens an empty bag displaying **Visit the banker first**, even when other characters have snapshots.
 - While searching, the character dropdown shows the matching **item quantity** beside each name, across their entire saved personal bank and captured reagent storage regardless of selected tab/category. Captured banks with no matches show **(0)**; the uncaptured current character shows **(No snapshot)**. Choosing another character keeps the search and resets tab/category selection and scrolling. Clearing the search restores plain names. Counts use the same literal item-name/ID search as the viewer; uncached names match only through the saved link/ID until item information arrives. Other characters' counts are calculated on opening the dropdown, not through background inventory scans.
