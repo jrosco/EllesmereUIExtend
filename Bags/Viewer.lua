@@ -238,6 +238,18 @@ local function CharacterChoices()
     end
     return keys
 end
+local function CharacterLabel(key, query)
+    if not key then return "Current character unavailable" end
+    if not query or query == "" then return key end
+    local snapshot = ns.DB and ns.DB.characters[key]
+    local valid, ok = ns.Read(ns.ValidSnapshot, snapshot)
+    if not ok or valid ~= true then return key .. " (No snapshot)" end
+    local count = 0
+    -- Same literal name/ID search as the item view, across the full bank rather
+    -- than the selected tab/category. Alt banks are scanned only on menu opening.
+    for _, entry in ipairs(ns.Items(snapshot, nil, query)) do count = count + entry.item.count end
+    return key .. " (" .. string.format("%.0f", count) .. ")"
+end
 local function SelectCharacter(key)
     local found = false
     for _, choice in ipairs(CharacterChoices()) do if choice == key then found = true; break end end
@@ -361,9 +373,10 @@ local function Build()
         f.characterMenuToken = token
         f.characterMenuSettings, f.characterMenuIdentity = owner, identity
         local items = {}
+        local query = f.search:GetText()
         for _, key in ipairs(CharacterChoices()) do
             local choice = key
-            items[#items + 1] = { text = choice, isActive = choice == selectedCharacter, onClick = function()
+            items[#items + 1] = { text = CharacterLabel(choice, query), isActive = choice == selectedCharacter, onClick = function()
                 if ns.Editing() or not f:IsShown() or f.characterMenuToken ~= token
                     or ns.Addon.Settings() ~= owner or ns.CharacterKey() ~= identity then return end
                 CloseCharacterMenu()
@@ -425,14 +438,21 @@ local function Build()
     local characterArrow = Font(f.characterDropdown, "v", 11)
     characterArrow:SetPoint("RIGHT", -8, 0)
     local search = CreateFrame("EditBox", nil, f)
-    search:SetSize(220, 24)
-    search:SetPoint("TOPRIGHT", -12, -40)
+    search:SetSize(192, 24)
+    search:SetPoint("TOPRIGHT", -40, -40)
     search:SetAutoFocus(false)
     search:SetFontObject(GameFontHighlightSmall)
     search:SetTextInsets(6, 6, 0, 0)
     search:SetMaxLetters(100)
     Skin(search)
     f.search = search
+    f.clearSearch = Button(f, "x", 24, function()
+        if ns.Editing() or not f:IsShown() then return end
+        search:SetText("")
+        search:ClearFocus()
+    end, "Clear search", true)
+    f.clearSearch:SetPoint("TOPRIGHT", -12, -40)
+    f.clearSearch:Hide()
     local hint = Font(search, "Search name or item ID")
     hint:SetPoint("LEFT", 6, 0)
     hint:SetTextColor(0.5, 0.5, 0.5)
@@ -655,6 +675,9 @@ end
 function ns.RefreshViewer()
     if not viewer or not viewer:IsShown() then return end
     local f = viewer
+    -- Search, item-name arrival and capture refreshes invalidate open choices
+    -- rather than leaving a stale count/menu callback on either EUI generation.
+    f.CloseCharacterMenu()
     local settings = ns.Addon.Settings()
     if f.characterMenuToken and (ns.Editing() or f.characterMenuSettings ~= settings
         or f.characterMenuIdentity ~= ns.CharacterKey()) then f.CloseCharacterMenu() end
@@ -710,7 +733,9 @@ function ns.RefreshViewer()
     end
     snapshot = ns.DB and selectedCharacter and ns.DB.characters[selectedCharacter]
     if not ns.ValidSnapshot(snapshot) then snapshot = nil end
-    f.character:SetText(selectedCharacter or "Current character unavailable")
+    f.character:SetText(CharacterLabel(selectedCharacter, f.search:GetText()))
+    f.clearSearch:SetShown(f.search:GetText() ~= "")
+    f.clearSearch:SetEnabled(not ns.Editing() and f.search:GetText() ~= "")
     f.characterDropdown:SetEnabled(not ns.Editing() and #CharacterChoices() > 0)
     local timestamp = snapshot and snapshot.updatedAt
     local formatted = timestamp and ns.String(ns.Read(date, "%Y-%m-%d %H:%M", timestamp))

@@ -924,6 +924,105 @@ native.characterDropdown.scripts.OnClick(native.characterDropdown)
 Check(native.characterMenu:IsShown(), "older EUI offers addon-owned character dropdown")
 native.characterDropdown.scripts.OnClick(native.characterDropdown)
 Check(not native.characterMenu:IsShown(), "fallback selector toggles menu closed")
+-- Character search counts span all saved tabs and preserve literal search on selection.
+settings = modules.feature.normalize({ showButton = true, display = "grid" })
+local function SearchItem(id, count) return { itemID = id, count = count, link = "item:" .. id } end
+local function SearchTab(id, items) return { bagID = id, name = "Search tab", numSlots = 3, items = items } end
+local searchKey = ns.CharacterKey()
+ns.DB = { format = 1, characters = {
+    [searchKey] = { tabs = { SearchTab(6, { SearchItem(100, 2), SearchItem(200, 4) }),
+        SearchTab(7, { SearchItem(100, 5) }), SearchTab(-3, { SearchItem(100, 7) }) } },
+    ["Search Alt - Realm"] = { tabs = { SearchTab(6, { SearchItem(100, 10), SearchItem(200, 9) }),
+        SearchTab(7, { SearchItem(100, 11) }) } },
+    ["No Match - Realm"] = { tabs = { SearchTab(6, { SearchItem(200, 8) }) } },
+} }
+C_Item.GetItemInfo = function(link) return link:find("100", 1, true) and "Silver Ore" or "Copper Ore" end
+ns.Addon.Refresh()
+native.search:SetText("silver")
+native.tabs[2].scripts.OnClick(native.tabs[2])
+Check(native.character.text == searchKey .. " (14)" and native.total.text == "1 stacks",
+    "selected character label counts full-bank quantities including reagent storage, not filtered stacks")
+EllesmereUI.ShowContextMenu = function(anchor, items, options) menuAnchor, menuItems, menuOptions = anchor, items, options end
+native.characterDropdown.scripts.OnClick(native.characterDropdown)
+Check(#menuItems == 3 and menuItems[1].text == searchKey .. " (14)", "search menu retains current character first with full-bank quantity")
+local matchChoice, zeroFound
+for _, item in ipairs(menuItems) do
+    if item.text == "Search Alt - Realm (21)" then matchChoice = item.onClick end
+    if item.text == "No Match - Realm (0)" then zeroFound = true end
+end
+Check(matchChoice and zeroFound, "dropdown reports matching quantities and keeps zero-match alts")
+native.categoryButtons[2].scripts.OnClick(native.categoryButtons[2])
+native.characterDropdown.scripts.OnClick(native.characterDropdown)
+for _, item in ipairs(menuItems) do if item.text == "Search Alt - Realm (21)" then matchChoice = item.onClick end end
+matchChoice()
+Check(native.search:GetText() == "silver" and native.character.text == "Search Alt - Realm (21)"
+    and native.total.text == "2 stacks" and native.tabs[1].navIcon.alpha == 1 and native.categoryButtons[1].navIcon.alpha == 1,
+    "search selection retains query, resets tab/category and shows all matching alt stacks")
+native.characterDropdown.scripts.OnClick(native.characterDropdown)
+local oldQueryChoice = menuItems[1].onClick
+native.search:SetText("100")
+oldQueryChoice()
+Check(native.character.text == "Search Alt - Realm (21)", "query changes invalidate already-open character selection callbacks")
+EllesmereUI.ShowContextMenu = nil
+native.characterDropdown.scripts.OnClick(native.characterDropdown)
+local fallbackCurrent, fallbackZero
+for _, row in ipairs(native.characterMenu.rows) do
+    if row:IsShown() and row.label.text == searchKey .. " (14)" then fallbackCurrent = row.scripts.OnClick end
+    if row:IsShown() and row.label.text == "No Match - Realm (0)" then fallbackZero = true end
+end
+Check(fallbackCurrent and fallbackZero, "older-EUI dropdown matches native name/ID search counts and zero statuses")
+native.search:SetText("200")
+fallbackCurrent()
+Check(not native.characterMenu:IsShown() and native.character.text == "Search Alt - Realm (9)",
+    "search change closes fallback popup and blocks stale choices")
+native.search:SetText("%")
+Check(native.character.text == "Search Alt - Realm (0)", "dropdown search counts use literal text, not Lua patterns")
+native.search:SetText("silver")
+native.characterDropdown.scripts.OnClick(native.characterDropdown)
+local staleCaptureChoice = native.characterMenu.rows[1].scripts.OnClick
+ns.DB.characters["Search Alt - Realm"].tabs[2].items[1].count = 31
+ns.Addon.Refresh()
+staleCaptureChoice()
+Check(native.character.text == "Search Alt - Realm (41)" and not native.characterMenu:IsShown(),
+    "capture refresh updates selected search total and invalidates open menu quantities")
+ns.DB.characters[searchKey] = nil
+ns.Addon.Refresh()
+native.characterDropdown.scripts.OnClick(native.characterDropdown)
+local uncapturedChoice
+for _, row in ipairs(native.characterMenu.rows) do
+    if row:IsShown() and row.label.text == searchKey .. " (No snapshot)" then uncapturedChoice = row.scripts.OnClick end
+end
+Check(uncapturedChoice ~= nil, "uncaptured current player remains selectable with No snapshot rather than zero")
+uncapturedChoice()
+Check(native.search:GetText() == "silver" and native.character.text == searchKey .. " (No snapshot)"
+    and native.message.text == "Visit the banker first", "selecting uncaptured current player retains search and first-visit state")
+native.search:SetText("")
+Check(native.character.text == searchKey, "clearing search restores plain dropdown character names")
+native:Hide(); ns.ToggleViewer()
+Check(native.search:GetText() == "" and native.character.text == searchKey, "reopening still clears query and selects current character")
+Check(not native.clearSearch:IsShown() and native.search:GetWidth() == 192
+    and native.clearSearch.point[2] == -12 and native.search.point[2] == -40,
+    "clear search control reserves adjacent space without overlapping minimum-width character selector")
+native.search:SetText("100")
+native.characterDropdown.scripts.OnClick(native.characterDropdown)
+for _, row in ipairs(native.characterMenu.rows) do
+    if row:IsShown() and row.label.text == "Search Alt - Realm (41)" then row.scripts.OnClick(); break end
+end
+native.tabs[2].scripts.OnClick(native.tabs[2])
+Check(native.clearSearch:IsShown() and native.clearSearch.enabled, "clear search button appears when text is present")
+editing = true
+native.clearSearch.scripts.OnClick()
+Check(native.search:GetText() == "100", "clear search click honors Edit Mode even from a stale control")
+editing = false
+local oldClearFocus, clearedFocus = native.search.ClearFocus, false
+native.search.ClearFocus = function() clearedFocus = true end
+native.characterDropdown.scripts.OnClick(native.characterDropdown)
+native.clearSearch.scripts.OnClick()
+Check(native.search:GetText() == "" and clearedFocus and not native.clearSearch:IsShown()
+    and native.character.text == "Search Alt - Realm" and native.tabs[2].navIcon.alpha == 1
+    and native.total.text == "2 stacks" and not native.characterMenu:IsShown(),
+    "clear button clears text/count labels, releases focus and dismisses dropdown without changing character/tab")
+native.search.ClearFocus = oldClearFocus
 -- Optional snapshot counts: combined quantities by ID, never live inventory.
 settings = modules.feature.normalize({ showButton = true })
 native:Hide()

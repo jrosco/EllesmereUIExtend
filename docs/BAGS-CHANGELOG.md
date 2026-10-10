@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add an adjacent search-clear button that preserves character and tab/category selection.
+- Show full-bank matching item quantities next to character dropdown names during searches, keeping zero-match characters and distinguishing missing snapshots. Character switches retain search and reset tab/category filters.
 - Remove tab/slot details and the read-only reminder from snapshot item tooltips; keep normal item content and optional stock counts.
 - Add optional bank-stock tooltip sections: compact current/other-bank counts in bags and class-coloured named counts in the live bank/snapshot viewer, also used in bags while either bank window is open. Omit zero stock and keep snapshots clearly labeled.
 - Cache item-ID bank quantities for low-footprint tooltip lookups; do not scan or count carried bags. Preserve any previously saved bag data unused.
