@@ -28,6 +28,20 @@ With a native Lua interpreter, `lua <suite-path>` can replace Fengari for indivi
 
 **Inspect output:** Fengari can print a Lua assertion/traceback and still return exit code zero. Require the suite's PASS message and no failure/traceback; a successful process exit is not enough. For a new untracked file, also run `git -c core.autocrlf=false diff --no-index --check -- NUL <file>` on Windows. Empty output with exit code 1 means file differences, not a whitespace error.
 
+## Release planner tests
+
+The manual release workflow runs offline Python regressions before planning.
+These use disposable Git repositories and do not publish or require upstream EUI:
+
+```powershell
+python -m unittest discover -s tools/tests -p 'test_release_plan.py' -v
+```
+
+Run these after changing `tools/release_plan.py` or the manual release workflow.
+They are separate from `tools/Test.ps1`. Also run both packaging suites for
+workflow/metadata changes. Preview the workflow on GitHub before first publishing;
+offline tests do not verify GitHub permissions, packager uploads or CurseForge.
+
 ## Upstream dependencies
 
 `EUI_TEST_ROOT` must point to the checkout containing `EllesmereUI_Kick.lua`, not a feature module directory. The fallback is `../EllesmereUI`. Set it through `-EUIRoot` above or `$env:EUI_TEST_ROOT = 'C:\path\to\EllesmereUI'`; replace the generic path with your own.

@@ -19,6 +19,9 @@ foreach ($path in $archives) {
         Check ($entries -contains "$identity/$identity.toc") 'Feature TOC matches installed folder'
         Check ($entries -contains "$identity/LICENSE") 'License included'
         Check (-not ($entries | Where-Object { $_ -match '/tests/|\.git|^Nameplates/|^QuestTracker/' })) 'No development source paths or tests bundled'
+        $pkgmetaName = if ($name -eq 'Nameplates') { 'nameplates' } else { 'questtracker' }
+        $pkgmeta = Get-Content -LiteralPath (Join-Path $root ".pkgmeta-$pkgmetaName") -Raw
+        Check ($pkgmeta -match '(?m)^\s+- \.agents\r?$') 'Release metadata excludes agent skills'
         $toc = Get-Content -LiteralPath (Join-Path $root "$name/$identity.toc") -Raw
         Check ($toc -match "## Dependencies: EllesmereUI, EllesmereUI$name\r?\n") 'Only corresponding upstream dependencies'
         Check ($toc -match "## SavedVariables: ${identity}Profiles\r?\n") 'Each feature saves its own profile snapshot'
@@ -26,8 +29,9 @@ foreach ($path in $archives) {
         $reader = New-Object System.IO.StreamReader($archive.GetEntry("$identity/$identity.toc").Open())
         try { $packagedToc = $reader.ReadToEnd() } finally { $reader.Dispose() }
         Check ($packagedToc -ceq $toc) 'Default ZIP preserves the dual-client source TOC'
-        $workflowName = if ($name -eq 'Nameplates') { 'nameplates' } else { 'questtracker' }
-        $workflow = Get-Content -LiteralPath (Join-Path $root ".github/workflows/$workflowName-release.yaml") -Raw
+        $workflow = Get-Content -LiteralPath (Join-Path $root '.github/workflows/create-releases.yaml') -Raw
+        Check ($workflow -match '(?m)^  workflow_dispatch:') 'Release creation remains manually dispatched'
+        Check ($workflow -match '-m \.pkgmeta-\$\{\{ matrix\.feature \}\}') 'Release matrix selects feature packaging metadata'
         Check ($workflow -notmatch 's/\^## Interface:') 'Release preparation does not overwrite client interfaces'
         $argsLine = [regex]::Match($workflow, '(?m)^\s+args: .+$').Value
         Check ($argsLine -ne '' -and $argsLine -notmatch '(?:^|\s)-g(?:\s|$)') 'Packager derives supported versions from TOCs'

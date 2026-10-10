@@ -1,6 +1,9 @@
 # Compiled Lua sources
 luac.out
 
+# Python release-planner test caches
+__pycache__/
+
 # luarocks build files
 *.src.rock
 *.zip
