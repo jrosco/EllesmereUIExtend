@@ -1,6 +1,6 @@
 # EllesmereUI Extend Quest Tracker
 
-Quality-of-life features for **EllesmereUIQuestTracker** on Retail and WoW Forever, under **Extend > Quest Tracker**.
+Quality-of-life features for **EllesmereUIQuestTracker** on Retail and WoW Forever, under **Extend Addons > Quest Tracker**.
 
 ## Install and open
 

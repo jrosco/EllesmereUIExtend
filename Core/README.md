@@ -1,17 +1,17 @@
 # EllesmereUI Extend Core
 
-Shared profiles and the **Extend** settings hub for Retail and WoW Forever. `Core/` is shared source, **not a separately installed addon**. Each extension embeds `Core.lua`, `Sync.lua` and `Options.lua` under its own `Shared/` folder; neither extension requires the other.
+Shared profiles and the **Extend Addons** settings hub for Retail and WoW Forever. `Core/` is shared source, **not a separately installed addon**. Each extension embeds `Core.lua`, `Sync.lua` and `Options.lua` under its own `Shared/` folder; neither extension requires the other.
 
 ## Profiles
 
-Open **Extend > Profiles** or `/eextend`. Each character (name + realm) selects one profile for all installed extensions. Unassigned characters use **Default**; characters assigned to the same named profile share settings. New profiles start with feature defaults. Up to 100 profiles are supported, with names of 1–32 bytes; Default cannot be renamed or deleted.
+Open **Extend Addons > Profiles** or `/eextend`. Each character (name + realm) selects one profile for all installed extensions. Unassigned characters use **Default**; characters assigned to the same named profile share settings. New profiles start with feature defaults. Up to 100 profiles are supported, with names of 1–32 bytes; Default cannot be renamed or deleted.
 
 Switching refreshes installed features and settings pages. Renaming updates assignments; deleting removes all sections of that profile, including absent features. Feature resets affect only their own section. Profile management is locked during EUI Edit Mode; protected Quest Tracker updates wait until combat ends. These profiles are separate from EUI's own profiles and exports.
 
 ## Loading and persistence contract
 
 - Load `Shared/Core.lua`, `Shared/Sync.lua`, then `Shared/Options.lua` before feature code. For source installs, copy those files from `Core/` into each feature's `Shared/` folder.
-- The first copy creates the `EllesmereUIExtend` singleton; later copies register their owner and reuse it. The plugin ID stays `EllesmereUIExtend`, but its label is **Extend** because EUI reserves labels beginning with Ellesmere/EUI.
+- The first copy creates the `EllesmereUIExtend` singleton; later copies register their owner and reuse it. The plugin ID stays `EllesmereUIExtend`, but its label is **Extend Addons** because EUI reserves labels beginning with Ellesmere/EUI.
 - Register features/modules during addon loading; access settings only after SavedVariables load. The combined UI registers once at `PLAYER_LOGIN`. Keep features non-load-on-demand: late module registration is rejected.
 - `EllesmereUIExtendDB` is the **in-memory** root: `profiles[name].nameplates`, `profiles[name].questTracker`, `profiles[name].bags` and `characterProfiles[character]`. It is not a SavedVariable.
 - Each feature owns its account-wide snapshot: `EllesmereUIExtendNameplatesProfiles`, `EllesmereUIExtendQuestTrackerProfiles` or `EllesmereUIExtendBagsProfiles`, shaped as `{ format = 1, revision = n, data = <root>, sync = <metadata> }`. Bags uses the `bags` settings section; its independent `EllesmereUIExtendBagsDB` inventory database never participates in profile synchronization/reset.
