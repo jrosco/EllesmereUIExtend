@@ -16,6 +16,7 @@ local function Widget(kind, name, parent, template)
         hooks = {}, text = "" }
     setmetatable(f, { __index = methods })
     function f:SetScript(event, callback) self.scripts[event] = callback end
+    function f:GetScript(event) return self.scripts[event] end
     function f:HookScript(event, callback)
         self.hooks[event] = self.hooks[event] or {}
         table.insert(self.hooks[event], callback)
@@ -202,12 +203,48 @@ combat = true
 ns.Addon.Refresh()
 Check(not ns.BagButton, "attachment defers in combat")
 combat = false
+local capturedDB = ns.DB
+ns.DB = { format = 1, characters = {} }
 Event("PLAYER_REGEN_ENABLED")
 Check(ns.BagButton and ns.BagButton.parent == EUI_Bags, "button attached to actual EUI bag frame")
-ns.Addon.Refresh(); ns.Addon.Refresh()
-Check(#EUI_Bags.hooks.OnShow == 1, "one native OnShow hook")
+Check(ns.BagButton.enabled, "no snapshots still allows opening empty bank")
+local shownTip
+EllesmereUI.ShowWidgetTooltip = function(_, tip) shownTip = tip end
+ns.BagButton.scripts.OnEnter()
+Check(shownTip == "Visit the banker first", "button explains current-character banker prerequisite")
 ns.BagButton.scripts.OnClick()
 local viewer = EllesmereUIExtendBagsViewer
+Check(viewer:IsShown() and viewer.message.text == "Visit the banker first", "button opens first-visit empty bank")
+Check(viewer.character.text == "Fallback - Realm", "uncaptured current character still labels empty bank")
+Check(not viewer.previousCharacter.enabled and not viewer.nextCharacter.enabled, "no alt snapshots disables character arrows")
+for _, slot in ipairs(viewer.slots) do Check(not slot:IsShown() and slot.entry == nil, "uncaptured bank has no item icons") end
+Event("BANKFRAME_OPENED"); Tick(); Tick()
+Check(viewer.slots[1]:IsShown() and viewer.message.text == "", "first capture fills open viewer without reopening bags")
+Check(not ns.BagButton.tip:find("first", 1, true), "first capture updates button help")
+ns.DB = capturedDB
+Event("BANKFRAME_CLOSED")
+player = "Uncaptured"
+ns.Addon.Refresh(); ns.Addon.Refresh()
+Check(ns.BagButton.enabled and viewer.message.text == "Visit the banker first", "uncaptured player never falls back to alt snapshot")
+Check(viewer.character.text == "Uncaptured - Realm" and not viewer.slots[1]:IsShown(), "current player owns empty viewer despite saved alts")
+Check(viewer.nextCharacter.enabled and viewer.previousCharacter.enabled, "uncaptured player can browse saved alts")
+viewer.nextCharacter.scripts.OnClick()
+Check(viewer.character.text == "Alt - Realm" and viewer.slots[1]:IsShown(), "right arrow browses captured alt from empty current bank")
+ns.Addon.Refresh()
+Event("GET_ITEM_INFO_RECEIVED")
+Check(viewer.character.text == "Alt - Realm", "refresh and item data arrival preserve selected alt")
+viewer.previousCharacter.scripts.OnClick()
+Check(viewer.character.text == "Uncaptured - Realm" and viewer.message.text == "Visit the banker first",
+    "left arrow returns to uncaptured current player")
+viewer.nextCharacter.scripts.OnClick()
+viewer:Hide()
+SlashCmdList.ELLESMEREUIEXTENDBAGS()
+Check(viewer.character.text == "Uncaptured - Realm" and viewer.message.text == "Visit the banker first",
+    "slash reopening defaults to current player instead of last browsed alt")
+player = "Fallback"
+Check(#EUI_Bags.hooks.OnShow == 1, "one native OnShow hook")
+viewer:Hide()
+ns.BagButton.scripts.OnClick()
 Check(viewer and viewer:IsShown(), "bag button opens separate viewer")
 local slots = {}
 for _, frame in ipairs(frames) do
@@ -219,8 +256,19 @@ end
 Check(#slots == 80 and slots[1].entry, "bounded snapshot grid renders stored items")
 slots[1].scripts.OnEnter(slots[1])
 Check(tooltips == 1, "stored-link tooltip shown")
-viewer.previousCharacter.scripts.OnClick()
-Check(viewer.character.text ~= "Fallback - Realm", "character selector changes snapshot")
+Check(viewer.character.text == "Fallback - Realm" and viewer.previousCharacter and viewer.nextCharacter,
+    "viewer opens on current player and retains character arrows")
+viewer.nextCharacter.scripts.OnClick()
+Check(viewer.character.text == "Alt - Realm", "right arrow browses other captured character")
+Event("BANKFRAME_OPENED"); Tick(); Tick()
+Check(viewer.character.text == "Alt - Realm", "current player's capture preserves intentionally browsed alt")
+Event("BANKFRAME_CLOSED")
+viewer.tabs[3].scripts.OnClick(viewer.tabs[3])
+viewer.search:SetText("no-match")
+viewer:Hide()
+ns.BagButton.scripts.OnClick()
+Check(viewer.character.text == "Fallback - Realm" and viewer.search:GetText() == "" and slots[1]:IsShown(),
+    "bag-button reopening resets alt selection, tab and search to current player")
 viewer.search:SetText("no-match")
 Check(not slots[1]:IsShown() and viewer.message.text == "No items in this view.", "search hides unrelated icons")
 viewer.search:SetText("")
@@ -244,23 +292,43 @@ local alt = ns.DB.characters["Alt - Realm"]
 for i = 1, 100 do alt.tabs[1].items[i] = { itemID = 100, count = 1, link = "item:100" } end
 alt.tabs[1].numSlots = 100
 player = "Alt"
--- Walk selector to Alt deterministically.
-for _ = 1, 3 do
-    if viewer.character.text == "Alt - Realm" then break end
-    viewer.nextCharacter.scripts.OnClick()
-end
 ns.RefreshViewer()
+Check(viewer.character.text == "Alt - Realm", "refresh uses current identity, not prior selection")
 Check(viewer.nextPage.enabled, "large banks have pagination")
 viewer.nextPage.scripts.OnClick()
 Check(slots[20]:IsShown() and not slots[21]:IsShown(), "last page hides unused pooled icons")
+viewer:Hide()
+SlashCmdList.ELLESMEREUIEXTENDBAGS()
+Check(slots[80]:IsShown() and viewer.page.text:find("Page 1/", 1, true), "reopening resets page to first page")
 EllesmereUIExtendBagsDB = { format = 99, characters = {} }
 ns.InitializeDB()
 Check(ns.DB == nil and EllesmereUIExtendBagsDB.format == 99, "unsupported DB preserved, not migrated")
+ns.Addon.Refresh()
+Check(ns.BagButton.enabled and ns.BagButton.tip:find("unsupported", 1, true), "unsupported database keeps diagnostic viewer accessible")
 ns.RefreshViewer()
 Check(viewer.message.text:find("unsupported", 1, true), "unsupported DB explains unavailable storage")
 EllesmereUIExtendBagsDB = { format = 1, characters = { Broken = { tabs = { { bagID = 6 } } } } }
 ns.InitializeDB()
 Check(#ns.Characters() == 0, "malformed saved records ignored without deleting them")
+ns.Addon.Refresh()
+Check(ns.BagButton.enabled, "malformed records still allow first-visit guidance")
 ns.RefreshViewer()
-Check(viewer.message.text == "Visit a banker to create a snapshot.", "malformed records cannot break viewer")
+Check(viewer.message.text == "Visit the banker first", "malformed records cannot break viewer")
+viewer:Hide()
+ns.BagButton.scripts.OnClick()
+Check(viewer:IsShown() and viewer.message.text == "Visit the banker first", "button reopens first-visit guidance")
+viewer:Hide()
+SlashCmdList.ELLESMEREUIEXTENDBAGS()
+Check(viewer:IsShown() and viewer.message.text == "Visit the banker first", "slash opens same first-visit guidance")
+ns.DB = { format = 1, characters = { ["Alt - Realm"] = { tabs = { { bagID = 6, name = "Bank", numSlots = 1, items = {} } } } } }
+ns.Addon.Refresh()
+Check(viewer.message.text == "No items in this view.", "captured empty current bank is distinct from uncaptured bank")
+local fullName = UnitFullName
+UnitFullName = function() return secret, secret end
+ns.RefreshViewer()
+Check(viewer.character.text == "Current character unavailable" and viewer.message.text == "Visit the banker first",
+    "unreadable character identity cannot select saved alt data")
+Check(not viewer.slots[1]:IsShown(), "unreadable identity clears prior icons")
+UnitFullName = fullName
+Check(ns.DB.characters["Alt - Realm"] ~= nil, "viewer preserves other stored character data")
 print("PASS: " .. checks .. " Bags capture, capability, read-only viewer and UI checks")

@@ -78,9 +78,14 @@ affected Options and Preview/Viewer modules and their tests before editing.
 - UI settings belong to shared profiles' `bags` section. Captured inventory is
   in `EllesmereUIExtendBagsDB`, never a preview/defaults table. Profile changes,
   reset and hiding the button must not erase inventory or disable slash access.
-- Preserve character selection, tab filtering, literal name/ID search,
+- Always open on the current character, resetting tab/page/search rather than
+  falling back to an alt. Preserve left/right character arrows and the selected
+  alt during refreshes while open. Include the current character in choices even
+  before capture; keep the button clickable and show **Visit the banker first**
+  in their empty viewer. Unreadable identity must never automatically select an alt.
+- Preserve tab filtering, literal name/ID search,
   pagination, last-updated/read-only labels and no-snapshot/empty/unavailable
-  states. Revalidate selection after database changes; clear unused pooled icons.
+  states. Revalidate current identity/tabs after database changes; clear unused pooled icons.
 - Use saved item links for hover tooltips. Never add secure item attributes,
   live container templates, item use, pickup, drag/drop or transfer actions to
   snapshot icons. Preserve Edit Mode checks inside stale settings/open/move callbacks.

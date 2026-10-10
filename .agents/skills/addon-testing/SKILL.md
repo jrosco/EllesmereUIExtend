@@ -63,7 +63,7 @@ report these as skipped, not passed. Never edit upstream files to make tests pas
 
 - `Bags/tests/runtime.lua` covers bank access boundaries, stable complete scans,
   empty storage, deposits/withdrawals, detached saved data, restricted/missing/
-  throwing getters, personal-only capture, Forever fallbacks, character browsing,
+  throwing getters, personal-only capture, Forever fallbacks, current-character opening and alt browsing,
   tab/search/pagination, saved-link tooltips, read-only icons and editor locks.
 - `Bags/tests/profiles.lua` covers Bags alone, pairs, all six three-feature load
   orders, independent profile persistence, reset isolation and Bags-alone reload.
@@ -93,7 +93,11 @@ combat transitions, pooled frame reuse, restoration and editor locks.
 
 For Bags, verify banker visits, every supported personal tab/bag and reagent
 storage, empty banks, character relogs, timestamps, item names/IDs, pagination,
-tooltips and non-actionable icons. Exclude portable Warband/guild/carried reagent
+tooltips and non-actionable icons. Verify uncaptured characters see an empty
+viewer with **Visit the banker first** on opening, can arrow to captured alts and
+back, and that reopening always restores the current character. Refreshes must
+preserve an intentionally selected alt; the button remains clickable.
+Exclude portable Warband/guild/carried reagent
 storage. Check the attached button at screen edges/scales and all EUI bag modes,
 combat, Edit Mode and native taint on both clients. See the Bags checklist in
 `TESTING.md`; mocks do not prove live bank timing or rendering.

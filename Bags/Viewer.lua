@@ -1,6 +1,6 @@
 local _, ns = ...
 if not ns.Addon then return end
-local viewer, selectedCharacter, selectedTab, page = nil, nil, nil, 1
+local viewer, selectedCharacter, currentCharacter, selectedTab, page = nil, nil, nil, nil, 1
 local PAGE_SIZE = 80
 
 local function Font(parent, text, size)
@@ -41,9 +41,25 @@ end
 local function HideTooltip()
     if GameTooltip then GameTooltip:Hide() end
 end
+local function CurrentSnapshot()
+    local key = ns.CharacterKey()
+    local snapshot = ns.DB and key and ns.DB.characters[key]
+    if not ns.ValidSnapshot(snapshot) then snapshot = nil end
+    return snapshot, key
+end
+local function CharacterChoices()
+    local current = ns.CharacterKey()
+    if not current then return {} end
+    -- Keep the current player selectable even before their first bank visit.
+    local keys = { current }
+    for _, key in ipairs(ns.Characters()) do
+        if key ~= current then keys[#keys + 1] = key end
+    end
+    return keys
+end
 local function ChangeCharacter(direction)
-    local keys = ns.Characters()
-    if #keys == 0 then return end
+    local keys = CharacterChoices()
+    if #keys < 2 then return end
     local index = 1
     for i, key in ipairs(keys) do if key == selectedCharacter then index = i; break end end
     selectedCharacter = keys[((index - 1 + direction) % #keys) + 1]
@@ -73,9 +89,9 @@ local function Build()
     f.title:SetPoint("LEFT", 12, 0)
     local close = Button(header, "X", 24, function() f:Hide() end)
     close:SetPoint("RIGHT", -8, 0)
-    f.previousCharacter = Button(f, "<", 24, function() ChangeCharacter(-1) end, "Previous captured character")
+    f.previousCharacter = Button(f, "<", 24, function() ChangeCharacter(-1) end, "Previous character's bank")
     f.previousCharacter:SetPoint("TOPLEFT", 12, -40)
-    f.nextCharacter = Button(f, ">", 24, function() ChangeCharacter(1) end, "Next captured character")
+    f.nextCharacter = Button(f, ">", 24, function() ChangeCharacter(1) end, "Next character's bank")
     f.nextCharacter:SetPoint("TOPLEFT", 352, -40)
     f.character = Font(f)
     f.character:SetPoint("LEFT", f.previousCharacter, "RIGHT", 8, 0)
@@ -141,7 +157,13 @@ local function Build()
     f.page = Font(f)
     f.page:SetPoint("BOTTOM", 70, 18)
     f:SetScript("OnHide", function() search:ClearFocus(); f:StopMovingOrSizing(); HideTooltip() end)
-    f:SetScript("OnShow", function() ns.RefreshViewer() end)
+    f:SetScript("OnShow", function()
+        currentCharacter = ns.CharacterKey()
+        selectedCharacter, selectedTab, page = currentCharacter, nil, 1
+        HideTooltip()
+        -- Reopening must not retain an alt's tab, page or search filter.
+        if search:GetText() ~= "" then search:SetText("") else ns.RefreshViewer() end
+    end)
     if type(UISpecialFrames) == "table" then UISpecialFrames[#UISpecialFrames + 1] = "EllesmereUIExtendBagsViewer" end
     f:Hide()
     return f
@@ -149,13 +171,18 @@ end
 
 function ns.RefreshViewer()
     if not viewer or not viewer:IsShown() then return end
-    local f, keys = viewer, ns.Characters()
-    if not selectedCharacter or not ns.DB or not ns.ValidSnapshot(ns.DB.characters[selectedCharacter]) then
-        local current = ns.CharacterKey()
-        selectedCharacter = ns.DB and current and ns.ValidSnapshot(ns.DB.characters[current]) and current or keys[1]
-    end
+    local f = viewer
+    local current = ns.CharacterKey()
     local snapshot = ns.DB and selectedCharacter and ns.DB.characters[selectedCharacter]
-    f.character:SetText(selectedCharacter or "No captured characters")
+    if currentCharacter ~= current or (selectedCharacter ~= current and not ns.ValidSnapshot(snapshot)) then
+        currentCharacter = current
+        selectedCharacter, selectedTab, page = current, nil, 1
+        HideTooltip()
+    end
+    snapshot = ns.DB and selectedCharacter and ns.DB.characters[selectedCharacter]
+    if not ns.ValidSnapshot(snapshot) then snapshot = nil end
+    f.character:SetText(selectedCharacter or "Current character unavailable")
+    local keys = CharacterChoices()
     f.previousCharacter:SetEnabled(#keys > 1)
     f.nextCharacter:SetEnabled(#keys > 1)
     local timestamp = snapshot and snapshot.updatedAt
@@ -200,7 +227,7 @@ function ns.RefreshViewer()
     end
     local message = ""
     if not ns.DB then message = "Snapshot storage is unavailable (unsupported database format)."
-    elseif not snapshot then message = "Visit a banker to create a snapshot."
+    elseif not snapshot then message = "Visit the banker first"
     elseif #items == 0 then message = "No items in this view." end
     f.message:SetText(message)
     f.previousPage:SetEnabled(page > 1)
@@ -224,11 +251,17 @@ function ns.AttachButton()
     if not ns.BagButton then
         -- An attached tab below the window avoids EUI's dynamic header/currency layout.
         local button = Button(bags, "Bank Snapshot", 125, function() ns.ToggleViewer() end,
-            "Browse read-only bank snapshots for captured characters. Visit a banker to update your snapshot.")
+            "View your character's read-only bank snapshot.")
         button:SetClampedToScreen(true)
         button:SetPoint("TOPRIGHT", bags, "BOTTOMRIGHT", -8, -4)
         ns.BagButton = button
         bags:HookScript("OnShow", function() ns.Addon.Refresh() end)
     end
+    local button = ns.BagButton
+    local snapshot = CurrentSnapshot()
+    button.tip = snapshot and "View your character's read-only bank snapshot. Visit a banker to update it."
+        or (ns.DB and "Visit the banker first"
+            or "Bank snapshot storage is unavailable (unsupported database format).")
+    button:SetEnabled(true) -- Keep the empty-state guidance accessible before the first visit.
     ns.BagButton:SetShown(ns.Addon.Settings().showButton)
 end

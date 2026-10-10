@@ -7,8 +7,9 @@ Read-only personal bank snapshots using the existing **EllesmereUIBags**, for Re
 Install the ZIP as `Interface/AddOns/EllesmereUIExtendBags/`. Requires **EllesmereUI** and **EllesmereUIBags**, not another Extend addon or a separate Core addon. For source installs, copy `Bags/` to that folder and embed `Core/Core.lua`, `Core/Sync.lua` and `Core/Options.lua` under `Shared/`.
 
 - Open normal EUI bags and click the attached **Bank Snapshot** button below the window, or use `/ebags`.
+- The button remains clickable before your first capture. Every time the viewer opens, it starts on the current character and clears the previous tab, page and search. Without their snapshot, it opens an empty bag displaying **Visit the banker first**, even when other characters have snapshots.
 - **Extend > Bags > Bank Snapshot** controls button visibility. `/eextend` opens shared profiles.
-- Visit a banker on each character to capture their bank. Use the character arrows to browse all captured characters, tab buttons to filter storage, search by item name or ID, and page arrows for larger banks.
+- Visit a banker on each character to capture their bank. Use the left/right character arrows to browse other captured banks and return to the current character (even without a snapshot). Use tab buttons to filter storage, search by item name or ID, and page arrows for larger banks. Refreshes preserve the character you are browsing until you close and reopen the viewer.
 - Drag the viewer's heading to move it; Escape closes it. Tooltips show stored item links, counts appear on icons, and the heading shows the last successful capture time.
 
 ## Snapshot behavior

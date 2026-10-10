@@ -141,7 +141,7 @@ function ns.Capture()
     local at = Integer(ns.Read(GetServerTime), 0, 9007199254740990)
     ns.DB.characters[key] = { tabs = tabs, updatedAt = at }
     ns.CapturedThisVisit = true
-    if ns.RefreshViewer then ns.RefreshViewer() end
+    ns.Addon.Refresh() -- Refresh the viewer and current-character first-visit tooltip.
     return true
 end
 

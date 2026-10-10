@@ -21,7 +21,7 @@ EllesmereUIExtend.RegisterModule({
         })
         y = y - height
         _, height = W:DualRow(parent, y, { type = "spacer", text = "Visit a banker to capture personal storage.",
-            tooltip = "Snapshots update during banker visits. Choose any captured character in the viewer. Inventory data is independent of UI profiles; resetting settings never clears it. Warband storage is not captured." })
+            tooltip = "Opens on your current character, showing Visit the banker first before capture. Use character arrows to browse other captured banks. Snapshots update during banker visits; profile resets never clear inventory. No Warband storage." })
         return math.abs(y - height)
     end,
 })

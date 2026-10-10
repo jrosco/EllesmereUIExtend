@@ -2,7 +2,7 @@
 ## Title: |cff0cd29fEllesmereUI|r Extend Bags
 ## Category: |cff0cd29fEllesmere|rUI
 ## Group: EllesmereUI
-## Notes: Read-only personal bank snapshots for all captured characters.
+## Notes: Read-only personal bank snapshots; opens on the current character with alt browsing.
 ## Author: jrosco
 ## Version: 0.1.0-alpha.1
 ## Dependencies: EllesmereUI, EllesmereUIBags
