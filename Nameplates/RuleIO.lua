@@ -1,4 +1,6 @@
+if EUI_CLIENT_BLOCKED then return end
 local _, addon = ...
+local GetHost = addon.GetHost
 local api = _G.EllesmereUIExtendNameplates
 if not api then return end
 
@@ -116,7 +118,7 @@ local function ValidateRule(rule, index)
 end
 
 local function GetCodec()
-    local serializer = EllesmereUI and EllesmereUI._Serializer
+    local serializer = GetHost() and GetHost()._Serializer
     local lib = LibStub and LibStub("LibDeflate", true)
     if not (serializer and serializer.Serialize and serializer.Deserialize and lib) then
         return nil, nil, "EUI serialization libraries are unavailable."

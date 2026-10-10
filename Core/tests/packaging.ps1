@@ -23,7 +23,14 @@ foreach ($path in $archives) {
         $pkgmeta = Get-Content -LiteralPath (Join-Path $root ".pkgmeta-$pkgmetaName") -Raw
         Check ($pkgmeta -match '(?m)^\s+- \.agents\r?$') 'Release metadata excludes agent skills'
         $toc = Get-Content -LiteralPath (Join-Path $root "$name/$identity.toc") -Raw
-        Check ($toc -match "## Dependencies: EllesmereUI, EllesmereUI$name\r?\n") 'Only corresponding upstream dependencies'
+        if ($name -eq 'Nameplates') {
+            Check ($toc -match '(?m)^## OptionalDeps: EllesmereUI, EllesmereUINameplates, EUIStandaloneNameplates\r?$' -and
+                $toc -notmatch '(?m)^## Dependencies:') 'Either nameplate host loads first without requiring the full suite'
+            Check ($pkgmeta -match '(?m)^optional-dependencies:\r?$' -and $pkgmeta -match '(?m)^  - eui-nameplates\r?$' -and
+                $pkgmeta -notmatch '(?m)^required-dependencies:') 'Addon managers offer alternative hosts without forcing the conflicting suite'
+        } else {
+            Check ($toc -match "## Dependencies: EllesmereUI, EllesmereUI$name\r?\n") 'Quest Tracker retains its upstream dependencies'
+        }
         Check ($toc -match "## SavedVariables: ${identity}Profiles\r?\n") 'Each feature saves its own profile snapshot'
         Check ($toc -match '(?m)^## Interface: 120100, 16001\r?$') 'Only Retail 12.1 and Forever interfaces advertised'
         $reader = New-Object System.IO.StreamReader($archive.GetEntry("$identity/$identity.toc").Open())

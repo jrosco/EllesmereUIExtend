@@ -1,4 +1,6 @@
+if EUI_CLIENT_BLOCKED then return end
 local _, addon = ...
+local GetHost = addon.GetHost
 local ResolveTexturePath = addon.ResolveBarTexturePath
 local states = setmetatable({}, { __mode = "k" })
 local defaults = {
@@ -62,7 +64,7 @@ local function PaintColor(plate, state, texture, entry)
             local onCD = Color(colors.interruptOnCD) or base
             local protectedColor = Color(colors.uninterruptible) or base
             local np = _G.EllesmereNameplates_NS
-            local compute = (np and np.ComputeCastBarTint) or (EllesmereUI and EllesmereUI.ComputeCastBarTint)
+            local compute = (np and np.ComputeCastBarTint) or (GetHost() and GetHost().ComputeCastBarTint)
             if compute then r, g, b = compute(onCD, normal)
             else r, g, b = normal.r, normal.g, normal.b end
             -- Match EUI precedence: cooldown folds first, uninterruptible wins.

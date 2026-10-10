@@ -1,4 +1,6 @@
+if EUI_CLIENT_BLOCKED then return end
 local _, private = ...
+local GetHost = private.GetHost
 local addon = EllesmereUIExtendNameplates
 if not addon then return end
 
@@ -117,39 +119,39 @@ end
 local CopyRule = private.CopyTable
 
 local function Rebuild()
-    local key = EllesmereUI.GetPluginModuleKey(PLUGIN_ID, "NameplateStyle")
-    if key then EllesmereUI:InvalidateModulePageCache(key) end
-    EllesmereUI:RefreshPage(true)
+    local key = GetHost().GetPluginModuleKey(PLUGIN_ID, "NameplateStyle")
+    if key then GetHost():InvalidateModulePageCache(key) end
+    GetHost():RefreshPage(true)
 end
 
 local function ExportRuleSet()
     local code, err = addon.ExportRuleSet()
     if not code then
-        EllesmereUI.PrintError(err or "Could not export Extend Nameplates rules.")
+        GetHost().PrintError(err or "Could not export Extend Nameplates rules.")
         return
     end
-    EllesmereUI:ShowCopyPopup("Export Nameplate Rules", "Copy this code to share the rule set between characters.", code)
+    GetHost():ShowCopyPopup("Export Nameplate Rules", "Copy this code to share the rule set between characters.", code)
 end
 
 local function ImportRuleSet()
     local function OnImport(code)
         local ok, err = addon.ImportRuleSet(code)
         if not ok then
-            EllesmereUI.PrintError(err or "Could not import Extend Nameplates rules.")
+            GetHost().PrintError(err or "Could not import Extend Nameplates rules.")
             return
         end
         Rebuild()
-        EllesmereUI.Print("Extend Nameplates rules imported.")
+        GetHost().Print("Extend Nameplates rules imported.")
     end
-    if EllesmereUI.ShowImportStringPopup then
-        EllesmereUI:ShowImportStringPopup(
+    if GetHost().ShowImportStringPopup then
+        GetHost():ShowImportStringPopup(
             "Import Nameplate Rules",
             "Paste a rule-set code from another character. Import replaces this profile's current rules.",
             "Import Rules", OnImport)
-    elseif EllesmereUI.ShowInputPopup then
+    elseif GetHost().ShowInputPopup then
         -- Older EUI builds do not yet include the scrollable import/export-style
         -- popup. Keep import usable there with the standard one-line code field.
-        EllesmereUI:ShowInputPopup({
+        GetHost():ShowInputPopup({
             title = "Import Nameplate Rules",
             message = "Paste the complete rule-set code. Import replaces this profile's current rules.",
             placeholder = "Paste rule-set code here...",
@@ -159,27 +161,27 @@ local function ImportRuleSet()
             onConfirm = OnImport,
         })
     else
-        EllesmereUI.PrintError("Update EllesmereUI to import Extend Nameplates rule sets.")
+        GetHost().PrintError("Update EllesmereUI to import Extend Nameplates rule sets.")
     end
 end
 
 local function AttachTooltip(control, text)
     if not control or not text or type(control.HookScript) ~= "function" then return end
     -- Keep EUI's existing hover styling and click handlers.
-    control:HookScript("OnEnter", function() EllesmereUI.ShowWidgetTooltip(control, text) end)
-    control:HookScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
+    control:HookScript("OnEnter", function() GetHost().ShowWidgetTooltip(control, text) end)
+    control:HookScript("OnLeave", function() GetHost().HideWidgetTooltip() end)
 end
 
 local function ButtonTooltips(row, ...)
     -- Search prebuild rows are frameless placeholders, not native controls.
-    if EllesmereUI.IsSearchPrebuild() then return end
+    if GetHost().IsSearchPrebuild() then return end
     for index, button in ipairs({ row:GetChildren() }) do
         AttachTooltip(button, select(index, ...))
     end
 end
 
 local function BuildSharingPage(parent, yOffset)
-    local W = EllesmereUI.Widgets
+    local W = GetHost().Widgets
     local y = yOffset
     local _, h
     _, h = W:SectionHeader(parent, "SHARE THIS PROFILE'S RULES", y); y = y - h
@@ -205,7 +207,7 @@ local function NewRule(index)
 end
 
 local function BuildStylePage(parent, yOffset)
-    local W = EllesmereUI.Widgets
+    local W = GetHost().Widgets
     local y = yOffset
     local _, h
     local db = DB()
@@ -253,8 +255,8 @@ local function BuildStylePage(parent, yOffset)
         block:SetAllPoints(control)
         block:SetFrameLevel(control:GetFrameLevel() + 10)
         block:EnableMouse(true)
-        block:SetScript("OnEnter", function() EllesmereUI.ShowWidgetTooltip(control, tip()) end)
-        block:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
+        block:SetScript("OnEnter", function() GetHost().ShowWidgetTooltip(control, tip()) end)
+        block:SetScript("OnLeave", function() GetHost().HideWidgetTooltip() end)
         local function Update()
             local off = locked()
             control:SetAlpha(off and 0.3 or 1)
@@ -262,22 +264,22 @@ local function BuildStylePage(parent, yOffset)
             if label then label:SetAlpha(off and 0.3 or 1) end
             if off then block:Show() else block:Hide() end
         end
-        EllesmereUI.RegisterWidgetRefresh(Update)
+        GetHost().RegisterWidgetRefresh(Update)
         Update()
     end
 
-    if not EllesmereUI.IsSearchPrebuild() and EllesmereUI.SetContentHeader then
+    if not GetHost().IsSearchPrebuild() and GetHost().SetContentHeader then
         rulesHeaderBuilder = function(headerParent, headerWidth)
             local height, preview = addon.BuildRulePreview(headerParent, headerWidth, GetRule,
                 function() return GlobalLocked() or GetRule().enabled == false end)
             if preview then
                 rulesPreview = preview
                 previewUpdates[#previewUpdates + 1] = preview.Update
-                EllesmereUI.RegisterWidgetRefresh(preview.Update)
+                GetHost().RegisterWidgetRefresh(preview.Update)
             end
             return height
         end
-        EllesmereUI:SetContentHeader(rulesHeaderBuilder)
+        GetHost():SetContentHeader(rulesHeaderBuilder)
     end
 
     local function GlowRow(prefix, off, barTip)
@@ -317,7 +319,7 @@ local function BuildStylePage(parent, yOffset)
             end,
             setValue = function(r, g, b) GetRule().style[prefix .. "GlowColor"] = { r = r, g = g, b = b }; Changed() end,
         })
-        if not EllesmereUI.IsSearchPrebuild() and EllesmereUI.BuildInlineCog then
+        if not GetHost().IsSearchPrebuild() and GetHost().BuildInlineCog then
             local function NotPixel() return Locked() or rule.style[prefix .. "GlowStyle"] ~= 1 end
             local function NotShine() return Locked() or rule.style[prefix .. "GlowStyle"] ~= 3 end
             local function Set(key, value, shine)
@@ -325,7 +327,7 @@ local function BuildStylePage(parent, yOffset)
                 rule.style[prefix .. key] = value
                 Changed()
             end
-            EllesmereUI.BuildInlineCog(row._leftRegion, {
+            GetHost().BuildInlineCog(row._leftRegion, {
                 title = title .. " glow settings", captureRegion = row._leftRegion,
                 tip = "Adjust the glow's appearance and animation.",
                 disabled = function() return Locked() or (NotPixel() and NotShine()) end,
@@ -454,11 +456,11 @@ local function BuildStylePage(parent, yOffset)
         if #current.rules <= 1 then return end
         local rule = current.rules[current.selectedRule]
         if not rule then return end
-        if not EllesmereUI.ShowConfirmPopup then
-            EllesmereUI.PrintError("This EUI version does not provide rule-delete confirmation.")
+        if not GetHost().ShowConfirmPopup then
+            GetHost().PrintError("This EUI version does not provide rule-delete confirmation.")
             return
         end
-        EllesmereUI:ShowConfirmPopup({
+        GetHost():ShowConfirmPopup({
             title = "Delete Nameplate Rule?",
             message = ("Delete '%s'? This cannot be undone."):format(rule.name or "Unnamed Rule"),
             confirmText = "Delete Rule",
@@ -498,7 +500,7 @@ local function BuildStylePage(parent, yOffset)
         Rebuild()
         Changed()
     end)
-    if EllesmereUI.IsSearchPrebuild() then
+    if GetHost().IsSearchPrebuild() then
         -- Index each action through the frameless factory without creating UI.
         for i, action in ipairs(actions) do
             local _, height = W:Button(parent, action.text, y, action.onClick)
@@ -509,7 +511,7 @@ local function BuildStylePage(parent, yOffset)
         -- independently tagged wrappers into separate vertical positions.
         local row
         row, h = W:Button(parent, actions[1].text, y, actions[1].onClick)
-        local PP, pad = EllesmereUI.PanelPP, EllesmereUI.CONTENT_PAD
+        local PP, pad = GetHost().PanelPP, GetHost().CONTENT_PAD
         local width, gap = parent:GetWidth() - pad * 2, 8
         local buttonWidth = (width - gap * (#actions - 1)) / #actions
         PP.Size(row, width, h)
@@ -517,20 +519,20 @@ local function BuildStylePage(parent, yOffset)
         local firstButton = row:GetChildren()
         local names, localizedNames = {}, {}
         for i, action in ipairs(actions) do
-            names[i], localizedNames[i] = action.text, EllesmereUI.L(action.text)
+            names[i], localizedNames[i] = action.text, GetHost().L(action.text)
             local button = firstButton
             if i > 1 then
                 button = CreateFrame("Button", nil, row)
                 button:SetFrameLevel(row:GetFrameLevel() + 1)
-                EllesmereUI.MakeStyledButton(button, action.text, 13, EllesmereUI.RB_COLOURS, action.onClick)
-                local wi = EllesmereUI._widgetInternals
+                GetHost().MakeStyledButton(button, action.text, 13, GetHost().RB_COLOURS, action.onClick)
+                local wi = GetHost()._widgetInternals
                 if wi and wi.IndexSlotForSearch then
                     wi.IndexSlotForSearch(parent, action.text, action.tooltip)
-                elseif EllesmereUI._RegisterSearchEntry then
+                elseif GetHost()._RegisterSearchEntry then
                     local section = parent._currentSection and parent._currentSection._sectionName
-                    local selector = EllesmereUI._buildingSelector
-                    EllesmereUI._RegisterSearchEntry(action.text, localizedNames[i], action.tooltip,
-                        EllesmereUI._buildingModule, EllesmereUI._buildingPage, section,
+                    local selector = GetHost()._buildingSelector
+                    GetHost()._RegisterSearchEntry(action.text, localizedNames[i], action.tooltip,
+                        GetHost()._buildingModule, GetHost()._buildingPage, section,
                         selector and selector.setter, selector and selector.key)
                 end
             end
@@ -602,20 +604,20 @@ local function BuildStylePage(parent, yOffset)
         }
     end
     local function BuildConditionMultiDropdown(region, condition)
-        local PP = EllesmereUI.PanelPP
-        local label = EllesmereUI.MakeFont(region, 14, nil, 1, 1, 1)
+        local PP = GetHost().PanelPP
+        local label = GetHost().MakeFont(region, 14, nil, 1, 1, 1)
         PP.Point(label, "LEFT", region, "LEFT", 20, 0)
         label:SetJustifyH("LEFT")
         label:SetWordWrap(false)
         label:SetMaxLines(1)
-        label:SetText(EllesmereUI.L(condition.text))
+        label:SetText(GetHost().L(condition.text))
 
-        local ddBtn, refresh = EllesmereUI.BuildVisOptsCBDropdown(
+        local ddBtn, refresh = GetHost().BuildVisOptsCBDropdown(
             region, 170, region:GetFrameLevel() + 2, condition.items,
             condition.getSelected, condition.setSelected, nil, nil, nil, nil, nil,
             { emptyLabel = condition.emptyLabel, label = condition.text })
         PP.Point(ddBtn, "RIGHT", region, "RIGHT", -20, 0)
-        EllesmereUI.RegisterWidgetRefresh(refresh)
+        GetHost().RegisterWidgetRefresh(refresh)
         AttachLock(ddBtn, RuleLocked, LockTip, label)
 
         if condition.tooltip then
@@ -625,9 +627,9 @@ local function BuildStylePage(parent, yOffset)
             hitFrame:SetFrameLevel(region:GetFrameLevel() + 10)
             hitFrame:EnableMouse(true)
             hitFrame:SetScript("OnEnter", function()
-                EllesmereUI.ShowWidgetTooltip(label, RuleLocked() and LockTip() or condition.tooltip)
+                GetHost().ShowWidgetTooltip(label, RuleLocked() and LockTip() or condition.tooltip)
             end)
-            hitFrame:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
+            hitFrame:SetScript("OnLeave", function() GetHost().HideWidgetTooltip() end)
             hitFrame:SetMouseClickEnabled(false)
         end
     end
@@ -659,7 +661,7 @@ local function BuildStylePage(parent, yOffset)
             right and { type = "spacer", text = right.text, tooltip = right.tooltip } or nil)
         -- The search factory returns absorbers, whose regions are not native
         -- UI parents. DualRow above still indexes both labels and tooltips.
-        if not EllesmereUI.IsSearchPrebuild() then
+        if not GetHost().IsSearchPrebuild() then
             BuildConditionMultiDropdown(row._leftRegion, left)
             if right then BuildConditionMultiDropdown(row._rightRegion, right) end
         end
@@ -688,7 +690,7 @@ local function BuildStylePage(parent, yOffset)
         setValue = function(value) GetRule().style.opacity = value; Changed() end,
         tooltip = "Fade the whole nameplate. 100% keeps EUI's opacity; 0% hides it.",
     })
-    if not EllesmereUI.IsSearchPrebuild() and EllesmereUI.BuildInlineCog then
+    if not GetHost().IsSearchPrebuild() and GetHost().BuildInlineCog then
         -- A popup can outlive its page/profile. Bind it to the rule that opened
         -- it and recheck both editor locks and selection on every write.
         local function CogLocked() return RuleLocked() or DB() ~= db or GetRule() ~= rule end
@@ -728,7 +730,7 @@ local function BuildStylePage(parent, yOffset)
                 end,
             }
         end
-        EllesmereUI.BuildInlineCog(sizeRow._leftRegion, {
+        GetHost().BuildInlineCog(sizeRow._leftRegion, {
             title = "Nameplate scaling", rows = cogRows, captureRegion = sizeRow._leftRegion,
             disabled = CogLocked, disabledTooltip = LockTip,
             tip = "Choose which elements scale. Unchecked elements keep EUI's size.",
@@ -978,19 +980,19 @@ local function BuildStylePage(parent, yOffset)
         }
     end
     local function FinishTextSlot(row, regionKey, slot)
-        if EllesmereUI.IsSearchPrebuild() then return end
+        if GetHost().IsSearchPrebuild() then return end
         local region = row[regionKey]
         local function SlotOff() return TextOff() or not Assigned(slot) end
         local function SlotTip() return TextOff() and TextTip() or "Add this text slot again to edit it." end
-        if EllesmereUI.BuildRowLabelMenu then
-            EllesmereUI.BuildRowLabelMenu(region, { values = positionValues, order = positionOrder,
+        if GetHost().BuildRowLabelMenu then
+            GetHost().BuildRowLabelMenu(region, { values = positionValues, order = positionOrder,
                 getValue = function() return slot.key end,
                 setValue = function(key) Move(slot, key) end,
                 itemDisabled = function(key) return MoveBlocked(slot, key) end,
                 locked = SlotOff, lockTip = SlotTip,
                 tooltip = "Move this text and its saved overrides to a free position. Unset sizes/offsets follow EUI at the destination." })
         end
-        if not EllesmereUI.BuildInlineCog then return end
+        if not GetHost().BuildInlineCog then return end
         local values, order = addon.GetRuleTextChoices(slot.cast)
         values.none = "Remove"
         local function Layout() return rule.style.textSlotLayout and rule.style.textSlotLayout[slot.key] or {} end
@@ -1090,15 +1092,15 @@ local function BuildStylePage(parent, yOffset)
                 Changed(); Rebuild()
             end }
         -- Older EUI versions can still move slots through the shared popup.
-        if not EllesmereUI.BuildRowLabelMenu then
+        if not GetHost().BuildRowLabelMenu then
             popupRows[#popupRows + 1] = { type = "dropdown", label = "Position", values = positionValues, order = positionOrder,
                 tooltip = "Move text and its saved overrides to a free position in the same health or cast group. Unset sizes/offsets follow EUI at the destination.",
                 get = function() return slot.key end, set = function(key) Move(slot, key) end,
                 disabled = SlotOff, disabledTooltip = SlotTip,
                 itemDisabled = function(key) return MoveBlocked(slot, key) end }
         end
-        EllesmereUI.BuildInlineCog(region, { title = slot.label .. " settings", rows = popupRows,
-            captureRegion = region, icon = EllesmereUI.RESIZE_ICON,
+        GetHost().BuildInlineCog(region, { title = slot.label .. " settings", rows = popupRows,
+            captureRegion = region, icon = GetHost().RESIZE_ICON,
             disabled = SlotOff, disabledTooltip = SlotTip, tip = "Choose this slot's content, color, size and X/Y offsets." })
     end
     local addOpen
@@ -1123,8 +1125,8 @@ local function BuildStylePage(parent, yOffset)
         for _, entry in ipairs({ { left, "_leftRegion" }, { right, "_rightRegion" } }) do
             local cell, regionKey = entry[1], entry[2]
             if cell == addCfg then
-                if not EllesmereUI.IsSearchPrebuild() and EllesmereUI.AttachButtonMenu then
-                    addOpen = EllesmereUI.AttachButtonMenu(row[regionKey]._control, { width = 220,
+                if not GetHost().IsSearchPrebuild() and GetHost().AttachButtonMenu then
+                    addOpen = GetHost().AttachButtonMenu(row[regionKey]._control, { width = 220,
                         values = positionValues, order = positionOrder, setValue = Add, itemDisabled = AddBlocked })
                 end
             elseif cell then FinishTextSlot(row, regionKey, cell) end
@@ -1156,20 +1158,20 @@ local function BuildStylePage(parent, yOffset)
 end
 
 local function BuildAboutPage(parent, yOffset)
-    local W = EllesmereUI.Widgets
+    local W = GetHost().Widgets
     local y = yOffset
     local _, h
     local function Paragraph(text)
         local row, height = W:Spacer(parent, y, 56)
-        if not EllesmereUI.IsSearchPrebuild() then
-            local PP = EllesmereUI.PanelPP
-            local pad = EllesmereUI.CONTENT_PAD + 20
-            local label = EllesmereUI.MakeFont(row, 13, nil, 1, 1, 1, 0.8)
+        if not GetHost().IsSearchPrebuild() then
+            local PP = GetHost().PanelPP
+            local pad = GetHost().CONTENT_PAD + 20
+            local label = GetHost().MakeFont(row, 13, nil, 1, 1, 1, 0.8)
             PP.Point(label, "TOPLEFT", row, "TOPLEFT", pad, -8)
             label:SetWidth(math.max(100, parent:GetWidth() - pad * 2))
             label:SetJustifyH("LEFT")
             label:SetWordWrap(true)
-            local displayText = EllesmereUI.L(text)
+            local displayText = GetHost().L(text)
             label:SetText(displayText)
             height = math.ceil(label:GetStringHeight()) + 20
             PP.Size(row, parent:GetWidth(), height)
@@ -1189,7 +1191,7 @@ local function BuildAboutPage(parent, yOffset)
     if type(getMetadata) == "function" then version = getMetadata("EllesmereUIExtendNameplates", "Version") end
     local versionText = type(version) == "string" and version ~= "" and ("Version " .. version .. ". ") or ""
     Section("NAMEPLATE EXTENSION", versionText ..
-        "Adds customizable, rule-based styling to EllesmereUI Nameplates so important units and casts stand out. Requires EllesmereUI, the Extend core and EllesmereUI Nameplates.")
+        "Adds customizable, rule-based styling to EllesmereUI Nameplates so important units and casts stand out. Requires the full suite's Nameplates module or EUI Standalone Nameplates.")
     Section("CUSTOM APPEARANCE",
         "Adjust nameplate size and opacity, health-bar colors and textures, borders, animated border glows, and target-arrow styles. Apply styles based on unit type, reaction, classification, quest objectives, targets, threat and casts.")
     Section("CAST COLORS",
@@ -1198,7 +1200,7 @@ local function BuildAboutPage(parent, yOffset)
         "Use Extend > Profiles for shared profiles across extensions and characters, and export or import your rules on Sharing. Enable Nameplate styling on the Style tab pauses styling without deleting your setup.")
     local row
     row, h = W:Button(parent, "Open Nameplate Style", y, function()
-        EllesmereUI.OpenPlugin(PLUGIN_ID, "NameplateStyle", "Style")
+        GetHost().OpenPlugin(PLUGIN_ID, "NameplateStyle", "Style")
     end)
     ButtonTooltips(row, "Open the Style tab to edit nameplate rules.")
     y = y - h
@@ -1213,7 +1215,7 @@ local function Register()
                 description = "Rule-based nameplate styling by unit, target, cast and rank.",
                 pages = { "Style", "Sharing", "About" },
                 buildPage = function(pageName, parent, yOffset)
-                    if pageName ~= "Style" and not EllesmereUI.IsSearchPrebuild() and EllesmereUI.ClearContentHeader then EllesmereUI:ClearContentHeader() end
+                    if pageName ~= "Style" and not GetHost().IsSearchPrebuild() and GetHost().ClearContentHeader then GetHost():ClearContentHeader() end
                     if pageName == "Sharing" then return BuildSharingPage(parent, yOffset) end
                     if pageName == "About" then return BuildAboutPage(parent, yOffset) end
                     return BuildStylePage(parent, yOffset)

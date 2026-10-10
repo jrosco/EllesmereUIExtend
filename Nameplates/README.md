@@ -4,7 +4,9 @@ Rule-based styling for EllesmereUI nameplates on Retail and WoW Forever, configu
 
 ## Install and open
 
-Extract the addon ZIP into `Interface/AddOns/`. The installed folder/TOC identity is **EllesmereUIExtendNameplates**. Requires **EllesmereUI** and its **EllesmereUINameplates** module enabled; shared profiles are embedded, so no separate Core addon or Quest Tracker extension is needed. Do not run the previous Nameplate Extras addon alongside it.
+Extract the addon ZIP into `Interface/AddOns/`. The installed folder/TOC identity is **EllesmereUIExtendNameplates**. Enable either **EllesmereUI** and its **EllesmereUINameplates** module, or **EllesmereUI: Standalone Nameplates** (`EUIStandaloneNameplates`, verified against v9.4). Shared profiles are embedded, so no separate Core addon or Quest Tracker extension is needed. Do not run the previous Nameplate Extras addon alongside it.
+
+The standalone disables itself when the full EUI suite or another EUI standalone is enabled; Extend respects that restriction. With the full suite enabled, Extend uses its core and Nameplates module. Without an active host, styling is inactive and a login message explains the requirement; saved rules remain unchanged. Switching hosts does not migrate native EUI settings or change Extend's saved-profile identity.
 
 Release packages target **Retail 12.1.0** and **WoW Forever 1.60.1** with the same ZIP. Retail 12.0.x and Classic clients are not advertised. Retail in-game verification is still required before publishing; see [Testing](../TESTING.md).
 

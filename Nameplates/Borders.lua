@@ -1,4 +1,6 @@
+if EUI_CLIENT_BLOCKED then return end
 local _, addon = ...
+local GetHost = addon.GetHost
 local api = EllesmereUIExtendNameplates
 local states = setmetatable({}, { __mode = "k" })
 local hidden = setmetatable({}, { __mode = "k" })
@@ -6,11 +8,11 @@ local hooked = setmetatable({}, { __mode = "k" })
 local Apply
 
 function api.SupportsBorderStyles()
-    return EllesmereUI and type(EllesmereUI.ApplyBorderStyle) == "function"
-        and type(EllesmereUI.GetBorderTextureDropdown) == "function" or false
+    return GetHost() and type(GetHost().ApplyBorderStyle) == "function"
+        and type(GetHost().GetBorderTextureDropdown) == "function" or false
 end
 function api.GetBorderStyleOptions()
-    if api.SupportsBorderStyles() then return EllesmereUI.GetBorderTextureDropdown() end
+    if api.SupportsBorderStyles() then return GetHost().GetBorderTextureDropdown() end
     return { solid = "Solid" }, { "solid" }
 end
 function api.ValidateBorderStyle(key)
@@ -28,11 +30,11 @@ function addon.RenderBorderStyle(frame, size, color, texture, guarded, native)
     -- pixel thicknesses. Preserve legacy solid rules up to eight pixels.
     if texture and texture ~= "solid" then size = math.min(4, size) end
     local px
-    if native and EllesmereUI.BorderPx then px = EllesmereUI.BorderPx(native.customBorderSizePx, size, texture) end
-    EllesmereUI.ApplyBorderStyle(frame, size, color.r, color.g, color.b, color.a or 1,
+    if native and GetHost().BorderPx then px = GetHost().BorderPx(native.customBorderSizePx, size, texture) end
+    GetHost().ApplyBorderStyle(frame, size, color.r, color.g, color.b, color.a or 1,
         texture or "solid", native and native.customBorderOffset, native and native.customBorderOffsetY,
         native and native.customBorderShiftX, native and native.customBorderShiftY, "nameplates", size, nil, px)
-    local PP = EllesmereUI.PP
+    local PP = GetHost().PP
     if guarded and PP and PP.GetBorders and PP.CreateBorder and PP.GetBorders(frame) then
         PP.CreateBorder(frame, nil, nil, nil, nil, nil, nil, nil, true)
     end
@@ -80,7 +82,7 @@ local function Release(state)
     end
 end
 local function NativeBorders(plate, state, health, cast)
-    local PP = EllesmereUI.PP
+    local PP = GetHost().PP
     local function Basic(bar)
         if PP and PP.GetBorders and bar then Suppress(PP.GetBorders(bar), state) end
     end
@@ -154,7 +156,7 @@ Apply = function(plate, state)
         -- outline spanning both bars. Native wrap can reconstruct on release.
         if cast and not health then
             if plate._cbWrapActive and np and np.NP_UnwrapCustomBorder then np.NP_UnwrapCustomBorder(plate) end
-            local PP = EllesmereUI.PP
+            local PP = GetHost().PP
             local hb = PP and PP.GetBorders and PP.GetBorders(plate.health)
             if hb and hb._hideBottom then
                 hb._hideBottom = nil
@@ -171,14 +173,14 @@ Apply = function(plate, state)
             addon.RenderBorderStyle(host, math.max(1, math.min(8, tonumber(style.borderSize) or 1)),
                 style.borderColor or { r = 1, g = 1, b = 1 }, style.borderTexture, true)
         elseif state.health then
-            if EllesmereUI and EllesmereUI.ApplyBorderStyle then EllesmereUI.ApplyBorderStyle(state.health, 0) else state.health:Hide() end
+            if GetHost() and GetHost().ApplyBorderStyle then GetHost().ApplyBorderStyle(state.health, 0) else state.health:Hide() end
         end
         if cast then
             local host = Host(plate, state, "cast", plate.cast)
             addon.RenderBorderStyle(host, math.max(1, math.min(8, tonumber(style.castBorderSize) or 2)),
                 style.castBorderColor or { r = 1, g = 1, b = 1 }, style.castBorderTexture, true)
         elseif state.cast then
-            if EllesmereUI and EllesmereUI.ApplyBorderStyle then EllesmereUI.ApplyBorderStyle(state.cast, 0) else state.cast:Hide() end
+            if GetHost() and GetHost().ApplyBorderStyle then GetHost().ApplyBorderStyle(state.cast, 0) else state.cast:Hide() end
         end
     end)
     state.busy = nil

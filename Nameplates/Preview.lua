@@ -1,4 +1,6 @@
+if EUI_CLIENT_BLOCKED then return end
 local _, addon = ...
+local GetHost = addon.GetHost
 local api = EllesmereUIExtendNameplates
 local Number = addon.ClampNumber
 local Secret = addon.IsSecret
@@ -8,14 +10,14 @@ local function Visible(frame)
     return ok and not Secret(value) and value == true
 end
 function api.BuildRulePreview(parent, parentWidth, getRule, locked)
-    if EllesmereUI.IsSearchPrebuild() then return 0 end
-    local PP = EllesmereUI.PanelPP
+    if GetHost().IsSearchPrebuild() then return 0 end
+    local PP = GetHost().PanelPP
     local preview = CreateFrame("Frame", nil, parent)
     preview:SetPoint("TOPLEFT", parent, "TOPLEFT")
     preview:SetPoint("TOPRIGHT", parent, "TOPRIGHT")
     preview:SetHeight(150)
     parent._extrasRulePreview = preview
-    local title = EllesmereUI.MakeFont(preview, 12, nil, 1, 1, 1)
+    local title = GetHost().MakeFont(preview, 12, nil, 1, 1, 1)
     PP.Point(title, "TOP", preview, "TOP", 0, -12)
     title:SetAlpha(0.7); title:SetWordWrap(false); title:SetMaxLines(1)
     local plate = CreateFrame("Frame", nil, preview)
@@ -44,10 +46,10 @@ function api.BuildRulePreview(parent, parentWidth, getRule, locked)
     local textHost = CreateFrame("Frame", nil, plate)
     textHost:SetAllPoints(health._bar)
     textHost:SetFrameLevel(health._bar:GetFrameLevel() + 3)
-    local level = EllesmereUI.MakeFont(textHost, 12, nil, 1, 1, 1)
-    local name = EllesmereUI.MakeFont(textHost, 12, nil, 1, 1, 1)
-    local hp = EllesmereUI.MakeFont(textHost, 12, nil, 1, 1, 1)
-    level:SetText("22"); name:SetText(EllesmereUI.L("Enemy Name")); hp:SetText("6,600")
+    local level = GetHost().MakeFont(textHost, 12, nil, 1, 1, 1)
+    local name = GetHost().MakeFont(textHost, 12, nil, 1, 1, 1)
+    local hp = GetHost().MakeFont(textHost, 12, nil, 1, 1, 1)
+    level:SetText("22"); name:SetText(GetHost().L("Enemy Name")); hp:SetText("6,600")
     PP.Point(level, "LEFT", textHost, "LEFT", 3, 0)
     PP.Point(name, "LEFT", textHost, "LEFT", 24, 0)
     PP.Point(hp, "RIGHT", textHost, "RIGHT", -3, 0)
@@ -55,9 +57,9 @@ function api.BuildRulePreview(parent, parentWidth, getRule, locked)
     preview.textHost, preview.name, preview.level, preview.hp = textHost, name, level, hp
     local castText = CreateFrame("Frame", nil, cast._appearance)
     castText:SetAllPoints(cast._bar); castText:SetFrameLevel(cast._bar:GetFrameLevel() + 3)
-    local spell = EllesmereUI.MakeFont(castText, 12, nil, 1, 1, 1)
-    local timer = EllesmereUI.MakeFont(castText, 12, nil, 1, 1, 1)
-    spell:SetText(EllesmereUI.L("Sample Spell")); spell:SetWordWrap(false); spell:SetMaxLines(1)
+    local spell = GetHost().MakeFont(castText, 12, nil, 1, 1, 1)
+    local timer = GetHost().MakeFont(castText, 12, nil, 1, 1, 1)
+    spell:SetText(GetHost().L("Sample Spell")); spell:SetWordWrap(false); spell:SetMaxLines(1)
     PP.Point(spell, "LEFT", castText, "LEFT", 3, 0); PP.Point(timer, "RIGHT", castText, "RIGHT", -3, 0)
     preview.spell, preview.timer, preview.castTextHost = spell, timer, castText
     local arrowHost = CreateFrame("Frame", nil, plate)
@@ -137,13 +139,13 @@ function api.BuildRulePreview(parent, parentWidth, getRule, locked)
             local opacity = Number(tonumber(style.opacity), 100, 0, 100) / 100
             health:SetAlpha(dim); cast:SetAlpha(dim)
             textHost:SetScale(textScale / other); textHost:SetAlpha(dim * opacity)
-            local path = EllesmereUI.GetFontPath and EllesmereUI.GetFontPath("nameplates") or "Fonts\\FRIZQT__.TTF"
+            local path = GetHost().GetFontPath and GetHost().GetFontPath("nameplates") or "Fonts\\FRIZQT__.TTF"
             local fontSize = Number(Setting("textSlotCenterSize", 12), 12, 8, 32)
             for _, font in ipairs({ level, name, hp, spell, timer }) do font:SetFont(path, fontSize, "OUTLINE") end
             name:SetWidth(math.max(20, width - 90) * healthScale / textScale)
             spell:SetWidth(math.max(20, castWidth - 55))
             title:SetWidth(available - 40)
-            title:SetText(EllesmereUI.L("Preview") .. ": [" .. (index or 1) .. "] " .. (rule.name or "Unnamed Rule"))
+            title:SetText(GetHost().L("Preview") .. ": [" .. (index or 1) .. "] " .. (rule.name or "Unnamed Rule"))
             for prefix, surface in pairs({ health = health, cast = cast }) do
                 local isCast = prefix == "cast"
                 local enabled = isCast and style.castEnabled == true or not isCast and style.healthEnabled ~= false
@@ -152,7 +154,7 @@ function api.BuildRulePreview(parent, parentWidth, getRule, locked)
                 local fill = "Interface\\Buttons\\WHITE8x8"
                 if texture ~= "flat" then
                     local paths = np.healthBarTextures or {}
-                    fill = EllesmereUI.ResolveTexturePath and EllesmereUI.ResolveTexturePath(paths, texture, fill) or paths[texture] or fill
+                    fill = GetHost().ResolveTexturePath and GetHost().ResolveTexturePath(paths, texture, fill) or paths[texture] or fill
                 end
                 surface._bar:SetStatusBarTexture(fill)
                 local color = Setting(isCast and "castBar" or "enemyInCombat", isCast and { r = 0.7, g = 0.4, b = 0.9 } or { r = 0.8, g = 0.14, b = 0.14 })
@@ -193,7 +195,7 @@ function api.BuildRulePreview(parent, parentWidth, getRule, locked)
             else left:Hide(); right:Hide() end
             local h = math.max(150, math.ceil((total + 48 * math.max(other, healthScale, castScale, textScale)) * ratio + 32))
             preview:SetHeight(h)
-            if not building and (headerHeight ~= h or forceHeight == true) and EllesmereUI.UpdateContentHeaderHeight then EllesmereUI:UpdateContentHeaderHeight(h) end
+            if not building and (headerHeight ~= h or forceHeight == true) and GetHost().UpdateContentHeaderHeight then GetHost():UpdateContentHeaderHeight(h) end
             headerHeight = h
             Tick(preview, 0)
             if api.UpdateRuleTextPreview then api.UpdateRuleTextPreview(preview, style) end

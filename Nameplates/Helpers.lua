@@ -1,4 +1,13 @@
+if EUI_CLIENT_BLOCKED then return end
 local _, addon = ...
+
+function addon.GetHost()
+    local core = _G.EllesmereUIExtend
+    if core and core.GetHost then return core.GetHost() end
+    -- Older embedded cores can load first when extensions update separately.
+    if EUI_CLIENT_BLOCKED then return nil end
+    return _G.EllesmereUI or (not _G.__EUISTANDALONE_NAMEPLATES_INERT and _G.EUICoreStandaloneNameplates) or nil
+end
 
 -- Private utilities shared by this addon's runtime and options modules.
 -- Keep the secret check dynamic: Forever may not provide issecretvalue.
@@ -30,8 +39,9 @@ function addon.ResolveBarTexturePath(key)
     local fallback = "Interface\\Buttons\\WHITE8x8"
     if key == "flat" then return fallback end
     local np = _G.EllesmereNameplates_NS
-    if EllesmereUI and EllesmereUI.ResolveTexturePath and np and np.healthBarTextures then
-        return EllesmereUI.ResolveTexturePath(np.healthBarTextures, key, fallback)
+    local host = addon.GetHost()
+    if host and host.ResolveTexturePath and np and np.healthBarTextures then
+        return host.ResolveTexturePath(np.healthBarTextures, key, fallback)
     end
     return fallback
 end
