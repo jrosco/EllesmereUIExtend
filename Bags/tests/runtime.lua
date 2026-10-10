@@ -673,4 +673,64 @@ for _, mode in ipairs({ "grid", "compact" }) do
     Check(not colored.iconFrame:IsShown() and colored.snapshotBorder.color[1] == 0.1,
         "switching to " .. mode .. " restores the existing icon-sized quality border")
 end
+-- List-only collapse uses stable EUI identities and current profile callbacks.
+EUI_CategoryManager = {
+    GetCategories = function() return cats end,
+    ClassifyItem = function()
+        for i, cat in ipairs(cats) do if cat._defaultName == "Trade Goods" then return i end end
+    end,
+}
+settings.display, settings.groupByCategory, settings.collapsedCategories = "list", true, {}
+ns.Addon.Refresh()
+local categoryHeader = native.headings[1]
+Check(categoryHeader.label.text:find("- Materials (", 1, true), "List category header shows expanded indicator and stack count")
+categoryHeader.scripts.OnClick(categoryHeader)
+Check(settings.collapsedCategories["category:Trade Goods"] and #ns.Layout(entries).slots == 0,
+    "click collapses all matching category stacks by stable identity")
+Check(categoryHeader.label.text:find("+ Materials (", 1, true) and native.scrollChild:GetHeight() == 20
+    and not native.slots[1]:IsShown(), "collapsed category retains clickable heading without empty row space")
+cats[1].name = "Renamed Materials"
+ns.Addon.Refresh()
+Check(categoryHeader.label.text:find("+ Renamed Materials", 1, true), "category rename preserves saved collapse state")
+cats[1], cats[5] = cats[5], cats[1]
+ns.Addon.Refresh()
+Check(not native.slots[1]:IsShown() and native.headings[1].categoryKey == "category:Trade Goods",
+    "category reordering preserves collapse by stable identity instead of index")
+cats[1], cats[5] = cats[5], cats[1]
+native.search:SetText("no-match")
+native.headings[1].scripts.OnClick(native.headings[1])
+Check(settings.collapsedCategories["category:Trade Goods"], "hidden filtered-out heading cannot toggle saved collapse")
+native.search:SetText("")
+Check(not native.slots[1]:IsShown(), "search does not erase collapsed-category preference")
+native:Hide(); ns.ToggleViewer()
+Check(not native.slots[1]:IsShown(), "reopening retains profile category collapse state")
+local collapsedProfile = settings
+settings = modules.feature.normalize({ showButton = true, display = "list", groupByCategory = true })
+ns.Addon.Refresh()
+Check(native.slots[1]:IsShown() and not settings.collapsedCategories["category:Trade Goods"],
+    "new profile starts independently expanded")
+editing = true
+native.headings[1].scripts.OnClick(native.headings[1])
+Check(not settings.collapsedCategories["category:Trade Goods"], "stale category callbacks honor Edit Mode")
+editing = false
+local staleHeader = native.headings[1]
+settings = collapsedProfile
+staleHeader.scripts.OnClick(staleHeader)
+Check(settings.collapsedCategories["category:Trade Goods"], "unrefreshed header cannot change newly selected profile")
+ns.Addon.Refresh()
+for _, mode in ipairs({ "grid", "compact" }) do
+    settings.display = mode
+    ns.Addon.Refresh()
+    Check(native.slots[1]:IsShown() and #ns.Layout(entries).slots == 100, "saved List collapse never hides stacks in " .. mode)
+    native.headings[1].scripts.OnClick(native.headings[1])
+    Check(settings.collapsedCategories["category:Trade Goods"], "non-List callbacks cannot change collapse preferences")
+end
+settings.display = "list"
+ns.Addon.Refresh()
+native.headings[1].scripts.OnClick(native.headings[1])
+Check(not settings.collapsedCategories["category:Trade Goods"] and native.slots[1]:IsShown(), "clicking collapsed heading expands its items")
+settings.collapsedCategories["category:Trade Goods"] = true
+settings.groupByCategory = false
+ns.Addon.Refresh()
+Check(native.slots[1]:IsShown() and not native.headings[1]:IsShown(), "disabling grouping ignores saved collapse state")
 print("PASS: " .. checks .. " Bags capture, capability, read-only viewer and UI checks")

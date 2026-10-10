@@ -118,29 +118,37 @@ function ns.Layout(items, columns)
             table.insert(buckets[index], entry)
         end
         for i = 0, #cats do
-            if buckets[i] then groups[#groups + 1] = { name = i == 0 and "Other" or cats[i].name, items = buckets[i] } end
+            if buckets[i] then
+                local cat = cats[i]
+                groups[#groups + 1] = { name = i == 0 and "Other" or cat.name, items = buckets[i],
+                    key = i == 0 and "fallback:other" or ("category:" .. (ns.String(cat._defaultName) or ns.String(cat.name) or tostring(i))) }
+            end
         end
     else groups[1] = { items = items } end
     local layout, x, y, band = { slots = {}, headings = {}, height = 0 }, 0, 0, 0
     for _, group in ipairs(groups) do
+        local collapsed = mode == "list" and group.key and (ns.Addon.Settings().collapsedCategories or {})[group.key] == true
+        local visibleItems = collapsed and {} or group.items
         local width = mode == "compact" and math.min(columns, math.max(1, math.ceil(math.sqrt(#group.items)))) or columns
         local cellHeight = mode == "list" and 24 or 40
         if mode ~= "compact" or x + width > columns then y, x = y + band, 0; band = 0 end
         local function Heading()
             if group.name then
-                table.insert(layout.headings, { text = group.name, x = x * 42, y = y, width = width * 42 })
+                table.insert(layout.headings, { text = group.name, x = x * 42, y = y, width = width * 42,
+                    key = group.key, collapsed = collapsed, count = #group.items })
                 return 20
             end
             return 0
         end
         local offset, row = Heading(), 0
-        for i, entry in ipairs(group.items) do
+        for i, entry in ipairs(visibleItems) do
             local column = mode == "list" and 0 or (i - 1) % width
             if i > 1 and column == 0 then row = row + 1 end
             table.insert(layout.slots, { entry = entry, x = x * 42 + column * 42, y = y + offset + row * cellHeight })
         end
-        if mode == "compact" then x = x + width; band = math.max(band, offset + (row + 1) * cellHeight)
-        else y = y + offset + (row + 1) * cellHeight; band = 0 end
+        local groupHeight = offset + (#visibleItems > 0 and (row + 1) * cellHeight or 0)
+        if mode == "compact" then x = x + width; band = math.max(band, groupHeight)
+        else y = y + groupHeight; band = 0 end
         layout.height = math.max(layout.height, y + band)
     end
     return layout, mode
@@ -169,20 +177,20 @@ end
 local function Button(parent, text, width, click, tip, plain)
     local button = CreateFrame("Button", nil, parent)
     button:SetSize(width, 24)
-    if not plain then Skin(button) else button:SetAlpha(0.4) end
+    if not plain then Skin(button) elseif plain ~= "header" then button:SetAlpha(0.4) end
     button.label = Font(button, text)
     button.label:SetPoint("CENTER")
     button.tip = tip
     button:SetScript("OnClick", click)
     button:SetScript("OnEnter", function()
-        if plain then button:SetAlpha(0.8) end
+        if plain and plain ~= "header" then button:SetAlpha(0.8) end
         button.label:SetTextColor(0.05, 0.82, 0.62)
         if button.tip and EllesmereUI and EllesmereUI.ShowWidgetTooltip then
             EllesmereUI.ShowWidgetTooltip(button, button.tip)
         end
     end)
     button:SetScript("OnLeave", function()
-        if plain then button:SetAlpha(0.4) end
+        if plain and plain ~= "header" then button:SetAlpha(0.4) end
         button.label:SetTextColor(0.9, 0.9, 0.9)
         if EllesmereUI and EllesmereUI.HideWidgetTooltip then EllesmereUI.HideWidgetTooltip() end
     end)
@@ -559,14 +567,36 @@ function ns.RefreshViewer()
     f.display.label:SetText(DISPLAY_NAMES[ns.Addon.Settings().display or "match"] or DISPLAY_NAMES.match)
     for _, heading in ipairs(f.headings) do heading:Hide() end
     for i, data in ipairs(layout.headings) do
-        local heading = f.headings[i] or Font(f.scrollChild, "", 11)
+        local heading = f.headings[i]
+        if not heading then
+            heading = Button(f.scrollChild, "", 420, function(self)
+                local currentSettings = ns.Addon.Settings()
+                if ns.Editing() or not self:IsShown() or self.ownerSettings ~= currentSettings
+                    or ns.DisplayMode() ~= "list" or not currentSettings.groupByCategory or not self.categoryKey then return end
+                currentSettings.collapsedCategories = currentSettings.collapsedCategories or {}
+                local collapsed = currentSettings.collapsedCategories
+                collapsed[self.categoryKey] = not collapsed[self.categoryKey] or nil
+                HideTooltip()
+                ns.RefreshViewer()
+            end, nil, "header")
+            heading:SetAlpha(1)
+            heading.label:ClearAllPoints()
+            heading.label:SetPoint("LEFT", 0, 0)
+            heading.label:SetWordWrap(false)
+            heading.label:SetJustifyH("LEFT")
+            heading:EnableMouseWheel(true)
+            heading:SetScript("OnMouseWheel", f.scrollFrame:GetScript("OnMouseWheel"))
+        end
         f.headings[i] = heading
+        heading.ownerSettings, heading.categoryKey = settings, data.key
         heading:ClearAllPoints()
         heading:SetPoint("TOPLEFT", data.x, -data.y)
-        heading:SetWidth(data.width)
-        heading:SetWordWrap(false)
-        heading:SetJustifyH("LEFT")
-        heading:SetText(data.text or "Other")
+        heading:SetSize(mode == "list" and availableWidth or data.width, 20)
+        heading.label:SetWidth((mode == "list" and availableWidth or data.width) - 4)
+        heading.label:SetText(mode == "list" and ((data.collapsed and "+ " or "- ") .. (data.text or "Other") .. " (" .. data.count .. ")")
+            or (data.text or "Other"))
+        heading:EnableMouse(mode == "list")
+        heading.tip = mode == "list" and (data.collapsed and "Expand category" or "Collapse category") or nil
         heading:Show()
     end
     local columns = ns.ListColumns()
@@ -654,7 +684,7 @@ function ns.RefreshViewer()
     f.scrollFrame:SetVerticalScroll(resetScroll and 0 or math.min(f.scrollFrame:GetVerticalScroll(), math.max(0, layout.height - ViewHeight(f))))
     resetScroll = false
     f.updateScrollbar()
-    f.total:SetText(#items .. " stacks")
+    f.total:SetText((#layout.slots < #items and (#layout.slots .. "/") or "") .. #items .. " stacks")
 end
 
 function ns.ToggleViewer()
