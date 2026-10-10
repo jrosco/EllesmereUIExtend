@@ -149,11 +149,14 @@ def plan(feature, channel, target, all_tags):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--channel", choices=("alpha", "beta", "stable"), required=True)
+    parser.add_argument("--features", nargs="+", choices=tuple(FEATURES), default=tuple(FEATURES),
+                        help="Addons to consider (default: all); accepts multiple names")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     target = git("rev-parse", "HEAD")
     tags = git("tag", "--list").splitlines()
-    plans = [p for f in FEATURES if (p := plan(f, args.channel, target, tags))]
+    selected = [f for f in FEATURES if f in args.features]
+    plans = [p for f in selected if (p := plan(f, args.channel, target, tags))]
     args.output.mkdir(parents=True, exist_ok=True)
     for p in plans:
         (args.output / f"{p['feature']}.md").write_text(p.pop("notes"), encoding="utf-8")
@@ -163,7 +166,8 @@ def main():
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
             output.write(f"matrix={json.dumps(matrix)}\n")
             output.write(f"has_releases={'true' if plans else 'false'}\n")
-    summary = "\n".join(f"- {p['tag']} at {target[:7]}" for p in plans) or "No code-driven releases to create."
+    summary = ("Selected addons: " + ", ".join(FEATURES[f] for f in selected) + "\n\n"
+               + ("\n".join(f"- {p['tag']} at {target[:7]}" for p in plans) or "No code-driven releases to create."))
     print(summary)
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:

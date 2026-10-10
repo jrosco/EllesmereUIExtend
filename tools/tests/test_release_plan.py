@@ -1,6 +1,8 @@
 """Offline release-planning regressions using disposable Git repositories."""
 
 import importlib.util
+from contextlib import redirect_stderr, redirect_stdout
+import io
 import json
 import os
 from pathlib import Path
@@ -155,6 +157,73 @@ class ReleasePlanTests(unittest.TestCase):
         self.assertEqual(self.plan("questtracker")["version"], "1.1.0")
         self.assertIsNone(self.plan("bags"))
 
+    def test_all_nonempty_addon_selections_filter_matrix_and_artifacts(self):
+        self.commit("fix(shared): update embedded core", "Core/Core.lua")
+        features = tuple(planner.FEATURES)
+        for mask in range(1, 1 << len(features)):
+            selected = [feature for i, feature in enumerate(features) if mask & (1 << i)]
+            with self.subTest(selected=selected):
+                output = Path(f"selected-{mask}")
+                env = {"GITHUB_OUTPUT": f"github-output-{mask}", "GITHUB_STEP_SUMMARY": f"summary-{mask}"}
+                argv = ["release_plan.py", "--channel", "alpha", "--features", *selected, "--output", str(output)]
+                with patch.dict(os.environ, env), patch("sys.argv", argv), redirect_stdout(io.StringIO()):
+                    planner.main()
+                matrix = json.loads((output / "plan.json").read_text(encoding="utf-8"))
+                self.assertEqual([result["feature"] for result in matrix["include"]], selected)
+                self.assertEqual({path.stem for path in output.glob("*.md")}, set(selected))
+                emitted = Path(env["GITHUB_OUTPUT"]).read_text(encoding="utf-8")
+                self.assertIn("has_releases=true", emitted)
+                self.assertEqual(json.loads(emitted.splitlines()[0].removeprefix("matrix=")), matrix)
+                summary = Path(env["GITHUB_STEP_SUMMARY"]).read_text(encoding="utf-8")
+                self.assertIn("Selected addons: " + ", ".join(planner.FEATURES[f] for f in selected), summary)
+                for feature in set(features) - set(selected):
+                    self.assertNotIn(feature + "-v", summary)
+
+    def test_unselected_addon_planner_errors_do_not_block_selection(self):
+        self.commit("fix(nameplates): beta fix", "Nameplates/Nameplates.lua")
+        self.git("tag", "nameplates-v1.0.1-beta.1")
+        self.commit("fix(nameplates): next fix", "Nameplates/Nameplates.lua")
+        self.commit("feat(bags): new bank display", "Bags/Viewer.lua")
+        argv = ["release_plan.py", "--channel", "alpha", "--features", "bags", "--output", "selected"]
+        with patch("sys.argv", argv), patch.object(planner, "plan", wraps=planner.plan) as called, redirect_stdout(io.StringIO()):
+            planner.main()
+        self.assertEqual([call.args[0] for call in called.call_args_list], ["bags"])
+        matrix = json.loads(Path("selected/plan.json").read_text(encoding="utf-8"))
+        self.assertEqual([result["feature"] for result in matrix["include"]], ["bags"])
+        self.assertEqual(matrix["include"][0]["version"], "1.1.0-alpha.1")
+
+    def test_selection_does_not_force_ineligible_release(self):
+        self.commit("feat(nameplates): new display", "Nameplates/Nameplates.lua")
+        env = {"GITHUB_OUTPUT": "github-output", "GITHUB_STEP_SUMMARY": "summary"}
+        argv = ["release_plan.py", "--channel", "stable", "--features", "bags", "--output", "selected"]
+        with patch.dict(os.environ, env), patch("sys.argv", argv), redirect_stdout(io.StringIO()):
+            planner.main()
+        self.assertEqual(json.loads(Path("selected/plan.json").read_text(encoding="utf-8")), {"include": []})
+        self.assertFalse(list(Path("selected").glob("*.md")))
+        self.assertIn("has_releases=false", Path("github-output").read_text(encoding="utf-8"))
+        summary = Path("summary").read_text(encoding="utf-8")
+        self.assertIn("Selected addons: Bags", summary)
+        self.assertIn("No code-driven releases", summary)
+
+    def test_selection_deduplicates_in_canonical_order(self):
+        self.commit("fix(shared): update core", "Core/Core.lua")
+        argv = ["release_plan.py", "--channel", "stable", "--features", "bags", "nameplates", "bags", "--output", "selected"]
+        with patch("sys.argv", argv), redirect_stdout(io.StringIO()):
+            planner.main()
+        matrix = json.loads(Path("selected/plan.json").read_text(encoding="utf-8"))
+        self.assertEqual([result["feature"] for result in matrix["include"]], ["nameplates", "bags"])
+
+    def test_empty_or_invalid_explicit_selection_is_rejected_before_planning(self):
+        for selection in ([], ["invalid"], ["all"], ["bags", "invalid"]):
+            with self.subTest(selection=selection):
+                argv = ["release_plan.py", "--channel", "alpha", "--features", *selection, "--output", "selected"]
+                with patch("sys.argv", argv), patch.object(planner, "plan") as called, redirect_stderr(io.StringIO()):
+                    with self.assertRaises(SystemExit) as error:
+                        planner.main()
+                    self.assertEqual(error.exception.code, 2)
+                    called.assert_not_called()
+                self.assertFalse(Path("selected").exists())
+
     def test_shared_cross_feature_change(self):
         self.commit("feat(shared): new settings", "Nameplates/Options.lua")
         Path("QuestTracker/Options.lua").write_text("fixture\n", encoding="utf-8")
@@ -244,6 +313,20 @@ class ReleasePlanTests(unittest.TestCase):
         self.git("checkout", "--detach", start)
         self.commit("fix(nameplates): branch fix", "Nameplates/Nameplates.lua")
         self.assertEqual(self.plan(channel="alpha")["version"], "1.0.1-alpha.2")
+
+
+class WorkflowSelectionTests(unittest.TestCase):
+    def test_dispatch_checkboxes_are_passed_to_planner_safely(self):
+        workflow = (Path(__file__).parents[2] / ".github/workflows/create-releases.yaml").read_text(encoding="utf-8")
+        for feature in planner.FEATURES:
+            self.assertRegex(workflow, rf"(?m)^      {feature}:\n        description: [^\n]+\n        type: boolean\n        default: true$")
+            self.assertIn(f"SELECT_{feature.upper()}: ${{{{ inputs.{feature} }}}}", workflow)
+            self.assertIn(f'if [[ "$SELECT_{feature.upper()}" == \'true\' ]]; then features+=({feature}); fi', workflow)
+        self.assertIn('if (( ${#features[@]} == 0 )); then', workflow)
+        self.assertIn("::error::Select at least one addon to release.", workflow)
+        self.assertIn('--features "${features[@]}"', workflow)
+        self.assertIn("matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}", workflow)
+        self.assertIn("needs.plan.outputs.has_releases == 'true' && !inputs.preview", workflow)
 
 
 if __name__ == "__main__":
