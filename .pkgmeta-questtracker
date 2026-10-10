@@ -5,6 +5,7 @@ move-folders:
   EllesmereUIExtendQuestTracker/QuestTracker: EllesmereUIExtendQuestTracker
 
 ignore:
+  - .agents
   - .github
   - .gitignore
   - .pkgmeta-nameplates
