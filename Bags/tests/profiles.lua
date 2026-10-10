@@ -42,18 +42,29 @@ for _, order in ipairs(orders) do
     Check(core.GetSettings("bags").showButton == true, "Bags defaults available")
     Check(core.CreateProfile("Other"), "Bags can create shared profile")
     core.GetSettings("bags").showButton = false
+    local otherWindow = core.GetSettings("bags").window
+    otherWindow.width, otherWindow.height, otherWindow.x, otherWindow.y, otherWindow.locked = 900, 700, 50, -25, true
     Check(core.SelectProfile("Default"), "Bags can switch shared profiles")
     Check(core.GetSettings("bags").showButton, "Bags settings isolated by profile")
+    Check(core.GetSettings("bags").window.width == 620 and not core.GetSettings("bags").window.locked,
+        "window defaults are independently copied for every profile")
     Check(core.SelectProfile("Other"), "restore selected profile")
     Check(not core.GetSettings("bags").showButton, "selected profile retains settings")
+    Check(core.GetSettings("bags").window.width == 900 and core.GetSettings("bags").window.locked,
+        "profile switch retains saved geometry and lock state")
     core.ResetFeature("bags")
     Check(core.GetSettings("bags").showButton and EllesmereUIExtendBagsDB == bank, "reset does not touch inventory")
+    Check(core.GetSettings("bags").window.width == 620 and not core.GetSettings("bags").window.locked,
+        "Bags reset resets window layout without touching captured inventory")
+    core.GetSettings("bags").window = { width = 1000, height = 800, x = 75, y = -50, locked = true }
     Event("PLAYER_LOGOUT")
     Check(EllesmereUIExtendBagsProfiles and EllesmereUIExtendBagsProfiles.format == 1, "Bags owner persists independently")
     Check(EllesmereUIExtendBagsProfiles.data.profiles.Other.bags.showButton, "Bags settings included in own profile snapshot")
     for _, key in ipairs(order) do
         local snapshot = _G["EllesmereUIExtend" .. owners[key] .. "Profiles"]
         Check(snapshot.data.profiles.Other.bags.showButton, "other installed owners preserve Bags feature section")
+        Check(snapshot.data.profiles.Other.bags.window.width == 1000 and snapshot.data.profiles.Other.bags.window.locked,
+            "every independent owner persists Bags window state")
     end
     -- Reload only Bags with its own snapshot (other extensions uninstalled).
     local saved = core.Copy(EllesmereUIExtendBagsProfiles)
@@ -66,5 +77,8 @@ for _, order in ipairs(orders) do
     Event("PLAYER_LOGIN")
     Check(EllesmereUIExtend.GetProfileInfo().active == "Other", "Bags-alone reload preserves shared assignments")
     Check(EllesmereUIExtendBagsDB == bank, "inventory survives uninstall/reload and profile restoration")
+    Check(EllesmereUIExtend.GetSettings("bags").window.width == 1000
+        and EllesmereUIExtend.GetSettings("bags").window.y == -50 and EllesmereUIExtend.GetSettings("bags").window.locked,
+        "Bags-alone reload restores profile window geometry and lock")
 end
 print("PASS: " .. checks .. " Bags independent persistence and all shared load orders")

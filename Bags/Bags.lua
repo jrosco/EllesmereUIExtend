@@ -12,10 +12,18 @@ function addon.Refresh()
     if ns.RefreshViewer then ns.RefreshViewer() end
 end
 core.RegisterFeature("bags", {
-    defaults = { showButton = true, groupByCategory = false, display = "match" },
+    defaults = { showButton = true, groupByCategory = false, display = "match",
+        window = { width = 620, height = 510, x = 0, y = 0, locked = false } },
     normalize = function(settings)
         settings.showButton = settings.showButton ~= false
         settings.groupByCategory = settings.groupByCategory == true
+        local window = type(settings.window) == "table" and settings.window or {}
+        window.width = math.max(620, math.min(1600, ns.Number(window.width) or 620))
+        window.height = math.max(480, math.min(1200, ns.Number(window.height) or 510))
+        window.x = math.max(-10000, math.min(10000, ns.Number(window.x) or 0))
+        window.y = math.max(-10000, math.min(10000, ns.Number(window.y) or 0))
+        window.locked = not ns.Secret(window.locked) and window.locked == true
+        settings.window = window
         if settings.display ~= "grid" and settings.display ~= "compact" and settings.display ~= "list" then
             settings.display = "match"
         end

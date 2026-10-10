@@ -2,7 +2,10 @@ local _, ns = ...
 if not ns.Addon then return end
 local viewer, selectedCharacter, currentCharacter, selectedTab = nil, nil, nil, nil
 local resetScroll = true
-local VIEW_HEIGHT = 330
+local function ViewHeight(f) return math.max(1, f:GetHeight() - 180) end
+local function WindowSettings()
+    return ns.Addon.Settings().window or { width = 620, height = 510, x = 0, y = 0, locked = false }
+end
 local DISPLAY_ORDER = { "match", "grid", "compact", "list" }
 local DISPLAY_NAMES = { match = "Match EUI bank", grid = "Grid", compact = "Compact", list = "List" }
 local function EUIProfile()
@@ -95,7 +98,8 @@ function ns.ListValues(item)
     -- Upgrade tracks and uncaptured binding state must not be guessed.
     return values
 end
-function ns.Layout(items)
+function ns.Layout(items, columns)
+    columns = columns or 10
     local mode, groups = ns.DisplayMode(), {}
     local manager = EUI_CategoryManager
     local cats = manager and ns.Read(manager.GetCategories, manager)
@@ -119,9 +123,9 @@ function ns.Layout(items)
     else groups[1] = { items = items } end
     local layout, x, y, band = { slots = {}, headings = {}, height = 0 }, 0, 0, 0
     for _, group in ipairs(groups) do
-        local width = mode == "compact" and math.min(10, math.max(1, math.ceil(math.sqrt(#group.items)))) or 10
+        local width = mode == "compact" and math.min(columns, math.max(1, math.ceil(math.sqrt(#group.items)))) or columns
         local cellHeight = mode == "list" and 24 or 40
-        if mode ~= "compact" or x + width > 10 then y, x = y + band, 0; band = 0 end
+        if mode ~= "compact" or x + width > columns then y, x = y + band, 0; band = 0 end
         local function Heading()
             if group.name then
                 table.insert(layout.headings, { text = group.name, x = x * 42, y = y, width = width * 42 })
@@ -162,21 +166,23 @@ local function Skin(frame)
         frame.snapshotBorder = EllesmereUI.MakeBorder(frame, 1, 1, 1, 0.15, EllesmereUI.PP)
     elseif pp and type(pp.CreateBorder) == "function" then pp.CreateBorder(frame, 0.25, 0.25, 0.25, 1, 1) end
 end
-local function Button(parent, text, width, click, tip)
+local function Button(parent, text, width, click, tip, plain)
     local button = CreateFrame("Button", nil, parent)
     button:SetSize(width, 24)
-    Skin(button)
+    if not plain then Skin(button) else button:SetAlpha(0.4) end
     button.label = Font(button, text)
     button.label:SetPoint("CENTER")
     button.tip = tip
     button:SetScript("OnClick", click)
     button:SetScript("OnEnter", function()
+        if plain then button:SetAlpha(0.8) end
         button.label:SetTextColor(0.05, 0.82, 0.62)
         if button.tip and EllesmereUI and EllesmereUI.ShowWidgetTooltip then
             EllesmereUI.ShowWidgetTooltip(button, button.tip)
         end
     end)
     button:SetScript("OnLeave", function()
+        if plain then button:SetAlpha(0.4) end
         button.label:SetTextColor(0.9, 0.9, 0.9)
         if EllesmereUI and EllesmereUI.HideWidgetTooltip then EllesmereUI.HideWidgetTooltip() end
     end)
@@ -219,6 +225,9 @@ local function Build()
     f:SetFrameStrata("DIALOG")
     f:SetClampedToScreen(true)
     f:SetMovable(true)
+    f:SetResizable(true)
+    if type(f.SetResizeBounds) == "function" then f:SetResizeBounds(620, 480, 1600, 1200) end
+    -- Refresh also clamps live sizes when an older client has no native bounds API.
     f:EnableMouse(true)
     Skin(f)
     local header = CreateFrame("Frame", nil, f)
@@ -230,12 +239,79 @@ local function Build()
     headerBG:SetColorTexture(0, 0, 0, 0.5)
     header:EnableMouse(true)
     header:RegisterForDrag("LeftButton")
-    header:SetScript("OnDragStart", function() if not ns.Editing() then f:StartMoving() end end)
-    header:SetScript("OnDragStop", function() f:StopMovingOrSizing() end)
+    f.header = header
+    local function SaveGeometry()
+        local settings = ns.Addon.Settings()
+        if not f.gestureSettings or f.gestureSettings ~= settings or ns.Editing() or WindowSettings().locked then return end
+        local window = WindowSettings()
+        local width, height = ns.Number(f:GetWidth()), ns.Number(f:GetHeight())
+        local ok, x, y = pcall(f.GetCenter, f)
+        local parentOK, px, py = pcall(UIParent.GetCenter, UIParent)
+        x, y, px, py = ns.Number(x), ns.Number(y), ns.Number(px), ns.Number(py)
+        if not width or not height or not ok or not parentOK or not x or not y or not px or not py then return end
+        settings.window = { width = math.max(620, math.min(1600, width)), height = math.max(480, math.min(1200, height)),
+            x = x - px, y = y - py, locked = window.locked }
+        f.geometrySettings, f.geometryWindow = nil, nil
+    end
+    local function StopGesture()
+        f:StopMovingOrSizing()
+        SaveGeometry()
+        f.gestureSettings = nil
+        if f.resize then f.resize:SetAlpha(ns.Read(f.resize.IsMouseOver, f.resize) == true and 0.8 or 0.4) end
+        f.geometrySettings, f.geometryWindow = nil, nil
+        ns.RefreshViewer()
+    end
+    f.StopGesture = StopGesture
+    header:SetScript("OnDragStart", function()
+        if ns.Editing() or WindowSettings().locked then return end
+        f.gestureSettings = ns.Addon.Settings()
+        f:StartMoving()
+    end)
+    header:SetScript("OnDragStop", StopGesture)
     f.title = Font(header, "Bank Snapshot | Read only", 14)
     f.title:SetPoint("LEFT", 12, 0)
     local close = Button(header, "X", 24, function() f:Hide() end)
     close:SetPoint("RIGHT", -8, 0)
+    f.lock = Button(f, "", 13, function()
+        if ns.Editing() then return end
+        StopGesture()
+        local settings = ns.Addon.Settings()
+        local window = WindowSettings()
+        if not settings.window then settings.window = window end
+        window.locked = not window.locked
+        ns.Addon.Refresh()
+    end, "Lock or unlock the window's position and size.", true)
+    f.lock:SetSize(13, 17)
+    f.lock:SetPoint("BOTTOMRIGHT", -4, 4)
+    f.lock.icon = f.lock:CreateTexture(nil, "ARTWORK")
+    f.lock.icon:SetAllPoints()
+    f.lock.icon:SetDesaturated(true)
+    f.resize = Button(f, "", 18, nil, "Drag to resize. Double-click to reset size.", true)
+    f.resize:SetSize(18, 18)
+    f.resize:SetPoint("BOTTOMRIGHT", -2, 2)
+    f.resize.icon = f.resize:CreateTexture(nil, "ARTWORK")
+    f.resize.icon:SetAllPoints()
+    f.resize.icon:SetDesaturated(true)
+    local resizeLoaded = ns.Read(f.resize.icon.SetTexture, f.resize.icon,
+        "Interface\\AddOns\\EllesmereUI\\media\\icons\\resize_element.png")
+    f.resize.label:SetText(resizeLoaded == true and "" or "/")
+    f.resize:SetScript("OnMouseDown", function(_, button)
+        if button ~= "LeftButton" or ns.Editing() or WindowSettings().locked then return end
+        f.gestureSettings = ns.Addon.Settings()
+        f.resize:SetAlpha(0.8)
+        f:StartSizing("BOTTOMRIGHT")
+    end)
+    f.resize:SetScript("OnMouseUp", StopGesture)
+    f.resize:SetScript("OnDoubleClick", function()
+        if ns.Editing() or WindowSettings().locked then return end
+        StopGesture()
+        local settings, window = ns.Addon.Settings(), WindowSettings()
+        settings.window = { width = 620, height = 510, x = window.x, y = window.y, locked = false }
+        ns.Addon.Refresh()
+    end)
+    f:SetScript("OnSizeChanged", function()
+        if not f.applyingGeometry and f:IsShown() and f.scrollFrame then ns.RefreshViewer() end
+    end)
     f.previousCharacter = Button(f, "<", 24, function() ChangeCharacter(-1) end, "Previous character's bank")
     f.previousCharacter:SetPoint("TOPLEFT", 12, -40)
     f.nextCharacter = Button(f, ">", 24, function() ChangeCharacter(1) end, "Next character's bank")
@@ -296,7 +372,7 @@ local function Build()
     f.tabs, f.slots, f.headings = {}, {}, {}
     local sf = CreateFrame("ScrollFrame", nil, f)
     sf:SetPoint("TOPLEFT", 170, -142)
-    sf:SetSize(420, VIEW_HEIGHT)
+    sf:SetSize(420, ViewHeight(f))
     sf:EnableMouseWheel(true)
     local child = CreateFrame("Frame", nil, sf)
     child:SetSize(420, 1)
@@ -326,7 +402,7 @@ local function Build()
         f.scrollTrack = track
         f.updateScrollbar = function()
             f.updatingScrollbar = true
-            local range = math.max(0, child:GetHeight() - VIEW_HEIGHT)
+            local range = math.max(0, child:GetHeight() - ViewHeight(f))
             track:SetMinMaxValues(0, range)
             track:SetValue(sf:GetVerticalScroll())
             track:SetShown(range > 0)
@@ -336,7 +412,7 @@ local function Build()
     f.scrollTrack:SetPoint("TOPRIGHT", -4, -142)
     f.scrollTrack:SetPoint("BOTTOMRIGHT", -4, 38)
     local function Wheel(_, delta)
-        local range = math.max(0, child:GetHeight() - VIEW_HEIGHT)
+        local range = math.max(0, child:GetHeight() - ViewHeight(f))
         sf:SetVerticalScroll(math.max(0, math.min(range, sf:GetVerticalScroll() - delta * 40)))
         HideTooltip()
         f.updateScrollbar()
@@ -374,7 +450,8 @@ local function Build()
     f.total = Font(f)
     f.total:SetPoint("BOTTOM", 70, 18)
     f:SetScript("OnHide", function()
-        search:ClearFocus(); f:StopMovingOrSizing(); HideTooltip()
+        search:ClearFocus(); f:StopMovingOrSizing(); SaveGeometry(); f.gestureSettings = nil; HideTooltip()
+        f.geometrySettings, f.geometryWindow = nil, nil
         local stop = f.scrollTrack:GetScript("OnMouseUp")
         if stop then stop(f.scrollTrack) end
     end)
@@ -393,6 +470,38 @@ end
 function ns.RefreshViewer()
     if not viewer or not viewer:IsShown() then return end
     local f = viewer
+    local settings = ns.Addon.Settings()
+    local window = WindowSettings()
+    if f.gestureSettings and (f.gestureSettings ~= settings or window.locked or ns.Editing()) then
+        f:StopMovingOrSizing()
+        f.gestureSettings = nil
+        f.geometrySettings, f.geometryWindow = nil, nil
+    end
+    if not f.gestureSettings and (f.geometrySettings ~= settings or f.geometryWindow ~= settings.window) then
+        f.applyingGeometry = true
+        f:ClearAllPoints()
+        f:SetPoint("CENTER", UIParent, "CENTER", window.x, window.y)
+        f:SetSize(window.width, window.height)
+        f.applyingGeometry = false
+        f.geometrySettings, f.geometryWindow = settings, settings.window
+    end
+    local iconLoaded = ns.Read(f.lock.icon.SetTexture, f.lock.icon,
+        "Interface\\AddOns\\EllesmereUI\\media\\icons\\eui-lock-" .. (window.locked and "locked" or "unlocked") .. ".png")
+    f.lock.label:SetText(iconLoaded == true and "" or (window.locked and "L" or "U"))
+    f.lock.tip = window.locked and "Unlock window position and size." or "Lock window position and size."
+    f:SetMovable(not window.locked and not ns.Editing())
+    f:SetResizable(not window.locked and not ns.Editing())
+    f.resize:SetShown(not window.locked and not ns.Editing())
+    f.lock:ClearAllPoints()
+    if f.resize:IsShown() then f.lock:SetPoint("RIGHT", f.resize, "LEFT", -2, 0)
+    else f.lock:SetPoint("BOTTOMRIGHT", -4, 4) end
+    local boundedWidth = math.max(620, math.min(1600, f:GetWidth()))
+    local boundedHeight = math.max(480, math.min(1200, f:GetHeight()))
+    if boundedWidth ~= f:GetWidth() or boundedHeight ~= f:GetHeight() then
+        f.applyingGeometry = true
+        f:SetSize(boundedWidth, boundedHeight)
+        f.applyingGeometry = false
+    end
     local current = ns.CharacterKey()
     local snapshot = ns.DB and selectedCharacter and ns.DB.characters[selectedCharacter]
     if currentCharacter ~= current or (selectedCharacter ~= current and not ns.ValidSnapshot(snapshot)) then
@@ -435,7 +544,8 @@ function ns.RefreshViewer()
         button:Show()
     end
     local items = ns.Items(snapshot, selectedTab, f.search:GetText())
-    local layout, mode = ns.Layout(items)
+    local availableWidth = math.max(420, f:GetWidth() - 200)
+    local layout, mode = ns.Layout(items, math.max(1, math.floor(availableWidth / 42)))
     local layoutKey = mode .. ":" .. tostring(ns.Addon.Settings().groupByCategory == true)
     if f.layoutKey ~= layoutKey then resetScroll = true; f.layoutKey = layoutKey end
     f.grouping.label:SetText("Group by Category: " .. (ns.Addon.Settings().groupByCategory and "On" or "Off"))
@@ -455,14 +565,15 @@ function ns.RefreshViewer()
     local columns = ns.ListColumns()
     local fixed, widths, offsets, offset = 0, {}, {}, 0
     for _, key in ipairs(columns) do fixed = fixed + (COLUMN_WIDTHS[key] or 0) end
-    local contentWidth = math.max(420, fixed + 160)
+    local contentWidth = availableWidth
+    local nameWidth = math.max(60, contentWidth - fixed)
+    local scale = fixed + nameWidth > contentWidth and contentWidth / (fixed + nameWidth) or 1
     for i, key in ipairs(columns) do
-        widths[i], offsets[i] = COLUMN_WIDTHS[key] or (contentWidth - fixed), offset
+        widths[i], offsets[i] = (COLUMN_WIDTHS[key] or nameWidth) * scale, offset
         offset = offset + widths[i]
     end
-    f:SetSize(mode == "list" and contentWidth + 200 or 620, 510)
-    f.scrollFrame:SetSize(mode == "list" and contentWidth or 420, VIEW_HEIGHT)
-    f.scrollChild:SetSize(mode == "list" and contentWidth or 420, math.max(1, layout.height))
+    f.scrollFrame:SetSize(contentWidth, ViewHeight(f))
+    f.scrollChild:SetSize(contentWidth, math.max(1, layout.height))
     f.columnLabels = f.columnLabels or {}
     for _, label in ipairs(f.columnLabels) do label:Hide() end
     if mode == "list" then
@@ -527,7 +638,7 @@ function ns.RefreshViewer()
     elseif not snapshot then message = "Visit the banker first"
     elseif #items == 0 then message = "No items in this view." end
     f.message:SetText(message)
-    f.scrollFrame:SetVerticalScroll(resetScroll and 0 or math.min(f.scrollFrame:GetVerticalScroll(), math.max(0, layout.height - VIEW_HEIGHT)))
+    f.scrollFrame:SetVerticalScroll(resetScroll and 0 or math.min(f.scrollFrame:GetVerticalScroll(), math.max(0, layout.height - ViewHeight(f))))
     resetScroll = false
     f.updateScrollbar()
     f.total:SetText(#items .. " stacks")

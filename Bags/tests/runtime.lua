@@ -10,7 +10,8 @@ local methods = { SetSize = Noop, SetHeight = Noop, SetWidth = Noop, SetPoint = 
     RegisterForDrag = Noop, StartMoving = Noop, StopMovingOrSizing = Noop, SetAutoFocus = Noop,
     SetFontObject = Noop, SetTextInsets = Noop, SetMaxLetters = Noop, SetJustifyH = Noop,
     SetWordWrap = Noop, SetTexCoord = Noop, Raise = Noop, ClearFocus = Noop, ClearAllPoints = Noop,
-    EnableMouseWheel = Noop, SetOrientation = Noop, SetValueStep = Noop, SetThumbTexture = Noop }
+    EnableMouseWheel = Noop, SetOrientation = Noop, SetValueStep = Noop, SetThumbTexture = Noop,
+    SetResizable = Noop, SetResizeBounds = Noop, SetDesaturated = Noop }
 local function Widget(kind, name, parent, template)
     Check(template == nil, "no secure/container templates")
     local f = { kind = kind, name = name, parent = parent, scripts = {}, events = {}, shown = true,
@@ -39,11 +40,21 @@ local function Widget(kind, name, parent, template)
     function f:SetEnabled(value) self.enabled = value end
     function f:SetText(text) self.text = text; if self.scripts.OnTextChanged then self.scripts.OnTextChanged(self) end end
     function f:GetText() return self.text end
-    function f:SetSize(width, height) self.width, self.height = width, height end
+    function f:SetSize(width, height)
+        local changed = self.width ~= width or self.height ~= height
+        self.width, self.height = width, height
+        if changed and self.scripts.OnSizeChanged then self.scripts.OnSizeChanged(self, width, height) end
+    end
     function f:SetWidth(width) self.width = width end
     function f:SetHeight(height) self.height = height end
     function f:GetWidth() return self.width or 0 end
     function f:GetHeight() return self.height or 0 end
+    function f:GetCenter() return self.centerX or 1000, self.centerY or 600 end
+    function f:SetAlpha(alpha) self.alpha = alpha end
+    function f:SetPoint(...) self.point = { ... } end
+    function f:StartMoving() self.moving = true end
+    function f:StartSizing(point) self.sizing = point end
+    function f:StopMovingOrSizing() self.moving, self.sizing = nil, nil end
     function f:SetScrollChild(child) self.scrollChild = child end
     function f:GetVerticalScroll() return self.scroll or 0 end
     function f:GetVerticalScrollRange() return math.max(0, self.scrollChild:GetHeight() - self:GetHeight()) end
@@ -561,4 +572,86 @@ native:Hide()
 Check(stops == priorStops + 1, "hiding viewer releases shared scrollbar drag state")
 ns.ToggleViewer()
 Check(attachments == 1, "reopening does not duplicate shared scrollbar attachment")
+-- Profile-owned geometry, responsive content and stale drag/resize locks.
+settings = modules.feature.normalize({ showButton = true, display = "grid" })
+ns.Addon.Refresh()
+Check(not settings.window.locked and settings.window.width == 620 and native.resize:IsShown(),
+    "new profile window defaults unlocked with resize grip")
+native.resize.scripts.OnMouseDown(native.resize, "LeftButton")
+Check(native.sizing == "BOTTOMRIGHT", "unlocked bottom-right control starts resizing")
+native:SetSize(1040, 740)
+Check(native.scrollFrame:GetWidth() == 840 and native.scrollFrame:GetHeight() == 560,
+    "live resize increases columns and scroll viewport without recursion")
+local wide = ns.Layout(entries, 20)
+Check(wide.slots[20].x == 798 and wide.slots[21].x == 0, "wide grid uses newly available columns")
+native.centerX, native.centerY = 1120, 680
+native.resize.scripts.OnMouseUp()
+Check(settings.window.width == 1040 and settings.window.height == 740 and settings.window.x == 120
+    and settings.window.y == 80, "resize end saves position and size to active profile")
+settings.display = "list"
+ns.Addon.Refresh()
+Check(native:GetWidth() == 1040 and native:GetHeight() == 740, "display changes cannot overwrite chosen size")
+native:Hide(); ns.ToggleViewer()
+Check(native:GetWidth() == 1040 and native.point[4] == 120 and native.point[5] == 80,
+    "reopening restores profile geometry")
+native.lock.scripts.OnClick()
+Check(settings.window.locked and not native.resize:IsShown()
+    and native.lock.icon.texture:find("eui-lock-locked", 1, true), "lock icon disables resizing and reflects state")
+native.header.scripts.OnDragStart()
+native.resize.scripts.OnMouseDown(native.resize, "LeftButton")
+Check(not native.moving and not native.sizing, "locked stale drag and resize callbacks cannot start gestures")
+native.lock.scripts.OnClick()
+native.header.scripts.OnDragStart()
+Check(native.moving, "unlocked heading starts movement")
+native.centerX, native.centerY = 1180, 720
+native.header.scripts.OnDragStop()
+Check(settings.window.x == 180 and settings.window.y == 120, "header drag saves current position")
+local originalSettings = settings
+native.resize.scripts.OnMouseDown(native.resize, "LeftButton")
+native:SetSize(1200, 800)
+settings = modules.feature.normalize({ showButton = true, window = { width = 700, height = 600, x = -20, y = 30, locked = true } })
+ns.Addon.Refresh()
+native.resize.scripts.OnMouseUp()
+Check(settings.window.width == 700 and native:GetWidth() == 700 and settings.window.locked
+    and originalSettings.window.width == 1040, "profile switch cancels active sizing without overwriting either profile")
+settings = originalSettings
+ns.Addon.Refresh()
+Check(native:GetWidth() == 1040 and not settings.window.locked, "profile switch restores independent size and lock")
+editing = true
+native.lock.scripts.OnClick(); native.header.scripts.OnDragStart()
+native.resize.scripts.OnMouseDown(native.resize, "LeftButton")
+Check(not settings.window.locked and not native.moving and not native.sizing, "editor lock applies inside all stale controls")
+editing = false
+native.resize.scripts.OnMouseDown(native.resize, "LeftButton")
+native:SetSize(900, 700)
+editing = true
+native.resize.scripts.OnMouseUp()
+Check(settings.window.width == 1040 and native:GetWidth() == 1040,
+    "entering Edit Mode mid-resize discards unsaved size")
+editing = false
+local normalized = modules.feature.normalize({ window = { width = secret, height = -5, x = secret, y = 1 / 0, locked = secret } })
+Check(normalized.window.width == 620 and normalized.window.height == 480 and normalized.window.x == 0
+    and normalized.window.y == 0 and not normalized.window.locked, "secret and invalid window values normalize safely")
+native.resize.scripts.OnMouseDown(native.resize, "LeftButton")
+native:SetSize(100, 200)
+Check(native:GetWidth() == 620 and native:GetHeight() == 480, "live resize clamps sizes even without native bounds enforcement")
+native:SetSize(10000, 10000)
+Check(native:GetWidth() == 1600 and native:GetHeight() == 1200, "live resize enforces maximum safe dimensions")
+native.resize.scripts.OnMouseUp()
+Check(native.lock.parent == native and native.resize.point[1] == "BOTTOMRIGHT"
+    and native.lock.point[2] == native.resize, "unframed lock and grip sit together in bottom-right footer")
+Check(native.resize.icon.texture:find("resize_element.png", 1, true)
+    and native.lock:GetWidth() == 13 and native.lock:GetHeight() == 17, "footer controls match native EUI icon art and dimensions")
+native.lock.scripts.OnEnter()
+Check(native.lock.alpha == 0.8, "footer icon hover matches EUI alpha")
+native.lock.scripts.OnLeave()
+Check(native.lock.alpha == 0.4, "footer icon idle matches EUI alpha")
+local positionX, positionY = settings.window.x, settings.window.y
+native.resize.scripts.OnDoubleClick()
+Check(settings.window.width == 620 and settings.window.height == 510
+    and settings.window.x == positionX and settings.window.y == positionY, "grip double-click resets size without moving window")
+native.lock.scripts.OnClick()
+native.resize.scripts.OnDoubleClick()
+Check(settings.window.locked, "stale double-click cannot reset locked window")
+Check(native.lock.point[1] == "BOTTOMRIGHT" and not native.resize:IsShown(), "locked icon occupies corner alone like EUI bags")
 print("PASS: " .. checks .. " Bags capture, capability, read-only viewer and UI checks")
