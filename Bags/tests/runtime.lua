@@ -9,7 +9,8 @@ local methods = { SetSize = Noop, SetHeight = Noop, SetWidth = Noop, SetPoint = 
     SetFrameStrata = Noop, SetClampedToScreen = Noop, SetMovable = Noop, EnableMouse = Noop,
     RegisterForDrag = Noop, StartMoving = Noop, StopMovingOrSizing = Noop, SetAutoFocus = Noop,
     SetFontObject = Noop, SetTextInsets = Noop, SetMaxLetters = Noop, SetJustifyH = Noop,
-    SetWordWrap = Noop, SetTexCoord = Noop, Raise = Noop, ClearFocus = Noop, ClearAllPoints = Noop }
+    SetWordWrap = Noop, SetTexCoord = Noop, Raise = Noop, ClearFocus = Noop, ClearAllPoints = Noop,
+    EnableMouseWheel = Noop, SetOrientation = Noop, SetValueStep = Noop, SetThumbTexture = Noop }
 local function Widget(kind, name, parent, template)
     Check(template == nil, "no secure/container templates")
     local f = { kind = kind, name = name, parent = parent, scripts = {}, events = {}, shown = true,
@@ -38,6 +39,24 @@ local function Widget(kind, name, parent, template)
     function f:SetEnabled(value) self.enabled = value end
     function f:SetText(text) self.text = text; if self.scripts.OnTextChanged then self.scripts.OnTextChanged(self) end end
     function f:GetText() return self.text end
+    function f:SetSize(width, height) self.width, self.height = width, height end
+    function f:SetWidth(width) self.width = width end
+    function f:SetHeight(height) self.height = height end
+    function f:GetWidth() return self.width or 0 end
+    function f:GetHeight() return self.height or 0 end
+    function f:SetScrollChild(child) self.scrollChild = child end
+    function f:GetVerticalScroll() return self.scroll or 0 end
+    function f:GetVerticalScrollRange() return math.max(0, self.scrollChild:GetHeight() - self:GetHeight()) end
+    function f:SetVerticalScroll(value)
+        self.scroll = value
+        if self.scripts.OnVerticalScroll then self.scripts.OnVerticalScroll(self, value) end
+        for _, hook in ipairs(self.hooks.OnVerticalScroll or {}) do hook(self, value) end
+    end
+    function f:SetMinMaxValues(min, max) self.min, self.max = min, max end
+    function f:SetValue(value)
+        self.value = value
+        if self.scripts.OnValueChanged then self.scripts.OnValueChanged(self, value) end
+    end
     function f:SetTexture(texture) self.texture = texture end
     function f:CreateFontString() return Widget("FontString", nil, self) end
     function f:CreateTexture() return Widget("Texture", nil, self) end
@@ -254,12 +273,13 @@ ns.BagButton.scripts.OnClick()
 Check(viewer and viewer:IsShown(), "bag button opens separate viewer")
 local slots = {}
 for _, frame in ipairs(frames) do
-    if frame.parent == viewer and frame.icon then
+    if frame.parent == viewer.scrollChild and frame.icon then
         slots[#slots + 1] = frame
         Check(frame.scripts.OnClick == nil and frame.scripts.OnDragStart == nil, "snapshot icon has no item action")
     end
 end
-Check(#slots == 80 and slots[1].entry, "bounded snapshot grid renders stored items")
+Check(#slots > 0 and slots[1].entry and viewer.scrollFrame.scrollChild == viewer.scrollChild,
+    "snapshot items render inside clipped scroll child")
 slots[1].scripts.OnEnter(slots[1])
 Check(tooltips == 1, "stored-link tooltip shown")
 Check(viewer.character.text == "Fallback - Realm" and viewer.previousCharacter and viewer.nextCharacter,
@@ -300,12 +320,26 @@ alt.tabs[1].numSlots = 100
 player = "Alt"
 ns.RefreshViewer()
 Check(viewer.character.text == "Alt - Realm", "refresh uses current identity, not prior selection")
-Check(viewer.nextPage.enabled, "large banks have pagination")
-viewer.nextPage.scripts.OnClick()
-Check(slots[20]:IsShown() and not slots[21]:IsShown(), "last page hides unused pooled icons")
+Check(not viewer.nextPage and not viewer.previousPage and viewer.scrollFrame:GetVerticalScrollRange() > 0,
+    "large banks scroll without stack pagination arrows")
+Check(viewer.slots[100]:IsShown() and viewer.total.text == "100 stacks", "every stack is in continuous scroll content")
+viewer.scrollFrame.scripts.OnMouseWheel(viewer.scrollFrame, -1)
+Check(viewer.scrollFrame:GetVerticalScroll() == 40, "bank wheel uses EUI's 40-pixel step")
+viewer.scrollFrame.scripts.OnMouseWheel(viewer.scrollFrame, -1000)
+Check(viewer.scrollFrame:GetVerticalScroll() == viewer.scrollFrame:GetVerticalScrollRange(), "wheel clamps to bottom")
+ns.Addon.Refresh()
+Check(viewer.scrollFrame:GetVerticalScroll() > 0, "capture/profile refresh preserves scroll when view is unchanged")
+viewer.scrollTrack:SetValue(20)
+Check(viewer.scrollFrame:GetVerticalScroll() == 20, "older EUI scrollbar can drag to position")
+viewer.search:SetText("no-match")
+Check(viewer.scrollFrame:GetVerticalScroll() == 0 and not viewer.scrollTrack:IsShown()
+    and not viewer.slots[100]:IsShown(), "search resets scroll and hides unused pooled items")
+viewer.search:SetText("")
+viewer.slots[1].scripts.OnMouseWheel(viewer.slots[1], -1)
+Check(viewer.scrollFrame:GetVerticalScroll() == 40, "wheel over plain item buttons scrolls")
 viewer:Hide()
 SlashCmdList.ELLESMEREUIEXTENDBAGS()
-Check(slots[80]:IsShown() and viewer.page.text:find("Page 1/", 1, true), "reopening resets page to first page")
+Check(viewer.slots[100]:IsShown() and viewer.scrollFrame:GetVerticalScroll() == 0, "reopening resets scroll to top")
 EllesmereUIExtendBagsDB = { format = 99, characters = {} }
 ns.InitializeDB()
 Check(ns.DB == nil and EllesmereUIExtendBagsDB.format == 99, "unsupported DB preserved, not migrated")
@@ -362,43 +396,41 @@ for i = 1, 100 do entries[i] = { item = { itemID = i % 2 == 0 and 100 or 200, li
 settings.groupByCategory = true
 for _, mode in ipairs({ "grid", "compact", "list" }) do
     settings.display = mode
-    local layouts, resolved = ns.Layout(entries)
+    local layout, resolved = ns.Layout(entries)
     local total, seen = 0, {}
-    for _, layout in ipairs(layouts) do
-        Check(#layout.slots <= 80, "layouts fit bounded read-only icon pool")
+        Check(#layout.slots == 100, "layouts include every stack in one scroll child")
         for _, placement in ipairs(layout.slots) do
             total = total + 1
             Check(placement.x >= 0 and placement.x < 420 and placement.y >= 0
-                and placement.y + (mode == "list" and 24 or 40) <= 320, "layout fits content bounds")
-            Check(not seen[placement.entry], "pagination never duplicates a stack")
+                and placement.y + (mode == "list" and 24 or 40) <= layout.height, "layout fits continuous content bounds")
+            Check(not seen[placement.entry], "scroll layout never duplicates a stack")
             seen[placement.entry] = true
         end
-    end
-    Check(total == 100 and resolved == mode, "all stacks survive category pagination in " .. mode)
-    Check(layouts[1].headings[1].text == "Materials", "EUI names and order reused")
+    Check(total == 100 and resolved == mode, "all stacks survive continuous category layout in " .. mode)
+    Check(layout.headings[1].text == "Materials", "EUI names and order reused")
 end
 EllesmereUI._bagsDB.profile.bagDisabledCategories = { ["Trade Goods"] = true }
 local layouts = ns.Layout({ entries[2] })
-Check(layouts[1].headings[1].text == "Other", "disabled EUI categories route to catch-all")
+Check(layouts.headings[1].text == "Other", "disabled EUI categories route to catch-all")
 EllesmereUI._bagsDB.profile.bagDisabledCategories = nil
 local specialItem = { itemID = 200, link = "item:200", count = 1, quality = 2, quest = true, setID = 42 }
 layouts = ns.Layout({ { item = specialItem } })
-Check(layouts[1].headings[1].text == "Quests", "captured quest status precedes equipment set")
+Check(layouts.headings[1].text == "Quests", "captured quest status precedes equipment set")
 specialItem.quest = nil
 layouts = ns.Layout({ { item = specialItem } })
-Check(layouts[1].headings[1].text == "Set Gear", "captured equipment membership supports alt grouping")
+Check(layouts.headings[1].text == "Set Gear", "captured equipment membership supports alt grouping")
 specialItem.quality = 0
 layouts = ns.Layout({ { item = specialItem } })
-Check(layouts[1].headings[1].text == "Junk", "junk precedes equipment set")
+Check(layouts.headings[1].text == "Junk", "junk precedes equipment set")
 EllesmereUIDB = { bagItemAssignments = { [200] = "Trade Goods" } }
 layouts = ns.Layout({ { item = specialItem } })
-Check(layouts[1].headings[1].text == "Materials", "current EUI assignment overrides captured special membership")
+Check(layouts.headings[1].text == "Materials", "current EUI assignment overrides captured special membership")
 EllesmereUIDB = nil
 EUI_CategoryManager = nil
 layouts = ns.Layout(entries)
-Check(layouts[1].headings[1].text == "Other", "missing category API retains every item in catch-all")
+Check(layouts.headings[1].text == "Other", "missing category API retains every item in catch-all")
 EUI_CategoryManager = { GetCategories = function() error("unavailable") end }
-Check(#ns.Layout(entries) > 0, "throwing category API has safe fallback")
+Check(#ns.Layout(entries).slots == 100, "throwing category API has safe fallback")
 EllesmereUI._bagsDB.profile.bagListColumns = { "name", "track", "count", "unknown", "name", "bind" }
 local columns = ns.ListColumns()
 Check(#columns == 4 and columns[1] == "name" and columns[4] == "bind", "EUI column order retained, unknowns and duplicates omitted")
@@ -488,4 +520,45 @@ for _, target in ipairs({ "grid", "compact" }) do
         Check(not label:IsShown(), "List headers hidden outside List")
     end
 end
+-- Native EUI scrollbar integration uses only addon-owned snapshot frames.
+viewer:Hide()
+local attachments, updates, stops = 0, 0, 0
+EllesmereUI._ModuleNS = { EllesmereUIBags = {
+    AttachGridScrollbar = function(host, sf, clamp, rawWheel)
+        attachments = attachments + 1
+        Check(host.name == "EllesmereUIExtendBagsViewer" and sf.parent == host and clamp and rawWheel,
+            "reuse the verified EUI bank scrollbar contract on snapshot-owned frames")
+        local track = Widget("Button", nil, host)
+        track:SetScript("OnMouseUp", function() stops = stops + 1 end)
+        return track, Widget("Texture", nil, track), function() updates = updates + 1 end
+    end,
+} }
+assert(loadfile("Bags/Viewer.lua"))("EllesmereUIExtendBags", ns)
+settings.display = "list"
+scan[1].numSlots = 100
+for i = 1, 100 do scan[1].items[i] = { itemID = 100, link = "item:100", count = 1 } end
+ns.ToggleViewer()
+local native = EllesmereUIExtendBagsViewer
+Check(attachments == 1 and updates > 0 and native.slots[100]:IsShown(), "native helper attached once for continuous content")
+native.scripts.OnMouseWheel(native, -3)
+Check(native.scrollFrame:GetVerticalScroll() == 120, "native helper viewer scrolls on EUI wheel step")
+native.tabs[2].scripts.OnClick(native.tabs[2])
+Check(native.scrollFrame:GetVerticalScroll() == 0, "changing bank tabs resets scroll")
+native.scripts.OnMouseWheel(native, -2)
+settings.display = "grid"
+ns.Addon.Refresh()
+Check(native.scrollFrame:GetVerticalScroll() == 0, "display changes reset scroll and retain every stack")
+native.scripts.OnMouseWheel(native, -2)
+settings.groupByCategory = not settings.groupByCategory
+ns.Addon.Refresh()
+Check(native.scrollFrame:GetVerticalScroll() == 0, "grouping changes reset scroll")
+native.scripts.OnMouseWheel(native, -2)
+ns.DB.characters["Browse - Realm"] = { tabs = scan }
+native.nextCharacter.scripts.OnClick()
+Check(native.scrollFrame:GetVerticalScroll() == 0, "character arrows reset scroll")
+local priorStops = stops
+native:Hide()
+Check(stops == priorStops + 1, "hiding viewer releases shared scrollbar drag state")
+ns.ToggleViewer()
+Check(attachments == 1, "reopening does not duplicate shared scrollbar attachment")
 print("PASS: " .. checks .. " Bags capture, capability, read-only viewer and UI checks")

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Replace stack pagination with continuous mouse-wheel/scrollbar navigation, reusing EUI's bank scrollbar helper with an older-EUI fallback.
+- Fill the content area with continuous category blocks; preserve scroll on refresh and reset it when changing views or reopening.
 - Clear all pooled List text when switching to Grid or Compact, including icon-first column layouts.
 - Add Group by Category using the current EUI bag categories within selected bank tabs.
 - Add Match EUI bank, Grid, Compact and List displays, with persistent viewer/settings controls.

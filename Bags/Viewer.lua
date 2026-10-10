@@ -1,7 +1,8 @@
 local _, ns = ...
 if not ns.Addon then return end
-local viewer, selectedCharacter, currentCharacter, selectedTab, page = nil, nil, nil, nil, 1
-local PAGE_SIZE = 80
+local viewer, selectedCharacter, currentCharacter, selectedTab = nil, nil, nil, nil
+local resetScroll = true
+local VIEW_HEIGHT = 330
 local DISPLAY_ORDER = { "match", "grid", "compact", "list" }
 local DISPLAY_NAMES = { match = "Match EUI bank", grid = "Grid", compact = "Compact", list = "List" }
 local function EUIProfile()
@@ -116,18 +117,14 @@ function ns.Layout(items)
             if buckets[i] then groups[#groups + 1] = { name = i == 0 and "Other" or cats[i].name, items = buckets[i] } end
         end
     else groups[1] = { items = items } end
-    local pages, x, y, band = { { slots = {}, headings = {} } }, 0, 0, 0
-    local function NewPage() pages[#pages + 1] = { slots = {}, headings = {} }; x, y, band = 0, 0, 0 end
+    local layout, x, y, band = { slots = {}, headings = {}, height = 0 }, 0, 0, 0
     for _, group in ipairs(groups) do
         local width = mode == "compact" and math.min(10, math.max(1, math.ceil(math.sqrt(#group.items)))) or 10
         local cellHeight = mode == "list" and 24 or 40
-        local rows = math.ceil(#group.items / (mode == "list" and 1 or width))
-        local height = rows * cellHeight + (group.name and 20 or 0)
-        if mode ~= "compact" or x + width > 10 or height > 320 then y, x = y + band, 0; band = 0 end
-        if y + math.min(height, 320) > 320 then NewPage() end
+        if mode ~= "compact" or x + width > 10 then y, x = y + band, 0; band = 0 end
         local function Heading()
             if group.name then
-                table.insert(pages[#pages].headings, { text = group.name, x = x * 42, y = y, width = width * 42 })
+                table.insert(layout.headings, { text = group.name, x = x * 42, y = y, width = width * 42 })
                 return 20
             end
             return 0
@@ -136,15 +133,13 @@ function ns.Layout(items)
         for i, entry in ipairs(group.items) do
             local column = mode == "list" and 0 or (i - 1) % width
             if i > 1 and column == 0 then row = row + 1 end
-            if y + offset + (row + 1) * cellHeight > 320 then
-                NewPage(); offset, row = Heading(), 0
-            end
-            table.insert(pages[#pages].slots, { entry = entry, x = x * 42 + column * 42, y = y + offset + row * cellHeight })
+            table.insert(layout.slots, { entry = entry, x = x * 42 + column * 42, y = y + offset + row * cellHeight })
         end
         if mode == "compact" then x = x + width; band = math.max(band, offset + (row + 1) * cellHeight)
         else y = y + offset + (row + 1) * cellHeight; band = 0 end
+        layout.height = math.max(layout.height, y + band)
     end
-    return pages, mode
+    return layout, mode
 end
 
 local function Font(parent, text, size)
@@ -212,7 +207,7 @@ local function ChangeCharacter(direction)
     local index = 1
     for i, key in ipairs(keys) do if key == selectedCharacter then index = i; break end end
     selectedCharacter = keys[((index - 1 + direction) % #keys) + 1]
-    selectedTab, page = nil, 1
+    selectedTab, resetScroll = nil, true
     HideTooltip()
     ns.RefreshViewer()
 end
@@ -264,7 +259,7 @@ local function Build()
     hint:SetTextColor(0.5, 0.5, 0.5)
     search:SetScript("OnTextChanged", function(self)
         hint:SetShown(self:GetText() == "")
-        page = 1
+        resetScroll = true
         ns.RefreshViewer()
     end)
     search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
@@ -275,11 +270,12 @@ local function Build()
         if ns.Editing() then return end
         local settings = ns.Addon.Settings()
         settings.groupByCategory = not settings.groupByCategory
-        page = 1
+        resetScroll = true
         ns.Addon.Refresh()
     end, "Group the selected tabs using the current EUI bag categories.")
+    f.grouping:SetSize(215, 24)
     f.grouping:SetPoint("TOPLEFT", 170, -94)
-    f.grouping.label:SetWidth(160)
+    f.grouping.label:SetWidth(205)
     f.grouping.label:SetWordWrap(false)
     f.display = Button(f, "", 225, function()
         if ns.Editing() then return end
@@ -287,21 +283,71 @@ local function Build()
         local index = 1
         for i, mode in ipairs(DISPLAY_ORDER) do if settings.display == mode then index = i end end
         settings.display = DISPLAY_ORDER[index % #DISPLAY_ORDER + 1]
-        page = 1
+        resetScroll = true
         ns.Addon.Refresh()
     end, "Cycle Match EUI bank, Grid, Compact and List.")
-    f.display:SetPoint("TOPLEFT", 350, -94)
+    f.display:SetSize(180, 24)
+    f.display:SetPoint("TOPLEFT", 395, -94)
     f.message = Font(f)
     f.message:SetPoint("TOPLEFT", 170, -142)
     f.message:SetWidth(425)
     f.message:SetJustifyH("LEFT")
     f.message:SetWordWrap(true)
     f.tabs, f.slots, f.headings = {}, {}, {}
-    -- A bounded grid: no live container templates or secure item actions.
-    for i = 1, PAGE_SIZE do
-        local button = CreateFrame("Button", nil, f)
+    local sf = CreateFrame("ScrollFrame", nil, f)
+    sf:SetPoint("TOPLEFT", 170, -142)
+    sf:SetSize(420, VIEW_HEIGHT)
+    sf:EnableMouseWheel(true)
+    local child = CreateFrame("Frame", nil, sf)
+    child:SetSize(420, 1)
+    child:EnableMouse(false)
+    sf:SetScrollChild(child)
+    f.scrollFrame, f.scrollChild = sf, child
+    local module = EllesmereUI and EllesmereUI._ModuleNS and EllesmereUI._ModuleNS.EllesmereUIBags
+    if module and type(module.AttachGridScrollbar) == "function" then
+        -- Same helper/contract used by EUI_Bank; only our own frames are passed.
+        local track, _, update = module.AttachGridScrollbar(f, sf, true, true)
+        f.scrollTrack, f.updateScrollbar = track, update
+    else
+        -- Older EUI: template-free slider, styled like the bank's slim scrollbar.
+        local track = CreateFrame("Slider", nil, f)
+        track:SetOrientation("VERTICAL")
+        track:SetWidth(12)
+        track:SetValueStep(1)
+        track:SetMinMaxValues(0, 0)
+        local bg = track:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints(); bg:SetColorTexture(1, 1, 1, 0.06)
+        local thumb = track:CreateTexture(nil, "ARTWORK")
+        thumb:SetSize(4, 20); thumb:SetColorTexture(1, 1, 1, 0.25)
+        track:SetThumbTexture(thumb)
+        track:SetScript("OnValueChanged", function(_, value)
+            if not f.updatingScrollbar then sf:SetVerticalScroll(value) end
+        end)
+        f.scrollTrack = track
+        f.updateScrollbar = function()
+            f.updatingScrollbar = true
+            local range = math.max(0, child:GetHeight() - VIEW_HEIGHT)
+            track:SetMinMaxValues(0, range)
+            track:SetValue(sf:GetVerticalScroll())
+            track:SetShown(range > 0)
+            f.updatingScrollbar = false
+        end
+    end
+    f.scrollTrack:SetPoint("TOPRIGHT", -4, -142)
+    f.scrollTrack:SetPoint("BOTTOMRIGHT", -4, 38)
+    local function Wheel(_, delta)
+        local range = math.max(0, child:GetHeight() - VIEW_HEIGHT)
+        sf:SetVerticalScroll(math.max(0, math.min(range, sf:GetVerticalScroll() - delta * 40)))
+        HideTooltip()
+        f.updateScrollbar()
+    end
+    sf:SetScript("OnMouseWheel", Wheel)
+    f:EnableMouseWheel(true)
+    f:SetScript("OnMouseWheel", Wheel)
+    sf:HookScript("OnVerticalScroll", function() HideTooltip(); f.updateScrollbar() end)
+    function f.CreateSlot(i)
+        local button = CreateFrame("Button", nil, child)
         button:SetSize(36, 36)
-        button:SetPoint("TOPLEFT", 170 + ((i - 1) % 10) * 42, -110 - math.floor((i - 1) / 10) * 40)
         Skin(button)
         button.icon = button:CreateTexture(nil, "ARTWORK")
         button.icon:SetPoint("TOPLEFT", 2, -2)
@@ -319,21 +365,24 @@ local function Build()
             GameTooltip:Show()
         end)
         button:SetScript("OnLeave", HideTooltip)
+        button:EnableMouseWheel(true)
+        button:SetScript("OnMouseWheel", Wheel)
         -- Intentionally no OnClick, OnDragStart, item attributes or container identity.
         f.slots[i] = button
+        return button
     end
-    f.previousPage = Button(f, "<", 24, function() page = math.max(1, page - 1); ns.RefreshViewer() end)
-    f.previousPage:SetPoint("BOTTOMLEFT", 170, 12)
-    f.nextPage = Button(f, ">", 24, function() page = page + 1; ns.RefreshViewer() end)
-    f.nextPage:SetPoint("BOTTOMRIGHT", -12, 12)
-    f.page = Font(f)
-    f.page:SetPoint("BOTTOM", 70, 18)
-    f:SetScript("OnHide", function() search:ClearFocus(); f:StopMovingOrSizing(); HideTooltip() end)
+    f.total = Font(f)
+    f.total:SetPoint("BOTTOM", 70, 18)
+    f:SetScript("OnHide", function()
+        search:ClearFocus(); f:StopMovingOrSizing(); HideTooltip()
+        local stop = f.scrollTrack:GetScript("OnMouseUp")
+        if stop then stop(f.scrollTrack) end
+    end)
     f:SetScript("OnShow", function()
         currentCharacter = ns.CharacterKey()
-        selectedCharacter, selectedTab, page = currentCharacter, nil, 1
+        selectedCharacter, selectedTab, resetScroll = currentCharacter, nil, true
         HideTooltip()
-        -- Reopening must not retain an alt's tab, page or search filter.
+        -- Reopening must not retain an alt's tab, scroll or search filter.
         if search:GetText() ~= "" then search:SetText("") else ns.RefreshViewer() end
     end)
     if type(UISpecialFrames) == "table" then UISpecialFrames[#UISpecialFrames + 1] = "EllesmereUIExtendBagsViewer" end
@@ -348,7 +397,7 @@ function ns.RefreshViewer()
     local snapshot = ns.DB and selectedCharacter and ns.DB.characters[selectedCharacter]
     if currentCharacter ~= current or (selectedCharacter ~= current and not ns.ValidSnapshot(snapshot)) then
         currentCharacter = current
-        selectedCharacter, selectedTab, page = current, nil, 1
+        selectedCharacter, selectedTab, resetScroll = current, nil, true
         HideTooltip()
     end
     snapshot = ns.DB and selectedCharacter and ns.DB.characters[selectedCharacter]
@@ -364,13 +413,13 @@ function ns.RefreshViewer()
     local tabs = snapshot and snapshot.tabs or {}
     local found = selectedTab == nil
     for _, tab in ipairs(tabs) do if tab.bagID == selectedTab then found = true end end
-    if not found then selectedTab, page = nil, 1 end
+    if not found then selectedTab, resetScroll = nil, true end
     for i = 0, #tabs do
         local index, id = i + 1, i > 0 and tabs[i].bagID or nil
         local button = f.tabs[index]
         if not button then
             button = Button(f, "", 145, function(self)
-                selectedTab, page = self.tabID, 1
+                selectedTab, resetScroll = self.tabID, true
                 HideTooltip()
                 ns.RefreshViewer()
             end)
@@ -387,16 +436,16 @@ function ns.RefreshViewer()
     end
     local items = ns.Items(snapshot, selectedTab, f.search:GetText())
     local layout, mode = ns.Layout(items)
-    local pages = #layout
-    page = math.min(page, pages)
+    local layoutKey = mode .. ":" .. tostring(ns.Addon.Settings().groupByCategory == true)
+    if f.layoutKey ~= layoutKey then resetScroll = true; f.layoutKey = layoutKey end
     f.grouping.label:SetText("Group by Category: " .. (ns.Addon.Settings().groupByCategory and "On" or "Off"))
     f.display.label:SetText(DISPLAY_NAMES[ns.Addon.Settings().display or "match"] or DISPLAY_NAMES.match)
     for _, heading in ipairs(f.headings) do heading:Hide() end
-    for i, data in ipairs(layout[page].headings) do
-        local heading = f.headings[i] or Font(f, "", 11)
+    for i, data in ipairs(layout.headings) do
+        local heading = f.headings[i] or Font(f.scrollChild, "", 11)
         f.headings[i] = heading
         heading:ClearAllPoints()
-        heading:SetPoint("TOPLEFT", 170 + data.x, -142 - data.y)
+        heading:SetPoint("TOPLEFT", data.x, -data.y)
         heading:SetWidth(data.width)
         heading:SetWordWrap(false)
         heading:SetJustifyH("LEFT")
@@ -412,6 +461,8 @@ function ns.RefreshViewer()
         offset = offset + widths[i]
     end
     f:SetSize(mode == "list" and contentWidth + 200 or 620, 510)
+    f.scrollFrame:SetSize(mode == "list" and contentWidth or 420, VIEW_HEIGHT)
+    f.scrollChild:SetSize(mode == "list" and contentWidth or 420, math.max(1, layout.height))
     f.columnLabels = f.columnLabels or {}
     for _, label in ipairs(f.columnLabels) do label:Hide() end
     if mode == "list" then
@@ -425,8 +476,9 @@ function ns.RefreshViewer()
             label:SetText(COLUMN_NAMES[key]); label:Show()
         end
     end
+    for i = #f.slots + 1, #layout.slots do f.CreateSlot(i) end
     for i, button in ipairs(f.slots) do
-        local placement = layout[page].slots[i]
+        local placement = layout.slots[i]
         local entry = placement and placement.entry
         button.entry = entry
         button.cells = button.cells or {}
@@ -434,7 +486,7 @@ function ns.RefreshViewer()
         for _, cell in pairs(button.cells) do cell:Hide() end
         if entry then
             button:ClearAllPoints()
-            button:SetPoint("TOPLEFT", 170 + placement.x, -142 - placement.y)
+            button:SetPoint("TOPLEFT", placement.x, -placement.y)
             button:SetSize(mode == "list" and contentWidth or 36, mode == "list" and 22 or 36)
             button.icon:ClearAllPoints()
             button.icon:SetPoint("TOPLEFT", 2, -2)
@@ -475,9 +527,10 @@ function ns.RefreshViewer()
     elseif not snapshot then message = "Visit the banker first"
     elseif #items == 0 then message = "No items in this view." end
     f.message:SetText(message)
-    f.previousPage:SetEnabled(page > 1)
-    f.nextPage:SetEnabled(page < pages)
-    f.page:SetText("Page " .. page .. "/" .. pages .. " | " .. #items .. " stacks")
+    f.scrollFrame:SetVerticalScroll(resetScroll and 0 or math.min(f.scrollFrame:GetVerticalScroll(), math.max(0, layout.height - VIEW_HEIGHT)))
+    resetScroll = false
+    f.updateScrollbar()
+    f.total:SetText(#items .. " stacks")
 end
 
 function ns.ToggleViewer()
