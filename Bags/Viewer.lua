@@ -429,6 +429,13 @@ local function Build()
         button.icon:SetPoint("TOPLEFT", 2, -2)
         button.icon:SetPoint("BOTTOMRIGHT", -2, 2)
         button.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        button.iconFrame = CreateFrame("Frame", nil, button)
+        button.iconFrame:SetAllPoints(button.icon)
+        button.iconFrame:EnableMouse(false)
+        if EllesmereUI and type(EllesmereUI.MakeBorder) == "function" then
+            button.iconFrame.snapshotBorder = EllesmereUI.MakeBorder(button.iconFrame, 1, 1, 1, 0.15, EllesmereUI.PP)
+        end
+        button.iconFrame:Hide()
         button.count = Font(button, "", 11)
         button.count:SetPoint("BOTTOMRIGHT", -1, 1)
         button:SetScript("OnEnter", function(self)
@@ -608,7 +615,12 @@ function ns.RefreshViewer()
             button.icon:SetTexture(entry.item.icon or 134400)
             local color = ITEM_QUALITY_COLORS and entry.item.quality and ITEM_QUALITY_COLORS[entry.item.quality]
             if button.snapshotBorder and type(button.snapshotBorder.SetColor) == "function" then
-                button.snapshotBorder:SetColor(color and color.r or 1, color and color.g or 1, color and color.b or 1, color and 0.8 or 0.15)
+                local rowColor = mode ~= "list" and color or nil
+                button.snapshotBorder:SetColor(rowColor and rowColor.r or 1, rowColor and rowColor.g or 1, rowColor and rowColor.b or 1, rowColor and 0.8 or 0.15)
+            end
+            local iconBorder = button.iconFrame.snapshotBorder
+            if iconBorder and type(iconBorder.SetColor) == "function" then
+                iconBorder:SetColor(color and color.r or 1, color and color.g or 1, color and color.b or 1, color and 0.8 or 0.15)
             end
             button.count:SetText(entry.item.count > 1 and tostring(entry.item.count) or "")
             button.count:SetShown(mode ~= "list")
@@ -630,6 +642,7 @@ function ns.RefreshViewer()
                     end
                 end
             end
+            button.iconFrame:SetShown(mode == "list" and button.icon:IsShown())
             button:Show()
         else button:Hide() end
     end

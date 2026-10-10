@@ -98,7 +98,7 @@ local borders = 0
 EllesmereUI.MakeBorder = function(_, r, g, b, a)
     Check(r == 1 and g == 1 and b == 1 and a == 0.15, "bank skin uses native EUI border contract")
     borders = borders + 1
-    return { SetColor = Noop }
+    return { SetColor = function(self, ...) self.color = { ... } end }
 end
 Enum = { BagIndex = { CharacterBankTab_1 = 6, CharacterBankTab_2 = 7, AccountBankTab_1 = 12,
     Reagentbank = -3, ReagentBag = 5 }, BankType = { Character = 0, Account = 2 } }
@@ -654,4 +654,23 @@ native.lock.scripts.OnClick()
 native.resize.scripts.OnDoubleClick()
 Check(settings.window.locked, "stale double-click cannot reset locked window")
 Check(native.lock.point[1] == "BOTTOMRIGHT" and not native.resize:IsShown(), "locked icon occupies corner alone like EUI bags")
+ITEM_QUALITY_COLORS = { [2] = { r = 0.1, g = 0.8, b = 0.2 } }
+scan[1].items[1].quality = 2
+settings.display, settings.groupByCategory = "list", false
+EllesmereUI._bagsDB.profile.bagListColumns = nil
+ns.Addon.Refresh()
+local colored = native.slots[1]
+Check(colored.snapshotBorder.color[1] == 1 and colored.snapshotBorder.color[4] == 0.15,
+    "List row border stays neutral instead of inheriting item quality")
+Check(colored.iconFrame:IsShown() and colored.iconFrame.snapshotBorder.color[1] == 0.1
+    and colored.iconFrame.snapshotBorder.color[4] == 0.8, "List item quality border belongs to icon only")
+EllesmereUI._bagsDB.profile.bagListColumns = { "name", "count" }
+ns.Addon.Refresh()
+Check(not colored.iconFrame:IsShown(), "List with no icon column hides its quality border")
+for _, mode in ipairs({ "grid", "compact" }) do
+    settings.display = mode
+    ns.Addon.Refresh()
+    Check(not colored.iconFrame:IsShown() and colored.snapshotBorder.color[1] == 0.1,
+        "switching to " .. mode .. " restores the existing icon-sized quality border")
+end
 print("PASS: " .. checks .. " Bags capture, capability, read-only viewer and UI checks")

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Limit item-quality borders to the icon in List display instead of coloring the whole row.
 - Add matching EUI-style resize/lock icons together in the bottom-right footer, with double-click size reset and per-profile position/size locking.
 - Reflow columns and the scroll area during resizing; protect saved geometry against stale gestures, profile switches and Edit Mode.
 - Replace stack pagination with continuous mouse-wheel/scrollbar navigation, reusing EUI's bank scrollbar helper with an older-EUI fallback.
