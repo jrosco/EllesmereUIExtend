@@ -24,5 +24,6 @@ manual-changelog:
   filename: docs/NAMEPLATES-CHANGELOG.md
   markup-type: markdown
 
-required-dependencies:
+optional-dependencies:
   - ellesmereui
+  - eui-nameplates

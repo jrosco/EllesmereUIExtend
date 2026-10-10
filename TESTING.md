@@ -71,9 +71,12 @@ Paths below are relative to each addon's `tests/` directory.
 
 ### Nameplates
 
+- Test the full-suite host and Standalone Nameplates separately on both clients: one Extend Addons hub, Style/Profiles pages, `/eextend`, previews, search, editor locks and rule import/export. Disable both hosts and confirm the login requirement message, no styling/errors and preserved saved rules. Enable the suite with the standalone installed and verify upstream makes the standalone inert and Extend uses only the suite; also respect upstream's multiple-standalone conflict gate. Switching hosts must preserve Extend profiles without migrating native settings.
 | Suites | Coverage |
 | --- | --- |
 | `runtime.lua`, `traits.lua`, `schema.lua`, `helpers.lua`, `rename.lua` | Matching/restoration, deep copies, target reload/profile switches, condition validation, v2 sharing, unsupported-format rejection, custom predicates and no legacy aliases/migration. |
+| `standalone.lua` | Complete runtime/UI fixture under the renamed standalone host, profiles, editor locks, sharing, full-suite precedence, blocked/inert/missing hosts and older embedded-core fallback without global aliases. |
+| `host-unavailable.lua` | Full feature loading without a host or on a blocked client, login guidance, no hook/paint/registration, inactive standalone guard and preserved logout snapshot. |
 | `predicate-snapshot.lua`, `style-capability.lua`, `cast-appearances.lua`, `cast-colors.lua`, `cooldown-transitions.lua` | Per-refresh consistency, style gates, implicit Casting versus per-state colors, restricted flags and targeted cooldown transitions. |
 | `cast-anchor-restrictions.lua` | Restricted/secret native spark geometry, non-destructive reanchoring, fresh-state retries, texture restoration and missing-API fallbacks. |
 | `root-secret-values.lua` | Root getter/setter failures, native secret values, scaling suspension/recovery, latest-value restoration, pool reset and Forever fallback. |

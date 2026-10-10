@@ -1,4 +1,6 @@
+if EUI_CLIENT_BLOCKED then return end
 local _, addon = ...
+local GetHost = addon.GetHost
 local api = EllesmereUIExtendNameplates
 local HEALTH = { "name", "level", "healthPercent", "healthCurrent", "healthMax", "healthCurrentMax", "targetOfTarget" }
 local CAST = { "spellName", "castTarget", "castRemaining", "castElapsed", "castTotal", "castElapsedTotal" }
@@ -130,7 +132,7 @@ function addon.GetRuleTextMoveBlock(style, slot)
     local native = Setting(slot.key, slot.key == "textSlotTop" and "enemyName" or "none")
     if native ~= "enemyName" and native ~= "healthNumber" and not healthValues[native] then return tip end
     if native == "healthPercent" and Setting(slot.key .. "PctDecimal", false) == true then return tip end
-    if EllesmereUI.IS_FOREVER and (native == "enemyName" or native == "name" or native == "targetOfTarget")
+    if GetHost().IS_FOREVER and (native == "enemyName" or native == "name" or native == "targetOfTarget")
         and Setting(slot.key .. "NameFormat", "full") ~= "full" then return tip end
 end
 local function NativeBindings(plate)
@@ -382,7 +384,7 @@ end
 api.WriteRuleText = Write
 local function Position(fs, plate, slot, sample, style)
     local np = EllesmereNameplates_NS or {}
-    local PP = EllesmereUI.PP
+    local PP = GetHost().PP
     local x, y = api.GetRuleTextLayoutValue(style, slot, "x"), api.GetRuleTextLayoutValue(style, slot, "y")
     fs:ClearAllPoints()
     if slot.cast then
@@ -419,7 +421,7 @@ local function Position(fs, plate, slot, sample, style)
     end
     local size = api.GetRuleTextLayoutValue(style, slot, "size")
     if np.SetFSFont and not sample then np.SetFSFont(fs, size)
-    else fs:SetFont(EllesmereUI.GetFontPath and EllesmereUI.GetFontPath("nameplates") or "Fonts\\FRIZQT__.TTF", size, "OUTLINE") end
+    else fs:SetFont(GetHost().GetFontPath and GetHost().GetFontPath("nameplates") or "Fonts\\FRIZQT__.TTF", size, "OUTLINE") end
     local wrap = not slot.bottom and Setting(slot.key .. "Wrap", false) == true
     fs:SetWordWrap(wrap); fs:SetMaxLines(wrap and 2 or 1)
     local width = Call(np.GetHealthBarWidth)

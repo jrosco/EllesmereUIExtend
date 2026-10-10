@@ -1,4 +1,6 @@
+if EUI_CLIENT_BLOCKED then return end
 local addonName, addon = ...
+local GetHost = addon.GetHost
 local Copy = addon.CopyTable
 local IsSecret = addon.IsSecret
 local ResolveBarTexturePath = addon.ResolveBarTexturePath
@@ -250,7 +252,7 @@ end
 local function ReadKnownCastColorState(interruptible)
     if interruptible == "uninterruptible" then return "uninterruptible" end
     if interruptible ~= "interruptible" then return "unknown" end
-    local getKick = EllesmereUI and EllesmereUI.GetActiveKickSpell
+    local getKick = GetHost() and GetHost().GetActiveKickSpell
     local spell = getKick and getKick()
     if not spell or not (C_Spell and C_Spell.GetSpellCooldownDuration)
         or not (C_CurveUtil and C_CurveUtil.EvaluateColorValueFromBoolean) then return "interruptible" end
@@ -281,7 +283,7 @@ local function ReadThreat(unit, checkRoles, targetExists, isTarget)
         if ok then return SafeBool(value) end
     end
     local function Classify(participant)
-        local getRole = (EllesmereUI and EllesmereUI.UnitEffectiveRole) or UnitGroupRolesAssigned
+        local getRole = (GetHost() and GetHost().UnitEffectiveRole) or UnitGroupRolesAssigned
         if type(getRole) ~= "function" then return false end
         local ok, role = pcall(getRole, participant)
         if not ok or IsSecret(role) or type(role) ~= "string" then return false end
@@ -324,7 +326,7 @@ end
 
 local function SupportsInstanceType(value)
     if MULTI_CONDITION_VALUES.instanceType[value] ~= true then return false end
-    if EllesmereUI and EllesmereUI.IS_FOREVER == true then
+    if GetHost() and GetHost().IS_FOREVER == true then
         return value ~= "arena" and value ~= "scenario" and value ~= "delve"
     end
     return MULTI_CONDITION_VALUES.instanceType[value] == true
@@ -770,6 +772,7 @@ end
 local InstallHooks
 
 local function ApplyPlateSafely(plate)
+    if not GetHost() then return end
     local state = GetState(plate)
     local previousSnapshotState = snapshotState
     state.castColorSnapshot = nil
@@ -818,6 +821,7 @@ local function CheckCastTransition(plate)
 end
 
 local function RefreshAll()
+    if not GetHost() then return end
     GetSettings()
     if not NP then NP = _G.EllesmereNameplates_NS end
     if not NP then return end
@@ -946,6 +950,7 @@ local function InstallPlateHooks(plate)
 end
 
 InstallHooks = function()
+    if not GetHost() then return end
     NP = _G.EllesmereNameplates_NS or NP
     if not NP then return end
     if addon.InstallScaleSelectionHooks then addon.InstallScaleSelectionHooks() end
@@ -963,6 +968,7 @@ end
 
 local events = {
     "ADDON_LOADED",
+    "PLAYER_LOGIN",
     "QUEST_LOG_UPDATE",
     "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED",
     "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "PLAYER_ENTERING_WORLD",
@@ -979,6 +985,9 @@ local events = {
 }
 for _, event in ipairs(events) do TryRegisterEvent(unitFrame, event) end
 unitFrame:SetScript("OnEvent", function(_, event, loadedAddon)
+    if event == "PLAYER_LOGIN" and (not GetHost() or not _G.EllesmereNameplates_NS) then
+        print("EllesmereUI Extend Nameplates: enable EllesmereUI and its Nameplates module, or EUI Standalone Nameplates. Styling is inactive; saved rules are unchanged.")
+    end
     if event == "ADDON_LOADED" then
         if loadedAddon ~= addonName then return end
         GetSettings()
@@ -1083,10 +1092,10 @@ SlashCmdList.EXTENDNAMEPLATES = function(message)
     end
     Report("diagnostics v3; addon=EllesmereUIExtendNameplates; feature=Nameplate; enabled=" .. Text(db.enabled ~= false)
         .. "; settings shared with options=" .. Text(db == core.GetSettings("nameplates")))
-    local pluginRegistered = EllesmereUI and EllesmereUI.IsPluginRegistered
-        and EllesmereUI.IsPluginRegistered("EllesmereUIExtendNameplates") or false
+    local pluginRegistered = GetHost() and GetHost().IsPluginRegistered
+        and GetHost().IsPluginRegistered("EllesmereUIExtend") or false
     Report("EUI plugin section registered=" .. Text(pluginRegistered))
-    Report("EUI plugin API available=" .. Text(EllesmereUI and type(EllesmereUI.RegisterPlugin) == "function"))
+    Report("EUI plugin API available=" .. Text(GetHost() and type(GetHost().RegisterPlugin) == "function"))
     if not pluginRegistered and addon.RegisterOptions then
         local ok, result = pcall(addon.RegisterOptions)
         Report("registration retry=" .. Text(ok and result == true)
