@@ -1,11 +1,13 @@
 """Offline release-planning regressions using disposable Git repositories."""
 
 import importlib.util
+import json
 import os
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location("release_plan", Path(__file__).parents[1] / "release_plan.py")
 planner = importlib.util.module_from_spec(SPEC)
@@ -30,8 +32,8 @@ class ReleasePlanTests(unittest.TestCase):
             path.parent.mkdir()
             path.write_text("## Version: 1.0.0\n", encoding="utf-8")
         self.commit("chore(shared): initialize fixtures", "Core/Core.lua")
-        self.git("tag", "nameplates-v1.0.0")
-        self.git("tag", "questtracker-v1.0.0")
+        for feature in planner.FEATURES:
+            self.git("tag", f"{feature}-v1.0.0")
 
     def tearDown(self):
         os.chdir(self.previous)
@@ -53,7 +55,8 @@ class ReleasePlanTests(unittest.TestCase):
         return planner.plan(feature, channel, self.git("rev-parse", "HEAD"), self.git("tag").splitlines())
 
     def test_no_changes(self):
-        self.assertIsNone(self.plan())
+        for feature in planner.FEATURES:
+            self.assertIsNone(self.plan(feature))
 
     def test_docs_chore_tests_do_not_trigger(self):
         self.commit("docs(shared): improve guidance", "README.md")
@@ -70,16 +73,87 @@ class ReleasePlanTests(unittest.TestCase):
         self.assertIn("fix opacity", result["notes"])
         self.assertIsNone(self.plan("questtracker"))
 
-    def test_core_releases_both(self):
+    def test_core_releases_all_features(self):
         self.commit("fix(shared): fix profile merge", "Core/Sync.lua")
-        self.assertEqual(self.plan()["version"], "1.0.1")
-        self.assertEqual(self.plan("questtracker")["version"], "1.0.1")
+        for feature in planner.FEATURES:
+            self.assertEqual(self.plan(feature)["version"], "1.0.1")
+
+    def test_bags_release_identity_and_isolation(self):
+        self.commit("feat(bags): add bank search", "Bags/Viewer.lua")
+        self.commit("docs(bags): explain snapshots", "Bags/README.md")
+        result = self.plan("bags", "alpha")
+        self.assertEqual(result["tag"], "bags-v1.1.0-alpha.1")
+        self.assertEqual(result["source"], "Bags")
+        self.assertEqual(result["project_variable"], "CURSEFORGE_BAGS_PROJECT_ID")
+        self.assertTrue(result["prerelease"])
+        self.assertIn("add bank search", result["notes"])
+        self.assertIn("explain snapshots", result["notes"])
+        self.assertIsNone(self.plan("nameplates"))
+        self.assertIsNone(self.plan("questtracker"))
+
+    def test_bags_non_runtime_changes_do_not_trigger(self):
+        for message, path in (
+            ("docs(bags): explain bank", "Bags/README.md"),
+            ("test(bags): cover snapshots", "Bags/tests/runtime.lua"),
+            ("build(bags): package bank", ".pkgmeta-bags"),
+            ("ci(shared): maintain workflow", ".github/workflows/create-releases.yaml"),
+        ):
+            self.commit(message, path)
+        for feature in planner.FEATURES:
+            self.assertIsNone(self.plan(feature))
+
+    def test_bags_first_release_from_alpha_source_version(self):
+        self.git("tag", "-d", "bags-v1.0.0")
+        Path("Bags/EllesmereUIExtendBags.toc").write_text("## Version: 0.1.0-alpha.1\n", encoding="utf-8")
+        self.commit("feat(bags): add bank snapshots", "Bags/Bags.lua")
+        self.assertEqual(self.plan("bags", "alpha")["tag"], "bags-v0.2.0-alpha.1")
+
+    def test_bags_prerelease_promotion_and_independent_boundary(self):
+        self.commit("fix(bags): fix capture", "Bags/Snapshot.lua")
+        alpha = self.plan("bags", "alpha")
+        self.git("tag", alpha["tag"])
+        self.assertIsNone(self.plan("bags", "alpha"))
+        beta = self.plan("bags", "beta")
+        self.assertEqual(beta["tag"], "bags-v1.0.1-beta.1")
+        self.git("tag", beta["tag"])
+        self.assertEqual(self.plan("bags")["tag"], "bags-v1.0.1")
+        self.commit("fix(shared): fix embedded core", "Core/Core.lua")
+        self.assertEqual(self.plan("bags", "beta")["tag"], "bags-v1.0.1-beta.2")
+        for feature in ("nameplates", "questtracker"):
+            result = self.plan(feature)
+            self.assertEqual(result["version"], "1.0.1")
+            self.assertNotIn("fix capture", result["notes"])
+            self.assertIn("fix embedded core", result["notes"])
+
+    def test_three_feature_matrix_and_notes_artifacts(self):
+        self.commit("fix(shared): fix embedded core", "Core/Core.lua")
+        self.commit("fix(bags): fix bank viewer", "Bags/Viewer.lua")
+        output = Path("release-plan")
+        env = {"GITHUB_OUTPUT": str(Path("github-output")), "GITHUB_STEP_SUMMARY": str(Path("summary"))}
+        with patch.dict(os.environ, env), patch("sys.argv", ["release_plan.py", "--channel", "alpha", "--output", str(output)]):
+            planner.main()
+        matrix = json.loads((output / "plan.json").read_text(encoding="utf-8"))
+        self.assertEqual({p["feature"] for p in matrix["include"]}, set(planner.FEATURES))
+        for result in matrix["include"]:
+            feature = result["feature"]
+            self.assertEqual(result["source"], planner.FEATURES[feature])
+            self.assertEqual(result["project_variable"], f"CURSEFORGE_{feature.upper()}_PROJECT_ID")
+            self.assertEqual(result["tag"], f"{feature}-v1.0.1-alpha.1")
+            self.assertNotIn("notes", result)
+            notes = (output / f"{feature}.md").read_text(encoding="utf-8")
+            self.assertIn("fix embedded core", notes)
+            self.assertEqual("fix bank viewer" in notes, feature == "bags")
+        github_output = Path(env["GITHUB_OUTPUT"]).read_text(encoding="utf-8")
+        self.assertIn("has_releases=true", github_output)
+        self.assertEqual(json.loads(github_output.splitlines()[0].removeprefix("matrix=")), matrix)
+        self.assertIn("bags-v1.0.1-alpha.1", Path(env["GITHUB_STEP_SUMMARY"]).read_text(encoding="utf-8"))
 
     def test_feature_notes_isolated(self):
         self.commit("feat(questtracker): new controls", "QuestTracker/Options.lua")
         self.commit("fix(nameplates): restore alpha", "Nameplates/Nameplates.lua")
         self.assertNotIn("new controls", self.plan()["notes"])
         self.assertEqual(self.plan("questtracker")["version"], "1.1.0")
+        self.assertIsNone(self.plan("bags"))
 
     def test_shared_cross_feature_change(self):
         self.commit("feat(shared): new settings", "Nameplates/Options.lua")
@@ -88,6 +162,7 @@ class ReleasePlanTests(unittest.TestCase):
         self.git("commit", "--amend", "--no-edit", "-q")
         self.assertEqual(self.plan()["version"], "1.1.0")
         self.assertEqual(self.plan("questtracker")["version"], "1.1.0")
+        self.assertIsNone(self.plan("bags"), "shared scope without Bags/Core runtime must not release Bags")
 
     def test_breaking_markers(self):
         for message in ("feat(shared)!: new contract", "refactor(shared): new contract\n\nBREAKING CHANGE: new API"):

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       channel:
-        description: Release channel
+        description: Release channel for eligible Nameplates, Quest Tracker and Bags addons
         type: choice
         options: [alpha, beta, stable]
         default: alpha
@@ -41,7 +41,7 @@ jobs:
           exit 1
       - name: Test release planner
         run: python3 -m unittest discover -s tools/tests -p 'test_release_plan.py' -v
-      - name: Calculate feature releases
+      - name: Calculate Nameplates, Quest Tracker and Bags releases
         id: plan
         env:
           CHANNEL: ${{ inputs.channel }}
@@ -62,7 +62,7 @@ jobs:
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       # Fetch only this commit, without other feature tags at the same SHA.
-      # The packager must see this feature's tag, not the other addon's tag.
+      # The packager must see this feature's tag, not another addon's tag.
       - uses: actions/checkout@v7
         with:
           ref: ${{ matrix.sha }}

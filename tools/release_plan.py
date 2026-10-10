@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 import subprocess
 
-FEATURES = {"nameplates": "Nameplates", "questtracker": "QuestTracker"}
+FEATURES = {"nameplates": "Nameplates", "questtracker": "QuestTracker", "bags": "Bags"}
 HEADER = re.compile(r"^(\w+)(?:\(([^)]+)\))?(!)?: (.+)$")
 VERSION = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta)\.(\d+))?$")
 RELEASE_TYPES = {"feat", "fix", "perf", "refactor", "revert", "build"}

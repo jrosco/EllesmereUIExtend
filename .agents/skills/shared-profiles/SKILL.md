@@ -16,16 +16,24 @@ the existing Core tests rather than relying only on this summary.
 - Core is shared source embedded as `Shared/` in each independent feature, not
   an installed addon. Preserve Core, Sync, Options load order before feature code.
 - The first embedded copy creates the singleton; later copies reuse it and
-  register their owner. Neither feature may require the other. Keep shared API
+   register their owner. No feature may require another feature. Keep shared API
   compatibility across independently updated packages.
 - Register features/modules during addon loading. Access settings only after
   SavedVariables load; preserve one combined UI registration at `PLAYER_LOGIN`.
   Do not introduce load-on-demand behavior or late registration.
 - `EllesmereUIExtendDB` is the in-memory root, with `profiles[name].nameplates`,
-  `profiles[name].questTracker` and `characterProfiles`. It is not a SavedVariable.
+  `profiles[name].questTracker`, `profiles[name].bags` and `characterProfiles`.
+  It is not a SavedVariable.
 - Preserve distinct snapshot SavedVariables:
-  `EllesmereUIExtendNameplatesProfiles` and `EllesmereUIExtendQuestTrackerProfiles`.
-  Never declare the same saved root in both TOCs.
+  `EllesmereUIExtendNameplatesProfiles`, `EllesmereUIExtendQuestTrackerProfiles`
+  and `EllesmereUIExtendBagsProfiles`. Never declare the same saved root in
+  multiple feature TOCs.
+- Bags' `EllesmereUIExtendBagsDB` is account-wide character inventory, not a
+  profile snapshot. Never synchronize it through `Core/Sync.lua` or clear it on
+  profile switch, feature reset, shared rename or profile deletion.
+- Verify `Core/Core.lua` recognizes all three owners. Older embedded copies may
+  not recognize Bags; follow the documented update-together guidance and test
+  actual version combinations rather than assuming a newer copy wins load order.
 
 ## Merge and persistence contract
 
@@ -41,8 +49,9 @@ the existing Core tests rather than relying only on this summary.
 4. Preserve change stamps and tie-break rules. Only changed, loaded feature
    sections receive new stamps; absent sections retain their stamps. Check clock
    readability before inspection and preserve deterministic logical fallback.
-5. Every loaded owner saves a full synchronized snapshot. Either feature must
-   survive the other's uninstall and merge retained snapshots safely on reinstall.
+5. Every loaded owner saves a full synchronized profile snapshot. Each feature
+   must survive other features' uninstall and merge retained snapshots safely
+   on reinstall. Inventory stays in Bags' own separate database.
 6. Reject unsupported/invalid snapshots as specified by current code. Do not add
    legacy settings migration, old SavedVariable imports or compatibility aliases.
 
@@ -64,10 +73,12 @@ the existing Core tests rather than relying only on this summary.
 
 Use `addon-testing` when available. Run `Core/tests/runtime.lua` and
 `Core/tests/persistence.lua`, relevant feature suites, and packaging checks when
-shared embedding or load order changes. Cover each feature alone, both load
-orders, reload/logout, independent sessions, rename/delete conflicts, same-name
+shared embedding or load order changes. Include `Bags/tests/profiles.lua` when
+Bags or owner registration is affected. Cover each feature alone, relevant pairs
+in both orders, all six three-feature orders, reload/logout, independent sessions,
+rename/delete conflicts, same-name
 creation, invalid snapshots, clock fallback, reset isolation and stale popups.
-Run `git diff --check`; use `addon-packaging` to rebuild both features after Core
+Run `git diff --check`; use `addon-packaging` to rebuild all three features after Core
 changes when requested.
 
 Report exact automated results and remaining Retail/Forever checks from

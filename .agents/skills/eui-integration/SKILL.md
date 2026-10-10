@@ -73,11 +73,35 @@ hook target as a stable public API. State uncertain or version-specific behavior
 
 ## Verify and report
 
+### Bags integration boundaries
+
+- Start with `Bags/README.md`, its TOC, `Compatibility.lua`, `Bags.lua`,
+  `Snapshot.lua`, `Viewer.lua` and `Options.lua`. Inspect upstream
+  `EllesmereUIBags.lua` and `EllesmereUIBags_Bank.lua` read-only.
+- Current integration attaches one addon-owned button to `_G.EUI_Bags` and hooks
+  its `OnShow` once. Treat that frame/global as a version-specific integration
+  point, not a guaranteed public EUI API. Verify its creation and lifecycle.
+- Keep EUI's live bag/bank layout, item buttons, currency footer and header
+  ownership intact. Do not replace `RefreshInventory`/`RefreshBank`, reparent
+  native frames, change global container search or reuse live item templates.
+- The snapshot viewer is separate and read-only: plain icons, stored-link
+  tooltips, no item-use/transfer/drag actions or secure container attributes.
+  Defer button attachment in combat; honor Edit Mode in open/move/settings callbacks.
+- Capture only while personal bank access is open; bank-opening events can
+  precede available data. Preserve the stable-scan and last-good-data contract,
+  exclude account-only access and stop polling at bank close/logout.
+- Inspect actual EUI font/border/tooltip helper implementations and gate optional
+  helpers. Check attached-button clipping/overlap in both clients and bag modes.
+
+### Regression selection
+
 Use the `addon-testing` skill to select focused regressions and relevant upstream
 integration suites from `TESTING.md`. Test missing helpers, supported older-EUI
 fallbacks, native repaints, latest-state restoration, pooling/reuse, stale callbacks
-and combat recovery as applicable. For shared registration changes, test either
-feature alone and both load orders. Run `git diff --check`.
+and combat recovery as applicable. For shared registration changes, test each
+feature alone, relevant pairs in both orders and all three in all six orders.
+Include `Bags/tests/runtime.lua` and `Bags/tests/profiles.lua` for Bags changes.
+Run `git diff --check`.
 
 Report inspected upstream APIs and version assumptions, changed integration points,
 fallbacks, exact test results and any dependency blockers. Provide Retail and Forever

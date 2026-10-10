@@ -8,7 +8,7 @@ description: Implement or review EllesmereUIExtend settings controls, menus, too
 The repository root is `../../..` relative to this skill directory. Read its
 `AGENTS.md`, `TESTING.md`, affected feature README and TOC, and any nested
 guidance. Check `git status --short`; preserve unrelated work. Inspect the
-affected Options and Preview modules and their tests before editing.
+affected Options and Preview/Viewer modules and their tests before editing.
 
 ## Establish behavior and API contracts
 
@@ -70,10 +70,30 @@ affected Options and Preview modules and their tests before editing.
 
 ## Validate and document
 
+### Bags viewer and settings
+
+- Use **Extend > Bags > Bank Snapshot** for the button-visibility setting and
+  `/ebags` for the separate viewer. Read `Bags/Options.lua` and `Bags/Viewer.lua`;
+  do not create a live viewer just to prebuild settings-search entries.
+- UI settings belong to shared profiles' `bags` section. Captured inventory is
+  in `EllesmereUIExtendBagsDB`, never a preview/defaults table. Profile changes,
+  reset and hiding the button must not erase inventory or disable slash access.
+- Preserve character selection, tab filtering, literal name/ID search,
+  pagination, last-updated/read-only labels and no-snapshot/empty/unavailable
+  states. Revalidate selection after database changes; clear unused pooled icons.
+- Use saved item links for hover tooltips. Never add secure item attributes,
+  live container templates, item use, pickup, drag/drop or transfer actions to
+  snapshot icons. Preserve Edit Mode checks inside stale settings/open/move callbacks.
+- Check character/tab label truncation, tab tooltips, button clipping/overlap at
+  screen edges/scales, Escape/focus handling and both-client rendering in game.
+
+### Regression selection
+
 Use `addon-testing` to select current suites from `TESTING.md`. For Nameplates,
 consider UI locks, tooltips, options search, header/appearance previews and the
 specific changed control suites. For QuestTracker, consider runtime,
-notifications and item-combat-recovery. Include Core runtime coverage for shared
+notifications and item-combat-recovery. For Bags, run `Bags/tests/runtime.lua`
+and `Bags/tests/profiles.lua`. Include Core runtime coverage for shared
 profile UI changes. Test stale open controls, unsupported capabilities, resets,
 profile/rule transitions and preview teardown. Run `git diff --check`.
 
