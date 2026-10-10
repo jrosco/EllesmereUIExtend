@@ -261,12 +261,24 @@ local function PickCharacter(key)
     local host = EllesmereUIExtendBagsViewer
     host.characterDropdown.scripts.OnClick(host.characterDropdown)
     for _, row in ipairs(host.characterMenu.rows) do
-        if row:IsShown() and row.label.text == key then row.scripts.OnClick(); return end
+        if row:IsShown() and row.label.text:sub(1, #key + 2) == key .. " (" then row.scripts.OnClick(); return end
     end
     error("missing dropdown character " .. key)
 end
+local function TotalLabel(key)
+    local snapshot = ns.DB.characters[key]
+    if not ns.ValidSnapshot(snapshot) then return key .. " (No snapshot)" end
+    local total = 0
+    for _ in ipairs(ns.Items(snapshot)) do total = total + 1 end
+    return key .. " (" .. total .. ")"
+end
+local function VisibleSlots(host)
+    local count = 0
+    for _, slot in ipairs(host.slots) do if slot:IsShown() then count = count + 1 end end
+    return count
+end
 Check(viewer:IsShown() and viewer.message.text == "Visit the banker first", "button opens first-visit empty bank")
-Check(viewer.character.text == "Fallback - Realm", "uncaptured current character still labels empty bank")
+Check(viewer.character.text == "Fallback - Realm (No snapshot)", "uncaptured current character still labels empty bank")
 Check(viewer.characterDropdown.enabled, "current character remains selectable without snapshots")
 for _, slot in ipairs(viewer.slots) do Check(not slot:IsShown() and slot.entry == nil, "uncaptured bank has no item icons") end
 Event("BANKFRAME_OPENED"); Tick(); Tick()
@@ -277,20 +289,20 @@ Event("BANKFRAME_CLOSED")
 player = "Uncaptured"
 ns.Addon.Refresh(); ns.Addon.Refresh()
 Check(ns.BagButton.enabled and viewer.message.text == "Visit the banker first", "uncaptured player never falls back to alt snapshot")
-Check(viewer.character.text == "Uncaptured - Realm" and not viewer.slots[1]:IsShown(), "current player owns empty viewer despite saved alts")
+Check(viewer.character.text == "Uncaptured - Realm (No snapshot)" and not viewer.slots[1]:IsShown(), "current player owns empty viewer despite saved alts")
 Check(viewer.characterDropdown.enabled, "uncaptured player can browse saved alts")
 PickCharacter("Alt - Realm")
-Check(viewer.character.text == "Alt - Realm" and viewer.slots[1]:IsShown(), "right arrow browses captured alt from empty current bank")
+Check(viewer.character.text == TotalLabel("Alt - Realm") and viewer.slots[1]:IsShown(), "dropdown browses captured alt from empty current bank")
 ns.Addon.Refresh()
 Event("GET_ITEM_INFO_RECEIVED")
-Check(viewer.character.text == "Alt - Realm", "refresh and item data arrival preserve selected alt")
+Check(viewer.character.text == TotalLabel("Alt - Realm"), "refresh and item data arrival preserve selected alt")
 PickCharacter("Uncaptured - Realm")
-Check(viewer.character.text == "Uncaptured - Realm" and viewer.message.text == "Visit the banker first",
+Check(viewer.character.text == "Uncaptured - Realm (No snapshot)" and viewer.message.text == "Visit the banker first",
     "left arrow returns to uncaptured current player")
 PickCharacter("Alt - Realm")
 viewer:Hide()
 SlashCmdList.ELLESMEREUIEXTENDBAGS()
-Check(viewer.character.text == "Uncaptured - Realm" and viewer.message.text == "Visit the banker first",
+Check(viewer.character.text == "Uncaptured - Realm (No snapshot)" and viewer.message.text == "Visit the banker first",
     "slash reopening defaults to current player instead of last browsed alt")
 player = "Fallback"
 Check(#EUI_Bags.hooks.OnShow == 1, "one native OnShow hook")
@@ -308,18 +320,18 @@ Check(#slots > 0 and slots[1].entry and viewer.scrollFrame.scrollChild == viewer
     "snapshot items render inside clipped scroll child")
 slots[1].scripts.OnEnter(slots[1])
 Check(tooltips == 1, "stored-link tooltip shown")
-Check(viewer.character.text == "Fallback - Realm" and viewer.characterDropdown and not viewer.previousCharacter and not viewer.nextCharacter,
+Check(viewer.character.text == TotalLabel("Fallback - Realm") and viewer.characterDropdown and not viewer.previousCharacter and not viewer.nextCharacter,
     "viewer opens on current player with dropdown replacing arrows")
 PickCharacter("Alt - Realm")
-Check(viewer.character.text == "Alt - Realm", "right arrow browses other captured character")
+Check(viewer.character.text == TotalLabel("Alt - Realm"), "dropdown browses other captured character")
 Event("BANKFRAME_OPENED"); Tick(); Tick()
-Check(viewer.character.text == "Alt - Realm", "current player's capture preserves intentionally browsed alt")
+Check(viewer.character.text == TotalLabel("Alt - Realm"), "current player's capture preserves intentionally browsed alt")
 Event("BANKFRAME_CLOSED")
 viewer.tabs[3].scripts.OnClick(viewer.tabs[3])
 viewer.search:SetText("no-match")
 viewer:Hide()
 ns.BagButton.scripts.OnClick()
-Check(viewer.character.text == "Fallback - Realm" and viewer.search:GetText() == "" and slots[1]:IsShown(),
+Check(viewer.character.text == TotalLabel("Fallback - Realm") and viewer.search:GetText() == "" and slots[1]:IsShown(),
     "bag-button reopening resets alt selection, tab and search to current player")
 viewer.search:SetText("no-match")
 Check(not slots[1]:IsShown() and viewer.message.text == "No items in this view.", "search hides unrelated icons")
@@ -345,10 +357,11 @@ for i = 1, 100 do alt.tabs[1].items[i] = { itemID = 100, count = 1, link = "item
 alt.tabs[1].numSlots = 100
 player = "Alt"
 ns.RefreshViewer()
-Check(viewer.character.text == "Alt - Realm", "refresh uses current identity, not prior selection")
+Check(viewer.character.text == "Alt - Realm (100)", "refresh uses current identity, not prior selection")
 Check(not viewer.nextPage and not viewer.previousPage and viewer.scrollFrame:GetVerticalScrollRange() > 0,
     "large banks scroll without stack pagination arrows")
-Check(viewer.slots[100]:IsShown() and viewer.total.text == "100 stacks", "every stack is in continuous scroll content")
+Check(viewer.slots[100]:IsShown() and VisibleSlots(viewer) == 100, "every stack is in continuous scroll content")
+Check(viewer.total == nil, "viewer has no bottom stacks-count label")
 viewer.scrollFrame.scripts.OnMouseWheel(viewer.scrollFrame, -1)
 Check(viewer.scrollFrame:GetVerticalScroll() == 40, "bank wheel uses EUI's 40-pixel step")
 viewer.scrollFrame.scripts.OnMouseWheel(viewer.scrollFrame, -1000)
@@ -812,12 +825,28 @@ EUI_CategoryManager = {
 ns.Addon.Refresh()
 Check(native.tabs[2]:IsShown() and native.categoryButtons[2]:IsShown() and native.tabsTitle.text == "Tabs"
     and native.categoriesTitle.text == "Categories", "both navigation sections visible together")
+local countButton = native.categoryButtons[2]
+Check(countButton.navCount.text == "(2)" and countButton.navCount:IsShown()
+    and countButton.navCount.point[1] == "RIGHT" and countButton.navCount.point[2] == -4
+    and countButton.label:GetWidth() + countButton.navCount:GetWidth() + 4 == 109,
+    "sidebar reserves separate right-aligned count space so category names cannot truncate counts")
+local oldCountWidth = countButton.navCount.GetStringWidth
+countButton.navCount.GetStringWidth = function() return 54 end
+native.StyleNavigation(countButton, 20, "Very long category name that must truncate", 134400, false, nil, 12345)
+Check(countButton.label.text == "Very long category name that must truncate" and countButton.navCount.text == "(12345)"
+    and countButton.navCount:GetWidth() == 56 and countButton.label:GetWidth() == 49,
+    "large slot counts use measured font width while only the long category name shrinks")
+countButton.navCount.GetStringWidth = function() return secret end
+native.StyleNavigation(countButton, 20, "Long category", 134400, false, nil, 12345)
+Check(countButton.navCount:GetWidth() == 58, "unreadable count measurement uses safe text-length fallback")
+countButton.navCount.GetStringWidth = oldCountWidth
+ns.Addon.Refresh()
 native.categoryButtons[2].scripts.OnClick(native.categoryButtons[2])
-Check(native.total.text == "2 stacks" and native.slots[1].entry.item.itemID == 100, "category filters all selected tabs")
+Check(VisibleSlots(native) == 2 and native.slots[1].entry.item.itemID == 100, "category filters all selected tabs")
 native.tabs[2].scripts.OnClick(native.tabs[2])
-Check(native.total.text == "1 stacks" and native.slots[1].entry.tab == "Tab One", "category selection filters within selected bank tab")
+Check(VisibleSlots(native) == 1 and native.slots[1].entry.tab == "Tab One", "category selection filters within selected bank tab")
 native.categoryButtons[3].scripts.OnClick(native.categoryButtons[3])
-Check(native.slots[1].entry.item.itemID == 200 and native.total.text == "1 stacks", "category navigation works without grouping")
+Check(native.slots[1].entry.item.itemID == 200 and VisibleSlots(native) == 1, "category navigation works without grouping")
 native.tabs[3].scripts.OnClick(native.tabs[3])
 Check(native.slots[1].entry.item.itemID == 100 and native.categoryButtons[1].navIcon.alpha == 1,
     "missing category in new tab returns to All categories")
@@ -826,6 +855,7 @@ native.sidebarToggle.scripts.OnClick()
 Check(settings.sidebarCollapsed and native.sidebar:GetWidth() == 32 and not native.tabs[2].label:IsShown()
     and native.tabs[2].navIcon.texture and not native.categoryButtons[2].tip,
     "collapse retains icon-only navigation without category tooltips")
+Check(not native.categoryButtons[2].navCount:IsShown(), "collapsed sidebar hides count labels alongside category names")
 local oldWidgetTooltip, sidebarTips = EllesmereUI.ShowWidgetTooltip, 0
 EllesmereUI.ShowWidgetTooltip = function() sidebarTips = sidebarTips + 1 end
 for _, button in ipairs(native.categoryButtons) do button.scripts.OnEnter() end
@@ -864,6 +894,8 @@ Check(native.sidebarScroll:GetVerticalScroll() == native.sidebarScroll:GetVertic
     and native.sidebarScroll:GetVerticalScroll() > 0, "long sidebar scrolls and clamps within separate clipped region")
 native.sidebarToggle.scripts.OnClick()
 Check(not settings.sidebarCollapsed and native.tabs[1].label:IsShown(), "expanding restores navigation labels")
+Check(native.categoryButtons[2].navCount:IsShown() and native.categoryButtons[2].navCount.text == "(1)",
+    "expanding restores separate category counts with fresh pooled category data")
 -- Use EUI category atlas metadata and its client-specific texture substitutions.
 local iconWidget = Widget("Texture")
 C_Texture = { GetAtlasInfo = function(name) return name == "category-atlas" and {} or nil end }
@@ -896,29 +928,29 @@ end
 ns.DB.characters["Dropdown Alt - Realm"] = { tabs = {} }
 native.characterDropdown.scripts.OnClick(native.characterDropdown)
 Check(menuAnchor == native.characterDropdown and menuOptions.below and menuOptions.minWidth == 364
-    and menuItems[1].text == ns.CharacterKey() and menuItems[1].isActive,
+    and menuItems[1].text == TotalLabel(ns.CharacterKey()) and menuItems[1].isActive,
     "EUI character dropdown anchors below selector and includes uncaptured current player first")
 local altChoice
-for _, item in ipairs(menuItems) do if item.text == "Dropdown Alt - Realm" then altChoice = item.onClick end end
+for _, item in ipairs(menuItems) do if item.text == "Dropdown Alt - Realm (0)" then altChoice = item.onClick end end
 Check(altChoice ~= nil, "dropdown includes captured alts by name and realm")
 editing = true
 altChoice()
-Check(native.character.text == ns.CharacterKey(), "already-open character dropdown honors Edit Mode")
+Check(native.character.text == TotalLabel(ns.CharacterKey()), "already-open character dropdown honors Edit Mode")
 editing = false
 local menuProfile = settings
 settings = modules.feature.normalize({ showButton = true })
 altChoice()
-Check(native.character.text == ns.CharacterKey(), "stale dropdown cannot select after profile switch")
+Check(native.character.text == TotalLabel(ns.CharacterKey()), "stale dropdown cannot select after profile switch")
 settings = menuProfile
 native:Hide(); ns.ToggleViewer()
 altChoice()
-Check(native.character.text == ns.CharacterKey(), "reopening invalidates prior character menu callbacks")
+Check(native.character.text == TotalLabel(ns.CharacterKey()), "reopening invalidates prior character menu callbacks")
 native.characterDropdown.scripts.OnClick(native.characterDropdown)
-for _, item in ipairs(menuItems) do if item.text == "Dropdown Alt - Realm" then altChoice = item.onClick end end
+for _, item in ipairs(menuItems) do if item.text == "Dropdown Alt - Realm (0)" then altChoice = item.onClick end end
 altChoice()
-Check(native.character.text == "Dropdown Alt - Realm", "EUI dropdown directly selects requested alt")
+Check(native.character.text == "Dropdown Alt - Realm (0)", "EUI dropdown directly selects requested empty alt")
 native:Hide(); ns.ToggleViewer()
-Check(native.character.text == ns.CharacterKey(), "dropdown preserves current-character opening contract")
+Check(native.character.text == TotalLabel(ns.CharacterKey()), "dropdown preserves current-character opening contract")
 EllesmereUI.ShowContextMenu = nil
 native.characterDropdown.scripts.OnClick(native.characterDropdown)
 Check(native.characterMenu:IsShown(), "older EUI offers addon-owned character dropdown")
@@ -938,42 +970,60 @@ ns.DB = { format = 1, characters = {
 } }
 C_Item.GetItemInfo = function(link) return link:find("100", 1, true) and "Silver Ore" or "Copper Ore" end
 ns.Addon.Refresh()
-native.search:SetText("silver")
-native.tabs[2].scripts.OnClick(native.tabs[2])
-Check(native.character.text == searchKey .. " (14)" and native.total.text == "1 stacks",
-    "selected character label counts full-bank quantities including reagent storage, not filtered stacks")
+Check(native.character.text == searchKey .. " (4)", "empty search counts occupied bank slots including reagent storage, not item quantity")
 EllesmereUI.ShowContextMenu = function(anchor, items, options) menuAnchor, menuItems, menuOptions = anchor, items, options end
 native.characterDropdown.scripts.OnClick(native.characterDropdown)
-Check(#menuItems == 3 and menuItems[1].text == searchKey .. " (14)", "search menu retains current character first with full-bank quantity")
+local totalChoices = {}
+for _, item in ipairs(menuItems) do totalChoices[item.text] = true end
+Check(totalChoices[searchKey .. " (4)"] and totalChoices["Search Alt - Realm (3)"]
+    and totalChoices["No Match - Realm (1)"], "native menu totals occupied slots for every character bank with no search")
+native.tabs[2].scripts.OnClick(native.tabs[2])
+native.categoryButtons[2].scripts.OnClick(native.categoryButtons[2])
+Check(native.character.text == searchKey .. " (4)", "empty-search slot total ignores selected tab and category")
+EllesmereUI.ShowContextMenu = nil
+native.characterDropdown.scripts.OnClick(native.characterDropdown)
+local fallbackTotals = {}
+for _, row in ipairs(native.characterMenu.rows) do
+    if row:IsShown() then fallbackTotals[row.label.text] = true end
+end
+Check(fallbackTotals[searchKey .. " (4)"] and fallbackTotals["Search Alt - Realm (3)"]
+    and fallbackTotals["No Match - Realm (1)"], "older-EUI menu shows full-bank occupied slots without search")
+native.search:SetText("silver")
+native.tabs[2].scripts.OnClick(native.tabs[2])
+Check(native.character.text == searchKey .. " (3)" and VisibleSlots(native) == 1,
+    "selected character label counts full-bank matching slots including reagent storage, ignoring view filters")
+EllesmereUI.ShowContextMenu = function(anchor, items, options) menuAnchor, menuItems, menuOptions = anchor, items, options end
+native.characterDropdown.scripts.OnClick(native.characterDropdown)
+Check(#menuItems == 3 and menuItems[1].text == searchKey .. " (3)", "search menu retains current character first with full-bank matching slots")
 local matchChoice, zeroFound
 for _, item in ipairs(menuItems) do
-    if item.text == "Search Alt - Realm (21)" then matchChoice = item.onClick end
+    if item.text == "Search Alt - Realm (2)" then matchChoice = item.onClick end
     if item.text == "No Match - Realm (0)" then zeroFound = true end
 end
-Check(matchChoice and zeroFound, "dropdown reports matching quantities and keeps zero-match alts")
+Check(matchChoice and zeroFound, "dropdown reports matching slots and keeps zero-match alts")
 native.categoryButtons[2].scripts.OnClick(native.categoryButtons[2])
 native.characterDropdown.scripts.OnClick(native.characterDropdown)
-for _, item in ipairs(menuItems) do if item.text == "Search Alt - Realm (21)" then matchChoice = item.onClick end end
+for _, item in ipairs(menuItems) do if item.text == "Search Alt - Realm (2)" then matchChoice = item.onClick end end
 matchChoice()
-Check(native.search:GetText() == "silver" and native.character.text == "Search Alt - Realm (21)"
-    and native.total.text == "2 stacks" and native.tabs[1].navIcon.alpha == 1 and native.categoryButtons[1].navIcon.alpha == 1,
+Check(native.search:GetText() == "silver" and native.character.text == "Search Alt - Realm (2)"
+    and VisibleSlots(native) == 2 and native.tabs[1].navIcon.alpha == 1 and native.categoryButtons[1].navIcon.alpha == 1,
     "search selection retains query, resets tab/category and shows all matching alt stacks")
 native.characterDropdown.scripts.OnClick(native.characterDropdown)
 local oldQueryChoice = menuItems[1].onClick
 native.search:SetText("100")
 oldQueryChoice()
-Check(native.character.text == "Search Alt - Realm (21)", "query changes invalidate already-open character selection callbacks")
+Check(native.character.text == "Search Alt - Realm (2)", "query changes invalidate already-open character selection callbacks")
 EllesmereUI.ShowContextMenu = nil
 native.characterDropdown.scripts.OnClick(native.characterDropdown)
 local fallbackCurrent, fallbackZero
 for _, row in ipairs(native.characterMenu.rows) do
-    if row:IsShown() and row.label.text == searchKey .. " (14)" then fallbackCurrent = row.scripts.OnClick end
+    if row:IsShown() and row.label.text == searchKey .. " (3)" then fallbackCurrent = row.scripts.OnClick end
     if row:IsShown() and row.label.text == "No Match - Realm (0)" then fallbackZero = true end
 end
 Check(fallbackCurrent and fallbackZero, "older-EUI dropdown matches native name/ID search counts and zero statuses")
 native.search:SetText("200")
 fallbackCurrent()
-Check(not native.characterMenu:IsShown() and native.character.text == "Search Alt - Realm (9)",
+Check(not native.characterMenu:IsShown() and native.character.text == "Search Alt - Realm (1)",
     "search change closes fallback popup and blocks stale choices")
 native.search:SetText("%")
 Check(native.character.text == "Search Alt - Realm (0)", "dropdown search counts use literal text, not Lua patterns")
@@ -983,8 +1033,25 @@ local staleCaptureChoice = native.characterMenu.rows[1].scripts.OnClick
 ns.DB.characters["Search Alt - Realm"].tabs[2].items[1].count = 31
 ns.Addon.Refresh()
 staleCaptureChoice()
-Check(native.character.text == "Search Alt - Realm (41)" and not native.characterMenu:IsShown(),
-    "capture refresh updates selected search total and invalidates open menu quantities")
+Check(native.character.text == "Search Alt - Realm (2)" and not native.characterMenu:IsShown(),
+    "quantity-only capture refresh preserves matching slot total and invalidates open menus")
+ns.DB.characters["Search Alt - Realm"].tabs[2].items[3] = SearchItem(100, 99)
+ns.Addon.Refresh()
+Check(native.character.text == "Search Alt - Realm (3)", "new matching stack adds one search slot regardless of quantity or sparse position")
+ns.DB.characters["Search Alt - Realm"].tabs[2].items[3] = nil
+native.search:SetText("")
+Check(native.character.text == "Search Alt - Realm (3)", "clearing search replaces matching slots with all occupied bank slots")
+native.characterDropdown.scripts.OnClick(native.characterDropdown)
+ns.DB.characters["Search Alt - Realm"].tabs[2].items[1].count = 32
+ns.Addon.Refresh()
+Check(native.character.text == "Search Alt - Realm (3)" and not native.characterMenu:IsShown(),
+    "quantity-only capture changes keep occupied slot total and close stale menus")
+ns.DB.characters["Search Alt - Realm"].tabs[2].items[2] = SearchItem(200, 99)
+ns.Addon.Refresh()
+Check(native.character.text == "Search Alt - Realm (4)", "adding a stack updates occupied slot total regardless of stack quantity")
+ns.DB.characters["Search Alt - Realm"].tabs[2].items[2] = nil
+ns.DB.characters["Search Alt - Realm"].tabs[2].items[1].count = 31
+native.search:SetText("silver")
 ns.DB.characters[searchKey] = nil
 ns.Addon.Refresh()
 native.characterDropdown.scripts.OnClick(native.characterDropdown)
@@ -997,16 +1064,16 @@ uncapturedChoice()
 Check(native.search:GetText() == "silver" and native.character.text == searchKey .. " (No snapshot)"
     and native.message.text == "Visit the banker first", "selecting uncaptured current player retains search and first-visit state")
 native.search:SetText("")
-Check(native.character.text == searchKey, "clearing search restores plain dropdown character names")
+Check(native.character.text == searchKey .. " (No snapshot)", "clearing search preserves uncaptured character status")
 native:Hide(); ns.ToggleViewer()
-Check(native.search:GetText() == "" and native.character.text == searchKey, "reopening still clears query and selects current character")
+Check(native.search:GetText() == "" and native.character.text == searchKey .. " (No snapshot)", "reopening still clears query and selects current character")
 Check(not native.clearSearch:IsShown() and native.search:GetWidth() == 192
     and native.clearSearch.point[2] == -12 and native.search.point[2] == -40,
     "clear search control reserves adjacent space without overlapping minimum-width character selector")
 native.search:SetText("100")
 native.characterDropdown.scripts.OnClick(native.characterDropdown)
 for _, row in ipairs(native.characterMenu.rows) do
-    if row:IsShown() and row.label.text == "Search Alt - Realm (41)" then row.scripts.OnClick(); break end
+    if row:IsShown() and row.label.text == "Search Alt - Realm (2)" then row.scripts.OnClick(); break end
 end
 native.tabs[2].scripts.OnClick(native.tabs[2])
 Check(native.clearSearch:IsShown() and native.clearSearch.enabled, "clear search button appears when text is present")
@@ -1019,9 +1086,9 @@ native.search.ClearFocus = function() clearedFocus = true end
 native.characterDropdown.scripts.OnClick(native.characterDropdown)
 native.clearSearch.scripts.OnClick()
 Check(native.search:GetText() == "" and clearedFocus and not native.clearSearch:IsShown()
-    and native.character.text == "Search Alt - Realm" and native.tabs[2].navIcon.alpha == 1
-    and native.total.text == "2 stacks" and not native.characterMenu:IsShown(),
-    "clear button clears text/count labels, releases focus and dismisses dropdown without changing character/tab")
+    and native.character.text == "Search Alt - Realm (3)" and native.tabs[2].navIcon.alpha == 1
+    and VisibleSlots(native) == 2 and not native.characterMenu:IsShown(),
+    "clear button restores full-bank total, releases focus and dismisses dropdown without changing character/tab")
 native.search.ClearFocus = oldClearFocus
 -- Optional snapshot counts: combined quantities by ID, never live inventory.
 settings = modules.feature.normalize({ showButton = true })

@@ -240,14 +240,13 @@ local function CharacterChoices()
 end
 local function CharacterLabel(key, query)
     if not key then return "Current character unavailable" end
-    if not query or query == "" then return key end
     local snapshot = ns.DB and ns.DB.characters[key]
     local valid, ok = ns.Read(ns.ValidSnapshot, snapshot)
     if not ok or valid ~= true then return key .. " (No snapshot)" end
-    local count = 0
-    -- Same literal name/ID search as the item view, across the full bank rather
+    -- Count occupied slots matching the item view's literal name/ID search,
+    -- across the full bank rather
     -- than the selected tab/category. Alt banks are scanned only on menu opening.
-    for _, entry in ipairs(ns.Items(snapshot, nil, query)) do count = count + entry.item.count end
+    local count = #ns.Items(snapshot, nil, query)
     return key .. " (" .. string.format("%.0f", count) .. ")"
 end
 local function SelectCharacter(key)
@@ -315,7 +314,7 @@ local function Build()
         f:StartMoving()
     end)
     header:SetScript("OnDragStop", StopGesture)
-    f.title = Font(header, "Bank Snapshot | Read only", 14)
+    f.title = Font(header, "Bank Viewer", 14)
     f.title:SetPoint("LEFT", 12, 0)
     local close = Button(header, "X", 24, function() f:Hide() end)
     close:SetPoint("RIGHT", -8, 0)
@@ -539,7 +538,7 @@ local function Build()
     f.tabsTitle = Font(sidebarChild, "Tabs", 10)
     f.tabsTitle:SetPoint("TOPLEFT", 4, 0)
     f.categoriesTitle = Font(sidebarChild, "Categories", 10)
-    f.StyleNavigation = function(button, y, text, icon, active, isAtlas)
+    f.StyleNavigation = function(button, y, text, icon, active, isAtlas, count)
         local collapsed = ns.Addon.Settings().sidebarCollapsed == true
         button:ClearAllPoints()
         button:SetPoint("TOPLEFT", 0, -y)
@@ -556,7 +555,25 @@ local function Build()
             button:SetScript("OnMouseWheel", SidebarWheel)
         end
         ns.PaintCategoryIcon(button.navIcon, icon, isAtlas)
-        button.label:SetWidth(109)
+        local countWidth = 0
+        if count ~= nil then
+            if not button.navCount then
+                button.navCount = Font(button)
+                button.navCount:SetPoint("RIGHT", -4, 0)
+                button.navCount:SetJustifyH("RIGHT")
+                button.navCount:SetWordWrap(false)
+            end
+            local countText = "(" .. string.format("%.0f", count) .. ")"
+            button.navCount:SetText(countText)
+            countWidth = ns.Number(ns.Read(button.navCount.GetStringWidth, button.navCount)) or (#countText * 8)
+            countWidth = math.ceil(countWidth) + 2
+            button.navCount:SetWidth(countWidth)
+            button.navCount:SetShown(not collapsed)
+            button.navCount:SetTextColor(active and 0.05 or 0.9, active and 0.82 or 0.9, active and 0.62 or 0.9)
+        elseif button.navCount then
+            button.navCount:Hide()
+        end
+        button.label:SetWidth(math.max(1, 109 - (countWidth > 0 and countWidth + 4 or 0)))
         button.label:SetText(text)
         button.label:SetShown(not collapsed)
         button.label:SetTextColor(active and 0.05 or 0.9, active and 0.82 or 0.9, active and 0.62 or 0.9)
@@ -647,8 +664,6 @@ local function Build()
         f.slots[i] = button
         return button
     end
-    f.total = Font(f)
-    f.total:SetPoint("BOTTOM", 70, 18)
     f:SetScript("OnHide", function()
         CloseCharacterMenu()
         if ns.RefreshCountTooltips then ns.RefreshCountTooltips() end
@@ -797,10 +812,10 @@ function ns.RefreshViewer()
             f.categoryButtons[index] = button
         end
         button.categoryKey, button.ownerSettings = group and group.key, settings
-        local title = group and ((group.name or "Other") .. " (" .. #group.items .. ")") or "All categories"
+        local title = group and (group.name or "Other") or "All categories"
         button.tip = nil -- Sidebar categories intentionally have no hover tooltip.
         f.StyleNavigation(button, categoryTop + 20 + i * 28, title, group and (group.icon or 134400)
-            or 133633, selectedCategory == button.categoryKey, group and group.isAtlas)
+            or 133633, selectedCategory == button.categoryKey, group and group.isAtlas, group and #group.items)
     end
     f.sidebarChild:SetSize(sidebarWidth, categoryTop + 20 + (#groups + 1) * 28)
     f.sidebarScroll:SetVerticalScroll(math.min(f.sidebarScroll:GetVerticalScroll(),
@@ -936,7 +951,6 @@ function ns.RefreshViewer()
     f.scrollFrame:SetVerticalScroll(resetScroll and 0 or math.min(f.scrollFrame:GetVerticalScroll(), math.max(0, layout.height - ViewHeight(f))))
     resetScroll = false
     f.updateScrollbar()
-    f.total:SetText((#layout.slots < #items and (#layout.slots .. "/") or "") .. #items .. " stacks")
 end
 
 function ns.ToggleViewer()
@@ -954,7 +968,7 @@ function ns.AttachButton()
     if not bags then return end
     if not ns.BagButton then
         -- An attached tab below the window avoids EUI's dynamic header/currency layout.
-        local button = Button(bags, "Bank Snapshot", 125, function() ns.ToggleViewer() end,
+        local button = Button(bags, "Bank Viewer", 125, function() ns.ToggleViewer() end,
             "View your character's read-only bank snapshot.")
         button:SetClampedToScreen(true)
         button:SetPoint("TOPRIGHT", bags, "BOTTOMRIGHT", -8, -4)

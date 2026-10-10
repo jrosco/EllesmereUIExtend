@@ -43,7 +43,7 @@ local function BuildAboutPage(parent, yOffset)
     Section("BANK SNAPSHOTS",
         "Visit a banker on each character to capture personal bank tabs and supported reagent storage. Complete stable scans preserve the previous snapshot when reads are unavailable. Warband, guild storage and carried bags are excluded; snapshots may be outdated until your next banker visit. Snapshot items cannot be used or transferred.")
     Section("VIEWER AND SEARCH",
-        "Use /ebags or the Bank Snapshot button below EUI bags. Opening selects your current character; missing snapshots show Visit the banker first. Browse characters, Tabs and Categories, and choose Grid, Compact or List. Search names or item IDs to see full-bank matching quantities beside character names; the x clears the search.")
+        "Use /ebags or the Bank Snapshot button below EUI bags. Opening selects your current character; missing snapshots show Visit the banker first. Browse characters, Tabs and Categories, and choose Grid, Compact or List. Character names show occupied bank slots; searching names or item IDs replaces these with full-bank matching slot counts. The x clears the search and restores slot totals.")
     Section("BANK STOCK TOOLTIPS",
         "Enable Show bank stock in tooltips on Bank Snapshot (off by default). Bags show positive current/other-bank counts; opening the live bank or snapshot viewer shows named, class-coloured character counts. Only saved personal-bank stock is counted. Cached item-ID lookups avoid live container reads and carried-bag scanning; unknown classes use neutral grey until that character logs in.")
     Section("PROFILES AND WINDOW",
@@ -108,7 +108,7 @@ EllesmereUIExtend.RegisterModule({
         })
         y = y - height
         _, height = W:DualRow(parent, y, {
-            type = "toggle", text = "Show Bank Snapshot button",
+            type = "toggle", text = "Show Bank Viewer button",
             tooltip = "Add a read-only bank viewer button below the EUI bag window. /ebags also opens the viewer.",
             getValue = function() return ns.Addon.Settings().showButton end,
             setValue = function(value)

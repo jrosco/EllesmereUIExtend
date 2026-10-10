@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Keep sidebar category occupied-slot counts visible in separate right-aligned labels when category names are long.
+
+- Show occupied bank slots beside the selected character and dropdown choices when search is empty; searching shows matching slot counts instead. Remove the bottom stacks-count label.
+
 - Add custom Bags artwork for WoW's AddOns list, included in distributed ZIPs.
 
 - Add a Bags About tab with installed version, feature overview, snapshot limits, profiles and commands.
