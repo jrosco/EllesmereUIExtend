@@ -83,7 +83,8 @@ for _, order in ipairs(orders) do
     Check(core.GetSettings("bags").collapsedCategories["category:Trade Goods"], "selected profile retains category collapse state")
     Check(core.GetSettings("bags").window.width == 900 and core.GetSettings("bags").window.locked,
         "profile switch retains saved geometry and lock state")
-    core.ResetFeature("bags")
+    Check(type(EllesmereUIExtendBags.Reset) == "function" and EllesmereUIExtendBags.Reset(),
+        "Bags reset entry point resets only its active shared-profile section")
     Check(core.GetSettings("bags").showButton and EllesmereUIExtendBagsDB == bank, "reset does not touch inventory")
     Check(not core.GetSettings("bags").sidebarCollapsed, "Bags reset expands sidebar without touching inventory")
     Check(not core.GetSettings("bags").tooltipBankCounts, "reset disables bank tooltip counts without clearing inventory")

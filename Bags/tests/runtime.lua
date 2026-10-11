@@ -344,7 +344,7 @@ viewer.search:SetText("")
 local before = ns.DB
 modules.options.buildPage("Snapshot Bags", {}, 0)
 editing = true
-for _, row in ipairs(rows) do if row.text == "Show Bank Snapshot button" then row.setValue(false) end end
+for _, row in ipairs(rows) do if row.text == "Show Bank button" then row.setValue(false) end end
 Check(settings.showButton, "stale setting callback honors editor lock")
 viewer:Hide(); ns.ToggleViewer()
 Check(not viewer:IsShown(), "viewer open blocked in edit mode")
@@ -355,6 +355,24 @@ Check(not ns.BagButton:IsShown() and ns.DB == before, "profile change hides butt
 settings = modules.feature.normalize({ showButton = true })
 modules.feature.refresh()
 Check(ns.BagButton:IsShown() and ns.DB == before, "settings reset preserves inventory")
+local resets, oldResetFeature = 0, EllesmereUIExtend.ResetFeature
+EllesmereUIExtend.ResetFeature = function(key)
+    Check(key == "bags", "footer reset targets only Bags settings")
+    resets = resets + 1
+    settings = modules.feature.normalize({})
+    modules.feature.refresh()
+    return true
+end
+Check(type(modules.options.onReset) == "function", "Bags registers the native EUI footer Reset control")
+settings.display, settings.tooltipBankCounts, settings.altBagsEnabled = "list", true, true
+editing = true
+modules.options.onReset()
+Check(resets == 0 and settings.display == "list", "footer reset callback respects Edit Mode")
+editing = false
+Check(modules.options.onReset() and resets == 1 and settings.display == "match"
+    and not settings.tooltipBankCounts and not settings.altBagsEnabled and settings.bankViewerEnabled
+    and ns.DB == before, "footer reset restores defaults without deleting saved snapshots")
+EllesmereUIExtend.ResetFeature = oldResetFeature
 ns.ToggleViewer()
 Check(viewer:IsShown(), "slash-access viewer independent of button visibility")
 local alt = ns.DB.characters["Alt - Realm"]
@@ -1370,19 +1388,30 @@ EllesmereUI.IsSearchPrebuild = function() return true end
 rows = {}
 local beforeAboutFrames = #frames
 local aboutHeight = modules.options.buildPage("About", UIParent, 0)
-Check(#rows == 6 and #aboutHeaders == 6 and #aboutLabels == 0 and #frames == beforeAboutFrames
+Check(#rows == 4 and #aboutHeaders == 4 and #aboutLabels == 0 and #frames == beforeAboutFrames
     and headerClears == 0 and aboutHeight > 0, "About search prebuild indexes sections without fonts, viewer or header mutation")
-Check(rows[1].text:find("Version 9.8.7", 1, true) and rows[3].text:find("/ebags", 1, true)
-    and rows[4].text:find("Cached item-ID", 1, true) and rows[1].type == "spacer",
+Check(rows[1].text:find("Version 9.8.7", 1, true) and rows[2].text:find("/ebags", 1, true)
+    and rows[3].text:find("saved snapshots", 1, true) and rows[1].type == "spacer",
     "About paragraphs expose version, commands and bank tooltip information to search")
+Check(aboutHeaders[2] == "SNAPSHOTS AND SEARCH" and aboutHeaders[4] == "SETTINGS AND PROFILES"
+    and rows[2].text:find("Visit a banker", 1, true) and rows[2].text:find("log into each character", 1, true)
+    and rows[2].text:find("left header icon", 1, true),
+    "concise About search describes both capture sources and switching")
+Check(rows[3].text:find("Bags: quantity / Bank: quantity", 1, true) and rows[3].text:find("Current/Other", 1, true)
+    and rows[3].text:find("turn it off to list characters", 1, true)
+    and rows[4].text:find("Enable Bank Bags", 1, true) and rows[4].text:find("Show Bank button", 1, true),
+    "concise About search indexes current controls and combined tooltip formats")
 aboutRows, aboutLabels, aboutHeaders = {}, {}, {}
 EllesmereUI.IsSearchPrebuild = function() return false end
 aboutHeight = modules.options.buildPage("About", UIParent, -10)
-Check(#aboutLabels == 6 and headerClears == 1 and aboutRows[1].height == 70 and aboutHeight == 600,
+Check(#aboutLabels == 4 and headerClears == 1 and aboutRows[1].height == 70 and aboutHeight == 400,
     "About renders auto-sized multiline paragraphs with surrounding extension styling")
-Check(aboutLabels[1].text:find("no other Extend addon", 1, true)
-    and aboutLabels[2].text:find("Warband", 1, true) and aboutLabels[5].text:find("never erase", 1, true),
+Check(aboutLabels[1].text:find("EUI Standalone Bags", 1, true)
+    and aboutLabels[2].text:find("Warband", 1, true) and aboutLabels[4].text:find("never erase", 1, true),
     "About describes independent dependencies, capture exclusions and profile/inventory separation")
+Check(aboutLabels[4].text:find("without stopping bank capture", 1, true)
+    and aboutLabels[4].text:find("shared layouts and window options", 1, true),
+    "rendered About explains bank access gates without implying capture is disabled or preferences are separate")
 C_AddOns.GetAddOnMetadata = function() return secret end
 aboutRows = {}
 modules.options.buildPage("About", UIParent, 0)
@@ -1390,7 +1419,7 @@ Check(not aboutRows[1]._labelText:find("Version", 1, true), "unreadable TOC vers
 EllesmereUI.Widgets.Spacer, EllesmereUI.MakeFont = nil, nil
 rows = {}
 modules.options.buildPage("About", UIParent, 0)
-Check(#rows == 6 and rows[1].type == "spacer" and rows[1].tooltip == rows[1].text,
+Check(#rows == 4 and rows[1].type == "spacer" and rows[1].tooltip == rows[1].text,
     "older EUI without paragraph helpers still exposes read-only About information")
 EllesmereUI.Widgets.Spacer, EllesmereUI.MakeFont, EllesmereUI.Widgets.SectionHeader = oldSpacer, oldFont, oldSection
 EllesmereUIExtend.GetSettings, ns.ToggleViewer = oldSettings, oldToggle
@@ -1422,8 +1451,8 @@ local framesBeforeAltPage = #frames
 modules.options.buildPage("Snapshot Bags", UIParent, 0)
 for _, row in ipairs(rows) do
     if row.text == "Show snapshot counts in tooltips" then altTooltip = row end
-    if row.text == "Enable Bank Snapshot viewer" then bankEnable = row end
-    if row.text == "Show Bank Snapshot button" then bankButtonControl = row end
+    if row.text == "Enable Bank Bags" then bankEnable = row end
+    if row.text == "Show Bank button" then bankButtonControl = row end
     if row.text == "Group by Category" then altGrouping = row end
 end
 for _, row in ipairs(rightRows) do
@@ -1434,6 +1463,16 @@ end
 Check(altEnable and altTooltip and altDisplay and altGrouping and #frames == framesBeforeAltPage,
     "Alt Bags settings are searchable without creating inventory or viewer widgets")
 Check(bankEnable and bankButtonControl and compressControl, "consolidated page exposes viewer, visibility and tooltip-format controls")
+Check(rows[1] == bankEnable and rightRows[1] == altEnable and rows[#rows] == altTooltip
+    and rightRows[#rightRows] == compressControl, "enable controls occupy the first row and tooltip controls the final row")
+local liveRows, liveRightRows, prebuild = rows, rightRows, EllesmereUI.IsSearchPrebuild
+rows, rightRows = {}, {}
+EllesmereUI.IsSearchPrebuild = function() return true end
+modules.options.buildPage("Snapshot Bags", UIParent, 0)
+Check(rows[1].text == "Enable Bank Bags" and rightRows[1].text == "Enable Alt Bags"
+    and rows[#rows].text == "Show snapshot counts in tooltips" and rightRows[#rightRows].text == "Compress tooltip counts"
+    and #frames == framesBeforeAltPage, "settings search prebuild preserves row order without creating runtime frames")
+rows, rightRows, EllesmereUI.IsSearchPrebuild = liveRows, liveRightRows, prebuild
 compressControl.setValue(false)
 Check(settings.compressTooltipCounts and compressControl.disabled(), "compression callback requires snapshot tooltips enabled")
 editing = true; altEnable.setValue(true); editing = false
@@ -1555,8 +1594,11 @@ EllesmereUI.OpenPlugin = function(id, module, page)
 end
 ns.RefreshViewer()
 native.settingsButton:GetScript("OnClick")()
-Check(openedSettings == 1 and native:IsShown() and native.settingsButton.point[2] == native.switchButton,
-    "settings icon sits next to switching and opens settings without closing the viewer")
+Check(openedSettings == 1 and native:IsShown() and native.settingsButton.point[1] == "RIGHT"
+    and native.settingsButton.point[2].label.text == "X"
+    and native.switchButton.point[1] == "LEFT" and native.switchButton.point[2] == native.header
+    and native.switchButton.point[4] == 8 and native.title.point[4] == 44,
+    "switch icon occupies the far-left header without title overlap; settings remains beside close on the right")
 editing = true; native.settingsButton:GetScript("OnClick")(); editing = false
 combat = true; native.settingsButton:GetScript("OnClick")(); combat = false
 Check(openedSettings == 1, "settings navigation callbacks enforce Edit Mode and combat locks")
@@ -1674,6 +1716,8 @@ bankEnable.setValue(false)
 Check(native:IsShown() and native.source == "bags" and native.search.text == "100"
     and not ns.BagButton:IsShown() and not native.switchButton:IsShown() and settings.showButton,
     "disabling bank viewer switches seamlessly to enabled Alt Bags and preserves visibility preference")
+Check(native.title.point[4] == 12 and native.settingsButton.point[2].label.text == "X",
+    "hiding the switch icon restores title space without moving the settings icon")
 ns.ToggleViewer(); ns.SwitchViewer("bank"); SlashCmdList.ELLESMEREUIEXTENDBAGS()
 Check(native.source == "bags" and native:IsShown(), "disabled bank viewer blocks bank footer, switching and slash entry")
 Check(bankButtonControl.disabled(), "bank button visibility control explains viewer prerequisite")

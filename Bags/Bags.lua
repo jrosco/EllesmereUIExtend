@@ -15,6 +15,10 @@ function ns.WindowStrata(value)
 end
 
 function addon.Settings() return core.GetSettings("bags") end
+function addon.Reset()
+    if ns.Editing() then return false end
+    return core.ResetFeature("bags")
+end
 function addon.Refresh()
     if ns.RefreshInventoryCapture then ns.RefreshInventoryCapture() end
     if ns.RefreshCountTooltips then ns.RefreshCountTooltips() end

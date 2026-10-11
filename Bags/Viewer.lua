@@ -352,12 +352,12 @@ local function Build()
         if ns.Editing() or not ns.AltBagsEnabled() or not ns.BankViewerEnabled() then return end
         ns.SwitchViewer(source == "bank" and "bags" or "bank")
     end, "Switch snapshot source", "header")
-    f.switchButton:SetPoint("RIGHT", close, "LEFT", -8, 0)
+    f.switchButton:SetPoint("LEFT", header, "LEFT", 8, 0)
     f.switchButton.icon = f.switchButton:CreateTexture(nil, "ARTWORK")
     f.switchButton.icon:SetAllPoints()
     f.settingsButton = Button(header, "", 24, function() ns.OpenSettings() end,
         "Open Extend Bags settings", "header")
-    f.settingsButton:SetPoint("RIGHT", f.switchButton, "LEFT", -8, 0)
+    f.settingsButton:SetPoint("RIGHT", close, "LEFT", -8, 0)
     f.settingsButton.icon = f.settingsButton:CreateTexture(nil, "ARTWORK")
     f.settingsButton.icon:SetAllPoints()
     local settingsArt = ns.Read(f.settingsButton.icon.SetTexture, f.settingsButton.icon, ns.MediaPath("icons\\cogs-3.png"))
@@ -750,13 +750,12 @@ function ns.RefreshViewer()
     f.source = source
     f.title:SetText(source == "bags" and "Alt Bags" or "Bank Snapshot")
     f.switchButton:SetShown(ns.AltBagsEnabled() == true and ns.BankViewerEnabled())
+    f.title:ClearAllPoints()
+    f.title:SetPoint("LEFT", f.header, "LEFT", f.switchButton:IsShown() and 44 or 12, 0)
     f.switchButton:SetEnabled(not ns.Editing())
     f.settingsButton:SetEnabled(not ns.Editing() and type(host.OpenPlugin) == "function")
     f.settingsButton.tip = type(host.OpenPlugin) == "function" and "Open Extend Bags settings"
         or "Update EUI to open Extend Bags settings directly."
-    f.settingsButton:ClearAllPoints()
-    f.settingsButton:SetPoint("RIGHT", f.switchButton:IsShown() and f.switchButton or f.header,
-        f.switchButton:IsShown() and "LEFT" or "RIGHT", f.switchButton:IsShown() and -8 or -40, 0)
     f.switchButton.tip = source == "bank" and "Switch to Alt Bags" or "Switch to Bank Snapshot"
     ns.PaintCategoryIcon(f.switchButton.icon, source == "bank" and "Interface\\Icons\\INV_Misc_Bag_10"
         or "Interface\\Icons\\INV_Misc_Coin_01", false)
