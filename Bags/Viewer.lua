@@ -6,9 +6,20 @@ local selectedCategory
 local resetScroll = true
 local source = "bank"
 function ns.ViewSettings()
+    return ns.Addon.Settings()
+end
+function ns.BankViewerEnabled()
     local settings = ns.Addon.Settings()
-    if source == "bags" then return settings.altBags or {} end
-    return settings
+    return settings and not ns.Secret(settings.bankViewerEnabled) and settings.bankViewerEnabled ~= false
+end
+function ns.OpenSettings()
+    local host = ns.GetHost()
+    if not host or ns.Editing() or type(host.OpenPlugin) ~= "function" then return end
+    if type(InCombatLockdown) == "function" then
+        local combat, ok = ns.Read(InCombatLockdown)
+        if not ok or combat ~= false then return end
+    end
+    ns.Read(host.OpenPlugin, EllesmereUIExtend.PluginID or "EllesmereUIExtend", "Bags", "Snapshot Bags")
 end
 local function ViewHeight(f) return math.max(1, f:GetHeight() - 180) end
 local function WindowSettings()
@@ -338,12 +349,19 @@ local function Build()
     local close = Button(header, "X", 24, function() f:Hide() end)
     close:SetPoint("RIGHT", -8, 0)
     f.switchButton = Button(header, "", 24, function()
-        if ns.Editing() or not ns.AltBagsEnabled() then return end
+        if ns.Editing() or not ns.AltBagsEnabled() or not ns.BankViewerEnabled() then return end
         ns.SwitchViewer(source == "bank" and "bags" or "bank")
     end, "Switch snapshot source", "header")
     f.switchButton:SetPoint("RIGHT", close, "LEFT", -8, 0)
     f.switchButton.icon = f.switchButton:CreateTexture(nil, "ARTWORK")
     f.switchButton.icon:SetAllPoints()
+    f.settingsButton = Button(header, "", 24, function() ns.OpenSettings() end,
+        "Open Extend Bags settings", "header")
+    f.settingsButton:SetPoint("RIGHT", f.switchButton, "LEFT", -8, 0)
+    f.settingsButton.icon = f.settingsButton:CreateTexture(nil, "ARTWORK")
+    f.settingsButton.icon:SetAllPoints()
+    local settingsArt = ns.Read(f.settingsButton.icon.SetTexture, f.settingsButton.icon, ns.MediaPath("icons\\cogs-3.png"))
+    f.settingsButton.label:SetText(settingsArt == true and "" or "S")
     f.lock = Button(f, "", 13, function()
         if ns.Editing() then return end
         StopGesture()
@@ -680,7 +698,7 @@ local function Build()
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             if ns.ClearCountTooltip then ns.ClearCountTooltip(GameTooltip) end
             if not pcall(GameTooltip.SetHyperlink, GameTooltip, entry.item.link) then HideTooltip(); return end
-            if ns.AddBankSnapshotCount then ns.AddBankSnapshotCount(GameTooltip, entry.item.itemID, true) end
+            if ns.AddSnapshotCounts then ns.AddSnapshotCounts(GameTooltip, entry.item.itemID) end
             GameTooltip:Show()
         end)
         button:SetScript("OnLeave", HideTooltip)
@@ -716,6 +734,8 @@ end
 function ns.RefreshViewer()
     if not viewer or not viewer:IsShown() then return end
     local f = viewer
+    local host = ns.GetHost()
+    if not host then f:Hide(); return end
     -- Search, item-name arrival and capture refreshes invalidate open choices
     -- rather than leaving a stale count/menu callback on either EUI generation.
     f.CloseCharacterMenu()
@@ -723,10 +743,20 @@ function ns.RefreshViewer()
     if source == "bags" and not ns.AltBagsEnabled() then
         source, selectedTab, selectedCategory, resetScroll = "bank", nil, nil, true
     end
+    if source == "bank" and not ns.BankViewerEnabled() then
+        if not ns.AltBagsEnabled() then f:Hide(); return end
+        source, selectedTab, selectedCategory, resetScroll = "bags", nil, nil, true
+    end
     f.source = source
     f.title:SetText(source == "bags" and "Alt Bags" or "Bank Snapshot")
-    f.switchButton:SetShown(ns.AltBagsEnabled() == true)
+    f.switchButton:SetShown(ns.AltBagsEnabled() == true and ns.BankViewerEnabled())
     f.switchButton:SetEnabled(not ns.Editing())
+    f.settingsButton:SetEnabled(not ns.Editing() and type(host.OpenPlugin) == "function")
+    f.settingsButton.tip = type(host.OpenPlugin) == "function" and "Open Extend Bags settings"
+        or "Update EUI to open Extend Bags settings directly."
+    f.settingsButton:ClearAllPoints()
+    f.settingsButton:SetPoint("RIGHT", f.switchButton:IsShown() and f.switchButton or f.header,
+        f.switchButton:IsShown() and "LEFT" or "RIGHT", f.switchButton:IsShown() and -8 or -40, 0)
     f.switchButton.tip = source == "bank" and "Switch to Alt Bags" or "Switch to Bank Snapshot"
     ns.PaintCategoryIcon(f.switchButton.icon, source == "bank" and "Interface\\Icons\\INV_Misc_Bag_10"
         or "Interface\\Icons\\INV_Misc_Coin_01", false)
@@ -1033,7 +1063,7 @@ end
 
 function ns.SwitchViewer(kind)
     if not ns.GetHost() or ns.Editing() or (kind ~= "bank" and kind ~= "bags")
-        or (kind == "bags" and not ns.AltBagsEnabled()) then return end
+        or (kind == "bags" and not ns.AltBagsEnabled()) or (kind == "bank" and not ns.BankViewerEnabled()) then return end
     source, selectedTab, selectedCategory, resetScroll = kind, nil, nil, true
     if viewer and viewer:IsShown() then
         viewer.CloseCharacterMenu()
@@ -1049,6 +1079,7 @@ end
 function ns.ToggleViewer(kind)
     if not ns.GetHost() or ns.Editing() then return end
     kind = kind or "bank"
+    if kind == "bank" and not ns.BankViewerEnabled() then return end
     if kind == "bags" and not ns.AltBagsEnabled() then return end
     local f = viewer or Build()
     if f:IsShown() and source == kind then f:Hide() else ns.SwitchViewer(kind) end
@@ -1082,7 +1113,7 @@ function ns.AttachButton()
         or (ns.DB and "Visit the banker first"
             or "Bank snapshot storage is unavailable (unsupported database format).")
     button:SetEnabled(true) -- Keep the empty-state guidance accessible before the first visit.
-    ns.BagButton:SetShown(ns.Addon.Settings().showButton)
+    ns.BagButton:SetShown(ns.Addon.Settings().showButton and ns.BankViewerEnabled())
     if ns.AltBagsEnabled() and not ns.AltBagButton then
         local altButton = Button(bags, "Alt Bags", 125, function() ns.ToggleViewer("bags") end,
             "View saved inventory bags for characters you have logged into with Alt Bags enabled.")
@@ -1091,7 +1122,7 @@ function ns.AttachButton()
     end
     if ns.AltBagButton then
         ns.AltBagButton:ClearAllPoints()
-        if ns.Addon.Settings().showButton then ns.AltBagButton:SetPoint("RIGHT", ns.BagButton, "LEFT", -6, 0)
+        if ns.Addon.Settings().showButton and ns.BankViewerEnabled() then ns.AltBagButton:SetPoint("RIGHT", ns.BagButton, "LEFT", -6, 0)
         else ns.AltBagButton:SetPoint("TOPRIGHT", bags, "BOTTOMRIGHT", -8, -4) end
         ns.AltBagButton:SetShown(ns.AltBagsEnabled() == true)
     end

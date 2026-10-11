@@ -24,27 +24,21 @@ end
 core.RegisterFeature("bags", {
     defaults = { showButton = true, groupByCategory = false, display = "match", collapsedCategories = {},
         windowScale = 1, frameStrata = "DIALOG", sidebarCollapsed = false, tooltipBankCounts = false,
-        altBagsEnabled = false, tooltipBagCounts = false,
-        altBags = { display = "match", groupByCategory = false, collapsedCategories = {} },
+        altBagsEnabled = false, bankViewerEnabled = true, compressTooltipCounts = true,
         window = { width = 620, height = 510, x = 0, y = 0, locked = false } },
     normalize = function(settings)
-        settings.showButton = settings.showButton ~= false
-        settings.groupByCategory = settings.groupByCategory == true
+        settings.showButton = not ns.Secret(settings.showButton) and settings.showButton ~= false
+        settings.groupByCategory = not ns.Secret(settings.groupByCategory) and settings.groupByCategory == true
         settings.sidebarCollapsed = not ns.Secret(settings.sidebarCollapsed) and settings.sidebarCollapsed == true
         settings.tooltipBankCounts = not ns.Secret(settings.tooltipBankCounts) and settings.tooltipBankCounts == true
+        -- Consolidate the two current tooltip preferences once. No inventory or
+        -- legacy addon settings are imported; the existing bank preference is
+        -- now the shared snapshot-tooltip switch.
+        if not ns.Secret(settings.tooltipBagCounts) and settings.tooltipBagCounts == true then settings.tooltipBankCounts = true end
+        settings.tooltipBagCounts = nil
+        settings.bankViewerEnabled = not ns.Secret(settings.bankViewerEnabled) and settings.bankViewerEnabled ~= false
+        settings.compressTooltipCounts = not ns.Secret(settings.compressTooltipCounts) and settings.compressTooltipCounts ~= false
         settings.altBagsEnabled = not ns.Secret(settings.altBagsEnabled) and settings.altBagsEnabled == true
-        settings.tooltipBagCounts = not ns.Secret(settings.tooltipBagCounts) and settings.tooltipBagCounts == true
-        local alt = not ns.Secret(settings.altBags) and type(settings.altBags) == "table" and settings.altBags or {}
-        alt.groupByCategory = not ns.Secret(alt.groupByCategory) and alt.groupByCategory == true
-        if not ns.String(alt.display) or (alt.display ~= "grid" and alt.display ~= "compact" and alt.display ~= "list") then alt.display = "match" end
-        local altCollapsed = {}
-        if not ns.Secret(alt.collapsedCategories) and type(alt.collapsedCategories) == "table" then
-            for key, value in pairs(alt.collapsedCategories) do
-                if ns.String(key) and #key <= 256 and not ns.Secret(value) and value == true then altCollapsed[key] = true end
-            end
-        end
-        alt.collapsedCategories = altCollapsed
-        settings.altBags = alt
         settings.windowScale = ns.WindowScale(settings.windowScale)
         settings.frameStrata = ns.WindowStrata(settings.frameStrata)
         local collapsed = {}
@@ -61,7 +55,7 @@ core.RegisterFeature("bags", {
         window.y = math.max(-10000, math.min(10000, ns.Number(window.y) or 0))
         window.locked = not ns.Secret(window.locked) and window.locked == true
         settings.window = window
-        if settings.display ~= "grid" and settings.display ~= "compact" and settings.display ~= "list" then
+        if not ns.String(settings.display) or (settings.display ~= "grid" and settings.display ~= "compact" and settings.display ~= "list") then
             settings.display = "match"
         end
         return settings
