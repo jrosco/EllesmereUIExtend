@@ -3,10 +3,15 @@ if not ns.Addon then return end
 
 local marked = setmetatable({}, { __mode = "k" })
 local hookedTooltip, processorInstalled, legacyInstalled
-local function Enabled()
+local function Enabled(source)
     if not ns.GetHost() then return false end
     local settings = ns.Addon.Settings()
-    return settings and not ns.Secret(settings.tooltipBankCounts) and settings.tooltipBankCounts == true
+    if not settings then return false end
+    if source == "bags" then
+        return ns.AltBagsEnabled() and not ns.Secret(settings.tooltipBagCounts) and settings.tooltipBagCounts == true
+    end
+    if source == "bank" then return not ns.Secret(settings.tooltipBankCounts) and settings.tooltipBankCounts == true end
+    return Enabled("bank") or Enabled("bags")
 end
 function ns.ClearCountTooltip(tooltip) marked[tooltip] = nil end
 local function ClassColor(key)
@@ -25,15 +30,19 @@ local function BankWindowOpen()
         or ns.Read(EUI_BankFrame and EUI_BankFrame.IsShown, EUI_BankFrame) == true
         or ns.Read(EllesmereUIExtendBagsViewer and EllesmereUIExtendBagsViewer.IsShown, EllesmereUIExtendBagsViewer) == true
 end
-function ns.AddBankSnapshotCount(tooltip, itemID, named)
-    if not Enabled() or marked[tooltip] or type(tooltip.AddLine) ~= "function" then return end
-    local stock = ns.BankStock(itemID)
+local function AddStock(tooltip, itemID, named, source)
+    if not Enabled(source) or (marked[tooltip] and marked[tooltip][source]) or type(tooltip.AddLine) ~= "function" then return end
+    local stock = ns.Stock(source, itemID)
     if not stock or stock.total <= 0 then return end
     local current = ns.CharacterKey()
     if not current then return end
     ns.Read(tooltip.AddLine, tooltip, " ")
-    local _, headingOK = ns.Read(tooltip.AddLine, tooltip, "Bank stock (snapshots)", 1, 0.82, 0.45)
-    if headingOK then marked[tooltip] = true end
+    local function Mark()
+        marked[tooltip] = marked[tooltip] or {}
+        marked[tooltip][source] = true
+    end
+    local _, headingOK = ns.Read(tooltip.AddLine, tooltip, source == "bags" and "Inventory bags (snapshots)" or "Bank stock (snapshots)", 1, 0.82, 0.45)
+    if headingOK then Mark() end
     local function Row(label, count, r, g, b)
         if count <= 0 then return end
         local text = string.format("%.0f", count)
@@ -41,7 +50,7 @@ function ns.AddBankSnapshotCount(tooltip, itemID, named)
         if not ok then
             _, ok = ns.Read(tooltip.AddLine, tooltip, label .. ": |cffffebb8" .. text .. "|r", r, g, b)
         end
-        if ok then marked[tooltip] = true end
+        if ok then Mark() end
     end
     local own = 0
     for _, character in ipairs(stock.characters) do if character.key == current then own = character.count; break end end
@@ -52,9 +61,13 @@ function ns.AddBankSnapshotCount(tooltip, itemID, named)
             if character.key ~= current then Row(character.key, character.count, ClassColor(character.key)) end
         end
     else
-        Row("Current bank", own, 0.4, 0.85, 0.72)
-        Row("Other banks", stock.total - own, 0.65, 0.72, 0.95)
+        Row(source == "bags" and "Current bags" or "Current bank", own, 0.4, 0.85, 0.72)
+        Row(source == "bags" and "Other bags" or "Other banks", stock.total - own, 0.65, 0.72, 0.95)
     end
+end
+function ns.AddBankSnapshotCount(tooltip, itemID, named)
+    AddStock(tooltip, itemID, named, "bank")
+    AddStock(tooltip, itemID, named, "bags")
 end
 local function TooltipContext(tooltip)
     if tooltip ~= GameTooltip then return end
@@ -113,7 +126,8 @@ function ns.InstallCountTooltips()
 end
 function ns.RefreshCountTooltips()
     ns.InstallCountTooltips()
-    if not Enabled() then ns.InvalidateBankCounts() end
+    if not Enabled("bank") then ns.InvalidateBankCounts() end
+    if not Enabled("bags") then ns.InvalidateBagCounts() end
     -- Remove an already-visible added line after profile/reset/capture changes;
     -- native content is rebuilt on its next hover/update, never edited in place.
     if GameTooltip and marked[GameTooltip] then

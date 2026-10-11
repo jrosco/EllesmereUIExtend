@@ -2,7 +2,7 @@
 ## Title: |cffadd8e6EllesmereUI|r Extend Bags
 ## Category: |cffadd8e6Ellesmere|rUI
 ## Group: EllesmereUI
-## Notes: Read-only personal bank snapshots; opens on the current character with alt browsing.
+## Notes: Read-only personal bank and optional Alt Bags inventory snapshots, with shared search and character browsing.
 ## Author: jrosco
 # Source placeholder; create-releases.yaml replaces this with the planned version before packaging, without committing it.
 ## Version: 0.0.0

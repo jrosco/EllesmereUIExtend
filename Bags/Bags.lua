@@ -16,6 +16,7 @@ end
 
 function addon.Settings() return core.GetSettings("bags") end
 function addon.Refresh()
+    if ns.RefreshInventoryCapture then ns.RefreshInventoryCapture() end
     if ns.RefreshCountTooltips then ns.RefreshCountTooltips() end
     if ns.AttachButton then ns.AttachButton() end
     if ns.RefreshViewer then ns.RefreshViewer() end
@@ -23,12 +24,27 @@ end
 core.RegisterFeature("bags", {
     defaults = { showButton = true, groupByCategory = false, display = "match", collapsedCategories = {},
         windowScale = 1, frameStrata = "DIALOG", sidebarCollapsed = false, tooltipBankCounts = false,
+        altBagsEnabled = false, tooltipBagCounts = false,
+        altBags = { display = "match", groupByCategory = false, collapsedCategories = {} },
         window = { width = 620, height = 510, x = 0, y = 0, locked = false } },
     normalize = function(settings)
         settings.showButton = settings.showButton ~= false
         settings.groupByCategory = settings.groupByCategory == true
         settings.sidebarCollapsed = not ns.Secret(settings.sidebarCollapsed) and settings.sidebarCollapsed == true
         settings.tooltipBankCounts = not ns.Secret(settings.tooltipBankCounts) and settings.tooltipBankCounts == true
+        settings.altBagsEnabled = not ns.Secret(settings.altBagsEnabled) and settings.altBagsEnabled == true
+        settings.tooltipBagCounts = not ns.Secret(settings.tooltipBagCounts) and settings.tooltipBagCounts == true
+        local alt = not ns.Secret(settings.altBags) and type(settings.altBags) == "table" and settings.altBags or {}
+        alt.groupByCategory = not ns.Secret(alt.groupByCategory) and alt.groupByCategory == true
+        if not ns.String(alt.display) or (alt.display ~= "grid" and alt.display ~= "compact" and alt.display ~= "list") then alt.display = "match" end
+        local altCollapsed = {}
+        if not ns.Secret(alt.collapsedCategories) and type(alt.collapsedCategories) == "table" then
+            for key, value in pairs(alt.collapsedCategories) do
+                if ns.String(key) and #key <= 256 and not ns.Secret(value) and value == true then altCollapsed[key] = true end
+            end
+        end
+        alt.collapsedCategories = altCollapsed
+        settings.altBags = alt
         settings.windowScale = ns.WindowScale(settings.windowScale)
         settings.frameStrata = ns.WindowStrata(settings.frameStrata)
         local collapsed = {}
@@ -80,6 +96,12 @@ end
 local host = ns.GetHost()
 if host and host.IS_FOREVER then pcall(frame.RegisterEvent, frame, "BAG_CONTAINER_UPDATE") end
 frame:SetScript("OnEvent", function(_, event, name)
+    if event == "PLAYER_LOGOUT" then
+        if ns.StopInventoryCapture then ns.StopInventoryCapture() end
+    elseif event == "PLAYER_LOGIN" or event == "BAG_UPDATE" or event == "BAG_UPDATE_DELAYED"
+        or event == "BAG_CONTAINER_UPDATE" or event == "GET_ITEM_INFO_RECEIVED" then
+        if ns.RequestInventoryCapture then ns.RequestInventoryCapture() end
+    end
     if event == "ADDON_LOADED" then
         if name == addonName and ns.InitializeDB then ns.InitializeDB() end
     elseif event == "PLAYER_LOGIN" then

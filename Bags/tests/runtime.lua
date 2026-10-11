@@ -1124,8 +1124,8 @@ ns.DB.bags = { [ns.CharacterKey()] = { preservedCarriedData = true } }
 local savedBagData = ns.DB.bags
 ns.DB.classes = { [ns.CharacterKey()] = "MAGE", ["Count Alt - Realm"] = "WARRIOR" }
 RAID_CLASS_COLORS = { MAGE = { r = 0.25, g = 0.78, b = 0.92 }, WARRIOR = { r = 0.78, g = 0.61, b = 0.43 } }
-Check(not ns.ScanBags and not ns.CaptureBags and not ns.InventoryEventFrame,
-    "bank-only tooltip design has no carried-bag scanner, captures or polling frame")
+Check(not ns.AltBagsEnabled() and not ns.ScanBags() and not ns.InventoryEventFrame,
+    "default bank-only operation does not create an inventory scanner frame or read bags")
 local countControl
 rows, rightRows = {}, {}
 modules.options.buildPage("Bank Snapshot", {}, 0)
@@ -1338,8 +1338,9 @@ ClearCountTip(bagItem); postHook(GameTooltip, { id = 100 })
 Check(#GameTooltip.lines == 0, "unsupported/missing snapshot database has no tooltip count")
 Check(inventoryReads == 0, "bank-stock tooltip hovers never query live bag or bank containers")
 -- About page is read-only, searchable and does not prebuild the snapshot viewer.
-Check(#modules.options.pages == 2 and modules.options.pages[1] == "Bank Snapshot" and modules.options.pages[2] == "About",
-    "Bags registers About after the existing default settings page")
+Check(#modules.options.pages == 3 and modules.options.pages[1] == "Bank Snapshot"
+    and modules.options.pages[2] == "Alt Bags" and modules.options.pages[3] == "About",
+    "Bags retains the default bank page and registers Alt Bags and About")
 local aboutRows, aboutLabels, aboutHeaders = {}, {}, {}
 local oldSpacer, oldFont, oldSection = EllesmereUI.Widgets.Spacer, EllesmereUI.MakeFont, EllesmereUI.Widgets.SectionHeader
 local oldSettings, oldToggle = EllesmereUIExtend.GetSettings, ns.ToggleViewer
@@ -1391,5 +1392,257 @@ Check(#rows == 6 and rows[1].type == "spacer" and rows[1].tooltip == rows[1].tex
     "older EUI without paragraph helpers still exposes read-only About information")
 EllesmereUI.Widgets.Spacer, EllesmereUI.MakeFont, EllesmereUI.Widgets.SectionHeader = oldSpacer, oldFont, oldSection
 EllesmereUIExtend.GetSettings, ns.ToggleViewer = oldSettings, oldToggle
+-- Alt Bags: opt-in capture, shared rendering, source-labelled search and stock.
+native:Hide()
+settings = modules.feature.normalize({})
+ns.DB = { format = 1, characters = {
+    [ns.CharacterKey()] = { tabs = { CountTab(6, { CountItem(100, 20) }) }, updatedAt = 50 },
+    ["Inventory Alt - Realm"] = { tabs = { CountTab(6, { CountItem(100, 7) }) } },
+}, bags = savedBagData }
+EllesmereUIExtendBagsDB = ns.DB
+ns.InvalidateBankCounts(); ns.InvalidateBagCounts()
+Check(not settings.altBagsEnabled and not settings.tooltipBagCounts and settings.altBags.display == "match",
+    "Alt Bags and inventory tooltip quantities default off with independent display defaults")
+local normalizedSecret = modules.feature.normalize({ altBagsEnabled = secret, tooltipBagCounts = secret,
+    altBags = { groupByCategory = secret, display = secret, collapsedCategories = { bad = secret, good = true } } })
+Check(not normalizedSecret.altBagsEnabled and not normalizedSecret.tooltipBagCounts
+    and not normalizedSecret.altBags.groupByCategory and normalizedSecret.altBags.display == "match"
+    and not normalizedSecret.altBags.collapsedCategories.bad and normalizedSecret.altBags.collapsedCategories.good,
+    "Alt Bags defaults reject secret flags/display/collapse settings")
+local altEnable, altTooltip, altDisplay, altGrouping
+rows, rightRows = {}, {}
+local framesBeforeAltPage = #frames
+modules.options.buildPage("Alt Bags", UIParent, 0)
+for _, row in ipairs(rows) do
+    if row.text == "Enable Alt Bags" then altEnable = row end
+    if row.text == "Group by Category" then altGrouping = row end
+end
+for _, row in ipairs(rightRows) do
+    if row.text == "Show inventory stock in tooltips" then altTooltip = row end
+    if row.text == "Inventory display" then altDisplay = row end
+end
+Check(altEnable and altTooltip and altDisplay and altGrouping and #frames == framesBeforeAltPage,
+    "Alt Bags settings are searchable without creating inventory or viewer widgets")
+altTooltip.setValue(true)
+Check(not settings.tooltipBagCounts and altTooltip.disabled(), "inventory tooltip callback requires Alt Bags enabled")
+editing = true; altEnable.setValue(true); editing = false
+altEnable.setValue(secret)
+Check(not settings.altBagsEnabled, "enable callback respects Edit Mode and secret flags")
+local altOwner = settings
+settings = modules.feature.normalize({})
+altEnable.setValue(true); altDisplay.setValue("list"); altGrouping.setValue(true)
+Check(not settings.altBagsEnabled and settings.altBags.display == "match" and not settings.altBags.groupByCategory,
+    "stale Alt Bags callbacks cannot mutate a replacement profile")
+settings = altOwner
+local oldIndices, oldContainer = Enum.BagIndex, C_Container
+Enum.BagIndex = { Backpack = 0, Bag_1 = 1, Bag_2 = 2, Bag_3 = 3, Bag_4 = 4, ReagentBag = 5,
+    CharacterBankTab_1 = 6, AccountBankTab_1 = 12 }
+local carriedSizes = { [0] = 4, [1] = 2, [5] = 2 }
+local carriedItems = { [0] = { Item(100, 20), Item(100, 20) }, [1] = { Item(101, 3) }, [5] = { Item(100, 5) } }
+local carriedReads = 0
+C_Container = {
+    GetContainerNumSlots = function(id)
+        Check(id >= 0 and id <= 5, "inventory capture never reads bank, Warband, guild or equipment")
+        carriedReads = carriedReads + 1
+        return carriedSizes[id] or 0
+    end,
+    GetContainerItemInfo = function(id, slot) return carriedItems[id] and carriedItems[id][slot] end,
+}
+Event("BAG_UPDATE_DELAYED")
+Check(carriedReads == 0 and not ns.InventoryEventFrame, "disabled Alt Bags does not scan or create a retry frame")
+altEnable.setValue(true)
+local function InventoryTick()
+    local frame = ns.InventoryEventFrame
+    local callback = frame and frame:GetScript("OnUpdate")
+    if callback then callback(frame, 0.25) end
+end
+InventoryTick()
+Check(not ns.DB.inventories, "first inventory scan does not publish partially loaded data")
+InventoryTick()
+local captured = ns.Snapshot("bags", ns.CharacterKey())
+Check(captured and #captured.tabs == 3 and captured.tabs[3].bagID == 5 and ns.BagStock(100).total == 45,
+    "stable inventory capture includes backpack, equipped inventory bags and carried reagent bag")
+Check(not ns.InventoryEventFrame:GetScript("OnUpdate") and ns.DB.bags == savedBagData,
+    "successful inventory capture stops retries and leaves historical data untouched")
+local readsAfterCapture = carriedReads
+InventoryTick(); ns.BagStock(100); ns.BagStock(101)
+Check(carriedReads == readsAfterCapture, "no continuous polling or live container reads for cached stock")
+carriedItems[0][1].stackCount = secret
+Event("BAG_UPDATE_DELAYED"); InventoryTick(); InventoryTick()
+Check(ns.Snapshot("bags", ns.CharacterKey()) == captured, "secret inventory quantity retains last complete snapshot")
+for i = 1, 34 do InventoryTick() end
+Check(not ns.InventoryEventFrame:GetScript("OnUpdate"), "unavailable inventory retries are bounded, not background polling")
+carriedItems[0][1].stackCount = 30
+Event("BAG_UPDATE_DELAYED"); InventoryTick()
+carriedItems[0][1].stackCount = 35
+InventoryTick()
+Check(ns.Snapshot("bags", ns.CharacterKey()) == captured, "changed inventory must settle across two complete scans")
+InventoryTick()
+captured = ns.Snapshot("bags", ns.CharacterKey())
+Check(ns.BagStock(100).total == 60 and not ns.InventoryEventFrame:GetScript("OnUpdate"),
+    "inventory changes invalidate the stock index and stop after a stable commit")
+local bagEnum = Enum.BagIndex.Bag_2
+Enum.BagIndex.Bag_2 = nil
+Event("BAG_UPDATE_DELAYED")
+Check(not ns.InventoryAvailable() and not ns.InventoryEventFrame:GetScript("OnUpdate")
+    and not ns.ScanBags() and ns.Snapshot("bags", ns.CharacterKey()) == captured,
+    "missing required inventory enum gates capture without deleting saved snapshots")
+Enum.BagIndex.Bag_2 = Enum.BagIndex.Bag_1
+Check(not ns.InventoryAvailable(), "duplicate inventory enums cannot publish a partial snapshot")
+Enum.BagIndex.Bag_2 = bagEnum
+local reagentEnum = Enum.BagIndex.ReagentBag
+Enum.BagIndex.ReagentBag = nil
+local standardOnly = ns.ScanBags()
+Check(standardOnly and #standardOnly == 2 and standardOnly[2].bagID == 1,
+    "clients without a reagent-bag enum safely retain supported standard-bag capture")
+Enum.BagIndex.ReagentBag = reagentEnum
+local storedInventories = ns.DB.inventories
+ns.DB.inventories = "future format"
+Event("BAG_UPDATE_DELAYED")
+Check(not ns.ScanBags() and not ns.InventoryEventFrame:GetScript("OnUpdate") and ns.DB.inventories == "future format",
+    "unsupported inventory section remains untouched and cannot start capture")
+ns.DB.inventories = storedInventories
+local itemGetter = C_Container.GetContainerItemInfo
+C_Container.GetContainerItemInfo = function() error("restricted") end
+Event("BAG_UPDATE_DELAYED"); InventoryTick(); InventoryTick()
+Check(ns.Snapshot("bags", ns.CharacterKey()) == captured, "throwing inventory reads retain saved contents")
+C_Container.GetContainerItemInfo = itemGetter
+local oldLink = carriedItems[0][1].hyperlink
+carriedItems[0][1].hyperlink = nil
+Event("BAG_UPDATE_DELAYED"); InventoryTick(); InventoryTick()
+Check(ns.Snapshot("bags", ns.CharacterKey()) == captured, "missing inventory links retain saved contents")
+carriedItems[0][1].hyperlink = oldLink
+carriedSizes[0] = 0
+Event("BAG_UPDATE_DELAYED"); InventoryTick(); InventoryTick()
+Check(ns.Snapshot("bags", ns.CharacterKey()) == captured, "unavailable backpack capacity cannot publish an empty inventory")
+carriedSizes[0] = 4
+Event("BAG_UPDATE_DELAYED")
+Event("PLAYER_LOGOUT")
+readsAfterCapture = carriedReads; InventoryTick()
+Check(carriedReads == readsAfterCapture and not ns.InventoryEventFrame:GetScript("OnUpdate"), "logout stops inventory capture without querying containers")
+Event("PLAYER_LOGIN"); InventoryTick(); InventoryTick()
+Check(ns.Snapshot("bags", ns.CharacterKey()) and not ns.InventoryEventFrame:GetScript("OnUpdate"), "enabled login captures carried inventory")
+ns.DB.inventories["Inventory Alt - Realm"] = { tabs = { CountTab(0, { CountItem(100, 8), CountItem(100, 9) }) }, updatedAt = 100 }
+ns.DB.inventories["Inventory Only - Realm"] = { tabs = { CountTab(0, { CountItem(100, 4) }) } }
+ns.InvalidateBagCounts()
+local oldManager = EUI_CategoryManager
+EUI_CategoryManager = { GetCategories = function() return { { name = "Everything", _defaultName = "Everything", isCatchAll = true } } end }
+ns.ToggleViewer("bags")
+Check(native:IsShown() and native.source == "bags" and native.title.text == "Alt Bags" and native.switchButton:IsShown()
+    and ns.AltBagButton:IsShown() and ns.AltBagButton.point[2] == ns.BagButton,
+    "Alt Bags opens current inventory and attaches its entry button left of Bank Snapshot")
+Check(native.character.text == ns.CharacterKey() .. " (4)", "inventory occupied-slot total counts stacks once")
+local currentBank = ns.DB.characters[ns.CharacterKey()]
+ns.DB.characters[ns.CharacterKey()] = nil; ns.Addon.Refresh()
+Check(ns.BagButton.tip == "Visit the banker first", "bank entry tooltip never mistakes an active inventory snapshot for bank capture")
+ns.DB.characters[ns.CharacterKey()] = currentBank; ns.InvalidateBankCounts(); ns.Addon.Refresh()
+settings.showButton = false; ns.Addon.Refresh()
+Check(ns.AltBagButton:IsShown() and ns.AltBagButton.point[1] == "TOPRIGHT" and ns.AltBagButton.point[2] == EUI_Bags,
+    "Alt Bags remains accessible at the right-hand footer position when the bank button is hidden")
+settings.showButton = true; ns.Addon.Refresh()
+PickCharacter("Inventory Alt - Realm")
+native.search:SetText("100")
+Check(native.character.text == "Inventory Alt - Realm (Bags: 2 / Bank: 1)" and VisibleSlots(native) == 3,
+    "combined search renders both sources with separate occupied-slot counts: " .. native.character.text .. " / " .. VisibleSlots(native))
+Check(native.headings[1].label.text == "Inventory Bags (2 slots)" and native.headings[2].label.text == "Bank Snapshot (1 slot)",
+    "combined search sections explicitly label inventories versus bank snapshots")
+local geometry = settings.window
+local altSlots, bankSlots = 0, 0
+for _, slot in ipairs(native.slots) do
+    if slot:IsShown() then
+        if slot.entry.source == "bags" then altSlots = altSlots + 1 else bankSlots = bankSlots + 1 end
+        Check(not slot:GetScript("OnClick") and not slot:GetScript("OnDragStart"), "both search sources remain read-only")
+    end
+end
+Check(altSlots == 2 and bankSlots == 1, "source metadata stays distinct on pooled combined-search icons")
+settings.altBags.display, settings.altBags.groupByCategory = "list", true
+ns.RefreshViewer()
+Check(native.headings[1].label.text == "Inventory Bags (2 slots)" and native.headings[3].label.text == "Bank Snapshot (1 slot)"
+    and VisibleSlots(native) == 3, "List grouping retains explicit source headings and continuous category sections")
+native.headings[1]:GetScript("OnClick")(native.headings[1])
+Check(VisibleSlots(native) == 3, "source headings never collapse or mutate category preferences")
+native.headings[2]:GetScript("OnClick")(native.headings[2])
+Check(VisibleSlots(native) == 0 and settings.altBags.collapsedCategories["category:Everything"],
+    "combined List category collapse affects both sections within the active mode only")
+settings.altBags.collapsedCategories = {}
+settings.altBags.display, settings.altBags.groupByCategory = "compact", false
+ns.RefreshViewer()
+Check(VisibleSlots(native) == 3 and native.headings[2].label.text == "Bank Snapshot (1 slot)",
+    "Compact combined search retains distinct source sections")
+settings.altBags.display = "grid"; ns.RefreshViewer()
+native.search:SetText("no-match-at-all")
+Check(VisibleSlots(native) == 0 and native.headings[1].label.text == "Inventory Bags (0 slots)"
+    and native.headings[2].label.text == "Bank Snapshot (0 slots)" and native.message.text == "",
+    "zero-result source headings stay visible without an overlapping empty-view message")
+native.search:SetText("100")
+native.switchButton:GetScript("OnClick")()
+Check(native.source == "bank" and native.search.text == "100" and native.character.text == "Inventory Alt - Realm (Bags: 2 / Bank: 1)"
+    and settings.window == geometry and VisibleSlots(native) == 3, "seamless mode switch preserves character, search and shared geometry")
+PickCharacter("Inventory Only - Realm")
+Check(native.character.text == "Inventory Only - Realm (Bags: 1 / Bank: No snapshot)" and VisibleSlots(native) == 1,
+    "inventory-only characters remain selectable while searching the bank mode")
+native.clearSearch:GetScript("OnClick")()
+Check(native.character.text == "Inventory Only - Realm (No snapshot)" and native.message.text == "Visit the banker first",
+    "clearing search restores active-source totals without selecting a different character")
+ns.SwitchViewer("bags")
+Check(native.character.text == "Inventory Only - Realm (1)" and VisibleSlots(native) == 1, "switching to inventory preserves a bank-uncaptured alt")
+editing = true; ns.SwitchViewer("bank"); editing = false
+Check(native.source == "bags", "mode switching is locked in Edit Mode")
+altDisplay.setValue("list"); altGrouping.setValue(true)
+Check(settings.altBags.display == "list" and settings.altBags.groupByCategory and settings.display == "match"
+    and not settings.groupByCategory, "display and grouping settings are independent between modes")
+local profile = EllesmereUI._bagsDB and EllesmereUI._bagsDB.profile
+if profile then
+    local oldMode = profile.bagDisplayMode
+    settings.altBags.display = "match"; profile.bagDisplayMode = "compact"
+    Check(ns.DisplayMode() == "compact", "Alt Bags Match EUI follows the actual bagDisplayMode host setting")
+    profile.bagDisplayMode = "list"
+    Check(ns.DisplayMode() == "list", "Alt Bags Match EUI supports native List display")
+    profile.bagDisplayMode = oldMode
+end
+settings.altBags.display, settings.altBags.groupByCategory = "grid", false
+native:Hide()
+altTooltip.setValue(true)
+settings.tooltipBankCounts = true
+ns.Addon.Refresh()
+ClearCountTip(bagItem); readsAfterCapture = carriedReads
+postHook(GameTooltip, { id = 100 }); postHook(GameTooltip, { id = 100 })
+local headingsSeen, quantities = {}, {}
+for _, text in ipairs(GameTooltip.lines) do headingsSeen[text] = true; quantities[#quantities + 1] = text end
+Check(headingsSeen["Bank stock (snapshots)"] and headingsSeen["Inventory bags (snapshots)"]
+    and headingsSeen["Current bank: 20"] and headingsSeen["Current bags: 60"] and headingsSeen["Other bags: 21"]
+    and #GameTooltip.lines == 8 and carriedReads == readsAfterCapture,
+    "both tooltip toggles show distinct quantity sections without duplicates or live reads")
+settings.tooltipBankCounts = false; ns.Addon.Refresh()
+ClearCountTip(bagItem); postHook(GameTooltip, { id = 100 })
+Check(#GameTooltip.lines == 4 and GameTooltip.lines[2] == "Inventory bags (snapshots)", "inventory tooltip toggle works independently of bank counts")
+ns.ToggleViewer("bags")
+ClearCountTip(bagItem); postHook(GameTooltip, { id = 100 })
+Check(GameTooltip.lines[3]:find("(you): 60", 1, true) and GameTooltip.lines[4]:find("Inventory Alt - Realm: 17", 1, true),
+    "open Alt Bags uses named character quantities just like Bank Snapshot")
+native.search:SetText("100")
+Event("BAG_UPDATE_DELAYED")
+local inventories = ns.DB.inventories
+altEnable.setValue(false)
+Check(native.source == "bank" and not ns.AltBagButton:IsShown() and not native.switchButton:IsShown()
+    and not ns.InventoryEventFrame:GetScript("OnUpdate") and ns.DB.inventories == inventories,
+    "disabling switches safely to bank mode, hides Alt Bags controls and stops capture without erasing inventory")
+ClearCountTip(bagItem); postHook(GameTooltip, { id = 100 })
+Check(#GameTooltip.lines == 0, "disabled Alt Bags suppresses inventory stock even if its tooltip preference is saved")
+readsAfterCapture = carriedReads; Event("BAG_UPDATE_DELAYED"); InventoryTick()
+Check(carriedReads == readsAfterCapture, "disabled inventory events never scan containers")
+local supportedEnums = Enum.BagIndex
+Enum.BagIndex = nil
+altEnable.setValue(true)
+Check(not settings.altBagsEnabled and altEnable.disabled(), "unsupported-client enable callbacks are gated with a disabled-state explanation")
+Enum.BagIndex = supportedEnums
+settings.altBagsEnabled = true; ns.Addon.Refresh()
+carriedItems = {}
+InventoryTick(); InventoryTick()
+Check(ns.Snapshot("bags", ns.CharacterKey()) and ns.BagStock(100).total == 21,
+    "a completely empty carried inventory is a valid snapshot and invalidates prior item totals")
+settings.altBagsEnabled = false; ns.Addon.Refresh()
+native:Hide()
+Enum.BagIndex, C_Container, EUI_CategoryManager = oldIndices, oldContainer, oldManager
 if standalone then _G.ExtendBagsTest = { ns = ns, frames = frames, host = EllesmereUI, options = modules.options } end
 print("PASS: " .. checks .. " Bags capture, capability, read-only viewer and UI checks")
