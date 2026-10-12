@@ -98,6 +98,7 @@ function CreateFrame(kind, _, parentFrame, template)
     function frame:GetNumPoints() return self.point and 1 or 0 end
     function frame:GetPoint() return unpack(self.point) end
     function frame:SetTexture(path) self.texture = path end
+    function frame:SetTexCoord(...) self.texCoord = { ... } end
     function frame:GetTexture() return self.texture end
     function frame:GetVertexColor() return unpack(self.vertexColor) end
     function frame:SetVertexColor(r, g, b, a) self.vertexColor = { r, g, b, a or 1 } end
@@ -290,6 +291,7 @@ end
 assert(loadfile("Nameplates/Nameplates.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/Borders.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/Glows.lua"))("EllesmereUIExtendNameplates", namespace)
+assert(loadfile("Nameplates/ClassStyles.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/Text.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/Scaling.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/TargetArrows.lua"))("EllesmereUIExtendNameplates", namespace)

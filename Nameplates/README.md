@@ -38,10 +38,19 @@ Settings use a two-column layout with two entries per row; an odd number of sett
 | Glows | Independent Pixel Glow or Auto-Cast Shine, with color and effect settings. Require the corresponding bar master, not a border override. Cast glows temporarily suppress EUI Important Cast Glow and restore its latest state afterward. |
 | Text | Compact slot rows have a popup for content, per-slot color, font size and X/Y offsets. Use EUI setting inherits content; size/offset overrides can still apply to native text. Remove hides that slot for the rule. Add Text Slot restores a free position; the slot-label menu moves text and saved overrides within the health or cast group. Unavailable health/time/target data stays blank. |
 | Target arrows | EUI artwork or a selected style. Arrows remain **current-target indicators**, never arrows on arbitrary matched units. Color/size follow EUI; arrows use Other elements scaling. |
+| Player class | Independent class-color toggles for health-bar fill and player-name text, plus an optional class emblem with left/right placement, 12–64 pixel size and X/Y offsets from -200 to 200. Emblems use Other elements scaling. |
 
 Unreadable root scale values temporarily suspend all scaling categories and release child compensation; unreadable alpha suspends the root opacity multiplier. Saved rules remain unchanged and styling resumes when native values become readable. Latest native secret writes stay native-owned rather than being replaced by older readable snapshots.
 
 The pinned **Style preview** displays the selected rule's saved appearance without evaluating conditions. Health, repeating casts/timers, text, glows and arrows update immediately; hidden previews stop animating. Overrides off, unmatched rules, disabled styling and recycled plates restore the **latest EUI-authored state**, not an initial snapshot. If native cast-spark anchors are restricted, texture styling continues while spark retargeting waits for a later refresh with readable anchors; native anchors are never cleared or guessed.
+
+### PvP class styling
+
+Under **Appearance - Player Class**, class-colored health requires **Override health bar** and takes priority over the saved custom fill color; tapped enemies retain EUI's tapped color. Class-colored names work without **Override text**, preserve native name content and take priority over saved name-slot colors. Turning class modes off restores the rule's custom colors or latest EUI coloring. NPCs and unavailable/restricted classes retain native coloring; unknown classes have no emblem. Missing class APIs or client icon artwork gate the affected controls without deleting saved settings.
+
+**Add PvP preset** explicitly inserts a highest-priority enemy-player rule with both class colors and a 24-pixel left-side class emblem. It includes open-world PvP as well as battlegrounds/arenas and does not modify existing rules or add itself to profiles automatically. Because ordinary appearance uses the first matching rule, move or edit this preset if another rule should take precedence. Keep EUI's current-target arrows enabled for a target cue distinct from class colors; adjust emblem offsets to avoid cast icons and arrows.
+
+The preview uses a **sample Mage** for class colors and artwork, not a live unit. Retail may restrict class identity in instanced PvP: the extension cannot bypass this and leaves EUI's native coloring/fallback intact while omitting the emblem. Verify readability and placement on both Retail and Forever.
 
 Text rows include inherited EUI slots and explicit rule content, omitting hidden positions. Different slots may show the same content with different colors. Existing content-wide saved colors remain a fallback; turning a slot's color override off keeps EUI coloring for that slot without deleting other colors. Older EUI versions without slot-menu helpers add the first free position and offer Move through the popup's Position dropdown.
 

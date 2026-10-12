@@ -69,6 +69,7 @@ assert(loadfile("Nameplates/Scaling.lua"))("EllesmereUIExtendNameplates", namesp
 assert(loadfile("Nameplates/Borders.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/Glows.lua"))("EllesmereUIExtendNameplates", namespace)
 function hooksecurefunc() end
+assert(loadfile("Nameplates/ClassStyles.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/Text.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/TargetArrows.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/Preview.lua"))("EllesmereUIExtendNameplates", namespace)
@@ -257,7 +258,9 @@ local function PrebuildTest()
         "Cast-bar texture", "Cast border size",
         "Override target arrows", "Target-arrow style", "Health border texture", "Cast border texture",
         "Health border glow", "Health glow color", "Cast border glow", "Cast glow color",
-        "Override text", "Top text", "Cast timer text", "+ Add Text Slot", "Player combat state", "Instance Type" }) do
+        "Override text", "Top text", "Cast timer text", "+ Add Text Slot", "Player combat state", "Instance Type",
+        "Add PvP preset", "Class-colored health bar", "Class-colored player name", "Show class emblem",
+        "Class emblem side", "Class emblem size", "Class emblem X offset", "Class emblem Y offset" }) do
         assert(index[label], "prebuild missed " .. label)
     end
     assert(not index["Name text color"] and not index["Left text"], "compact text search should omit separate colors and unused slots")

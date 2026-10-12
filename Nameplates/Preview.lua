@@ -68,6 +68,9 @@ function api.BuildRulePreview(parent, parentWidth, getRule, locked)
     preview.arrows = { host = arrowHost, left = left, right = right }
     PP.Point(left, "RIGHT", health._bar, "LEFT", -8, 0)
     PP.Point(right, "LEFT", health._bar, "RIGHT", 8, 0)
+    local classIcon = CreateFrame("Frame", nil, plate)
+    classIcon:EnableMouse(false)
+    preview.classIcon = classIcon
 
     local busy, building, headerHeight = false, true, 150
     local function Stop()
@@ -145,7 +148,9 @@ function api.BuildRulePreview(parent, parentWidth, getRule, locked)
             name:SetWidth(math.max(20, width - 90) * healthScale / textScale)
             spell:SetWidth(math.max(20, castWidth - 55))
             title:SetWidth(available - 40)
-            title:SetText(GetHost().L("Preview") .. ": [" .. (index or 1) .. "] " .. (rule.name or "Unnamed Rule"))
+            local sample = (style.healthClassColor == true or style.nameClassColor == true or style.classIconEnabled == true)
+                and (" - " .. GetHost().L("Sample Mage")) or ""
+            title:SetText(GetHost().L("Preview") .. ": [" .. (index or 1) .. "] " .. (rule.name or "Unnamed Rule") .. sample)
             for prefix, surface in pairs({ health = health, cast = cast }) do
                 local isCast = prefix == "cast"
                 local enabled = isCast and style.castEnabled == true or not isCast and style.healthEnabled ~= false
@@ -162,6 +167,9 @@ function api.BuildRulePreview(parent, parentWidth, getRule, locked)
                     color = style.castColor or castDefaults.castColor or color
                 elseif enabled and not isCast and style.healthColorEnabled ~= false then
                     color = style.healthColor or color
+                end
+                if enabled and not isCast and style.healthClassColor == true then
+                    color = addon.GetClassColor and addon.GetClassColor("MAGE") or Setting("enemyInCombat", { r = 0.8, g = 0.14, b = 0.14 })
                 end
                 surface._bar:SetStatusBarColor(color.r, color.g, color.b, 1)
                 local bg = Setting(isCast and "castBgColor" or "bgColor", { r = 0.12, g = 0.12, b = 0.12 })
@@ -187,6 +195,8 @@ function api.BuildRulePreview(parent, parentWidth, getRule, locked)
                 api.RenderRuleGlowPreview(surface._glow, style, prefix, isCast and castWidth or width, isCast and castHeight or healthHeight)
             end
             arrowHost:SetAlpha(dim * opacity)
+            classIcon:SetAlpha(dim * opacity)
+            if api.RenderClassIcon then api.RenderClassIcon(classIcon, health._bar, style, "MAGE") else classIcon:Hide() end
             if showArrows then
                 local r, g, b = 1, 1, 1
                 if np.GetTargetArrowColor then r, g, b = np.GetTargetArrowColor(profile) end

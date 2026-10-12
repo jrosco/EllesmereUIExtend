@@ -548,6 +548,26 @@ local function BuildStylePage(parent, yOffset)
     end
     y = y - h
 
+    local function PresetLocked() return GlobalLocked() or DB() ~= db or #DB().rules >= MAX_RULES end
+    _, h = LockedRow({ type = "button", text = "Add PvP preset", buttonText = "Add preset",
+        disabled = PresetLocked,
+        disabledTooltip = "Enable styling, reopen this page if the profile changed, and leave room for another rule.",
+        tooltip = "Add an enemy-player rule at the top with class colors and a left-side emblem, including open-world PvP. Existing rules stay unchanged. Restricted class identity keeps native appearance.",
+        onClick = function()
+            if PresetLocked() then return end
+            local preset = NewRule(#db.rules + 1)
+            preset.name = "PvP Players"
+            preset.conditions = { unitType = { player = true }, reaction = { enemy = true } }
+            addon.NormalizeRuleConditions(preset)
+            preset.style.healthClassColor, preset.style.nameClassColor, preset.style.classIconEnabled = true, true, true
+            preset.style.classIconSide, preset.style.classIconSize = "left", 24
+            preset.style.borderSize = 0
+            table.insert(db.rules, 1, preset)
+            db.selectedRule = 1
+            Rebuild(); Changed()
+        end,
+    }, nil, "global"); y = y - h
+
     _, h = W:SectionHeader(parent, "MATCH CONDITIONS", y); y = y - h
     _, h = LockedRow({ type = "toggle", text = "Rule enabled",
         tooltip = "Use this rule when all its conditions match. Off keeps its settings but skips the rule.",
@@ -764,8 +784,8 @@ local function BuildStylePage(parent, yOffset)
     }, {
         type = "colorpicker", text = "Health-bar color", hasAlpha = false,
         tooltip = "Choose the health bar's fill color.",
-        disabled = function() return HealthOff() or GetRule().style.healthColorEnabled == false end,
-        disabledTooltip = "Enable Custom health color first.",
+        disabled = function() return HealthOff() or GetRule().style.healthColorEnabled == false or GetRule().style.healthClassColor == true end,
+        disabledTooltip = "Enable Custom health color and turn off Class-colored health bar first.",
         getValue = function()
             local color = GetRule().style.healthColor
             return color.r, color.g, color.b, 1
@@ -1132,6 +1152,46 @@ local function BuildStylePage(parent, yOffset)
             elseif cell then FinishTextSlot(row, regionKey, cell) end
         end
     end
+    _, h = W:SectionHeader(parent, "APPEARANCE - PLAYER CLASS", y); y = y - h
+    local function ClassLocked() return DB() ~= db or GetRule() ~= rule end
+    local function ColorsUnavailable() return ClassLocked() or not addon.SupportsClassColors() end
+    local function IconsUnavailable() return ClassLocked() or not addon.SupportsClassIcons() end
+    _, h = LockedRow({ type = "toggle", text = "Class-colored health bar",
+        disabled = function() return HealthOff() or ColorsUnavailable() end,
+        disabledTooltip = "Enable Override health bar. Class APIs must be available; reopen this page after changing rules or profiles.",
+        tooltip = "Use player class color instead of custom fill color. Tapped enemies, NPCs and unavailable/restricted classes retain EUI coloring. Retail PvP may restrict class identity.",
+        getValue = function() return rule.style.healthClassColor == true end,
+        setValue = function(value) rule.style.healthClassColor = value; Changed(); Rebuild() end,
+    }, { type = "toggle", text = "Class-colored player name", disabled = ColorsUnavailable,
+        disabledTooltip = "Class APIs must be available; reopen this page after changing rules or profiles.",
+        tooltip = "Class-color player names without changing content. Takes priority over saved name colors; Override text is not required. NPCs and unavailable/restricted classes keep EUI coloring. Retail PvP may restrict identity.",
+        getValue = function() return rule.style.nameClassColor == true end,
+        setValue = function(value) rule.style.nameClassColor = value; Changed() end,
+    }); y = y - h
+    local function IconOff() return IconsUnavailable() or rule.style.classIconEnabled ~= true end
+    local iconTip = "Enable Show class emblem. Class APIs and client class-icon artwork must be available; reopen this page after changing rules or profiles."
+    _, h = LockedRow({ type = "toggle", text = "Show class emblem", disabled = IconsUnavailable,
+        disabledTooltip = "Class APIs and client class-icon artwork must be available; reopen this page after changing rules or profiles.",
+        tooltip = "Show a class symbol beside player health bars. Unknown/restricted classes and NPCs have no emblem. Uses Other elements scaling; preview shows a sample Mage.",
+        getValue = function() return rule.style.classIconEnabled == true end,
+        setValue = function(value) rule.style.classIconEnabled = value; Changed(); Rebuild() end,
+    }, { type = "dropdown", text = "Class emblem side", disabled = IconOff, disabledTooltip = iconTip,
+        values = { left = "Left", right = "Right" }, order = { "left", "right" },
+        tooltip = "Place the class emblem to the left or right of the health bar, with a six-pixel gap before offsets.",
+        getValue = function() return rule.style.classIconSide or "left" end,
+        setValue = function(value) if value ~= "left" and value ~= "right" then return end; rule.style.classIconSide = value; Changed() end,
+    }); y = y - h
+    local function IconSlider(label, key, default, minimum, maximum)
+        return { type = "slider", text = label, min = minimum, max = maximum, step = 1,
+            disabled = IconOff, disabledTooltip = iconTip,
+            tooltip = "Adjust the class emblem independently. Size is in pixels; offsets are relative to the selected side of the health bar.",
+            getValue = function() return private.ClampNumber(rule.style[key], default, minimum, maximum) end,
+            setValue = function(value) rule.style[key] = private.ClampNumber(value, default, minimum, maximum); Changed() end }
+    end
+    _, h = LockedRow(IconSlider("Class emblem size", "classIconSize", 24, 12, 64),
+        IconSlider("Class emblem X offset", "classIconX", 0, -200, 200)); y = y - h
+    _, h = LockedRow(IconSlider("Class emblem Y offset", "classIconY", 0, -200, 200)); y = y - h
+
     _, h = W:SectionHeader(parent, "APPEARANCE - TARGET ARROWS", y); y = y - h
     local arrowValues, arrowOrder = addon.GetTargetArrowOptions()
     local function ArrowsUnavailable() return not addon.SupportsTargetArrows() end

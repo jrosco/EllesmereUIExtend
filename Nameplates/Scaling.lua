@@ -7,7 +7,7 @@ local OPTIONS = {
     { key = "castBar", label = "Cast bar", tooltip = "Scale the cast bar, icon, text, borders and glows, including lifted casts." },
     { key = "classResources", label = "Class resources", tooltip = "Scale class-resource bars and pips." },
     { key = "text", label = "Text", tooltip = "Scale nameplate labels, including names and health text. Cast text follows Cast bar; aura counters follow Other elements." },
-    { key = "other", label = "Other elements", tooltip = "Scale auras, crowd control, cast-lockout indicators, markers, target arrows and selection indicators." },
+    { key = "other", label = "Other elements", tooltip = "Scale auras, crowd control, cast-lockout indicators, markers, class icons, target arrows and selection indicators." },
 }
 api.ScaleElementOptions = OPTIONS
 local policies = setmetatable({}, { __mode = "k" })
@@ -100,6 +100,7 @@ local function Targets(plate, policy)
         for _, object in ipairs(plate[key] or {}) do Add(object, "other") end
     end
     Add(plate.npcLockout, "other")
+    if addon.GetClassIconFrame then Add(addon.GetClassIconFrame(plate), "other") end
     Add(plate._cpBar, "classResources")
     for _, pip in ipairs(plate._cpPips or {}) do
         Add(pip, "classResources")

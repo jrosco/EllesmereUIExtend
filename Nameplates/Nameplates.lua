@@ -656,6 +656,7 @@ local function ApplyAlpha(plate, state)
 end
 
 local function ResetStyle(plate, state, released, castColors)
+    if addon.ApplyClassIcon then addon.ApplyClassIcon(plate, nil) end
     if addon.ApplyRuleText then addon.ApplyRuleText(plate, nil) end
     if addon.ApplyRuleGlows then addon.ApplyRuleGlows(plate, nil) end
     if addon.ApplyRuleBorders then addon.ApplyRuleBorders(plate, nil) end
@@ -713,10 +714,14 @@ local function ApplyStyle(plate)
     local style = rule.style or {}
     state.rule = rule
     state.writingHealth = true
-    local applyHealthColor = style.healthEnabled ~= false
-        and style.healthColorEnabled and style.healthColor and traits.tapDenied ~= true
+    local healthColor = style.healthColor
+    if style.healthClassColor == true then
+        healthColor = addon.GetPlayerClassColor and addon.GetPlayerClassColor(unit)
+    end
+    local applyHealthColor = style.healthEnabled ~= false and traits.tapDenied ~= true
+        and (style.healthClassColor == true or style.healthColorEnabled) and healthColor
     if applyHealthColor then
-        local c = style.healthColor
+        local c = healthColor
         plate.health:SetStatusBarColor(c.r or 1, c.g or 1, c.b or 1, 1)
         state.hadColor = true
     elseif state.hadColor and state.baseColor then
@@ -745,6 +750,7 @@ local function ApplyStyle(plate)
     end
     state.writingHealth = nil
     if addon.ApplyRuleText then addon.ApplyRuleText(plate, style) end
+    if addon.ApplyClassIcon then addon.ApplyClassIcon(plate, style) end
     if addon.ApplyRuleBorders then addon.ApplyRuleBorders(plate, style) end
     if addon.ApplyTargetArrowStyle then addon.ApplyTargetArrowStyle(plate, style) end
     local scale = math.max(50, math.min(200, tonumber(style.scale) or 100)) / 100

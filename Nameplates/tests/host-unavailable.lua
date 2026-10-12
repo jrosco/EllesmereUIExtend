@@ -20,7 +20,7 @@ local private = {}
 assert(loadfile("Core/Core.lua"))("EllesmereUIExtendNameplates")
 assert(loadfile("Core/Sync.lua"))("EllesmereUIExtendNameplates")
 assert(loadfile("Core/Options.lua"))("EllesmereUIExtendNameplates")
-for _, name in ipairs({ "Helpers", "Nameplates", "Borders", "Glows", "Text", "Scaling",
+for _, name in ipairs({ "Helpers", "Nameplates", "Borders", "Glows", "ClassStyles", "Text", "Scaling",
     "TargetArrows", "CastStyles", "RuleIO", "Preview", "Options" }) do
     assert(loadfile("Nameplates/" .. name .. ".lua"))("EllesmereUIExtendNameplates", private)
 end
@@ -54,7 +54,7 @@ EllesmereUIExtend, EllesmereUIExtendNameplates = nil, nil
 assert(loadfile("Core/Core.lua"))("EllesmereUIExtendNameplates")
 assert(loadfile("Core/Sync.lua"))("EllesmereUIExtendNameplates")
 assert(loadfile("Core/Options.lua"))("EllesmereUIExtendNameplates")
-for _, name in ipairs({ "Helpers", "Nameplates", "Borders", "Glows", "Text", "Scaling",
+for _, name in ipairs({ "Helpers", "Nameplates", "Borders", "Glows", "ClassStyles", "Text", "Scaling",
     "TargetArrows", "CastStyles", "RuleIO", "Preview", "Options" }) do
     assert(loadfile("Nameplates/" .. name .. ".lua"))("EllesmereUIExtendNameplates", {})
 end
