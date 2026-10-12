@@ -17,6 +17,7 @@ Helpers.lua
 Nameplates.lua
 Borders.lua
 Glows.lua
+ClassStyles.lua
 Text.lua
 Scaling.lua
 TargetArrows.lua

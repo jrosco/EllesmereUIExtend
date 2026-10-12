@@ -69,6 +69,7 @@ assert(loadfile("Nameplates/Scaling.lua"))("EllesmereUIExtendNameplates", namesp
 assert(loadfile("Nameplates/Borders.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/Glows.lua"))("EllesmereUIExtendNameplates", namespace)
 function hooksecurefunc() end
+assert(loadfile("Nameplates/ClassStyles.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/Text.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/TargetArrows.lua"))("EllesmereUIExtendNameplates", namespace)
 assert(loadfile("Nameplates/Preview.lua"))("EllesmereUIExtendNameplates", namespace)
@@ -257,11 +258,21 @@ local function PrebuildTest()
         "Cast-bar texture", "Cast border size",
         "Override target arrows", "Target-arrow style", "Health border texture", "Cast border texture",
         "Health border glow", "Health glow color", "Cast border glow", "Cast glow color",
-        "Override text", "Top text", "Cast timer text", "+ Add Text Slot", "Player combat state", "Instance Type" }) do
+        "Override text", "Top text", "Cast timer text", "+ Add Text Slot", "Player combat state", "Instance Type",
+        "Add PvP preset", "Class-colored health bar", "Class-colored player name", "Show class emblem" }) do
         assert(index[label], "prebuild missed " .. label)
     end
     assert(not index["Name text color"] and not index["Left text"], "compact text search should omit separate colors and unused slots")
     assert(index["Top text"].tooltip:find("color", 1, true), "slot search retains color description")
+    for _, theme in ipairs({ "Blizzard", "Modern", "Pixel", "Pixels Comic", "Glyph", "Arcade", "Legend", "Midnight", "Runic" }) do
+        assert(index["Show class emblem"].tooltip:find(theme, 1, true), "emblem toggle indexes cog theme: " .. theme)
+    end
+    for _, label in ipairs({ "Class emblem side", "Class emblem size", "Class emblem X offset", "Class emblem Y offset" }) do
+        assert(not index[label], "cog geometry must not leave a phantom inline search row: " .. label)
+    end
+    for _, field in ipairs({ "Style", "Side", "Size", "X/Y offsets" }) do
+        assert(index["Show class emblem"].tooltip:find(field, 1, true), "emblem search retains cog setting: " .. field)
+    end
     assert(index["Unit type"].tooltip:find("Any creature", 1, true), "condition tooltip lost")
     assert(index["Spell school"] == nil, "retired condition must not appear in search")
     for _, text in ipairs(actions) do assert(index[text], "action search entry lost: " .. text) end

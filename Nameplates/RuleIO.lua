@@ -19,6 +19,7 @@ local BOOLEAN_STYLE_KEYS = {
     "targetArrowsEnabled",
     "healthGlowBackground", "castGlowBackground",
     "textEnabled",
+    "healthClassColor", "nameClassColor", "classIconEnabled",
 }
 local COLOR_STYLE_KEYS = { "healthColor", "borderColor", "castColor", "castBorderColor",
     "healthGlowColor", "castGlowColor", "healthGlowBackgroundColor", "castGlowBackgroundColor" }
@@ -29,6 +30,7 @@ local NUMBER_STYLE_RANGES = {
     healthGlowThickness = { 1, 4 }, castGlowThickness = { 1, 4 },
     healthGlowSpeed = { 1, 8 }, castGlowSpeed = { 1, 8 },
     healthGlowShineSize = { 50, 200 }, castGlowShineSize = { 50, 200 },
+    classIconSize = { 12, 64 }, classIconX = { -200, 200 }, classIconY = { -200, 200 },
 }
 
 local function IsFinite(value)
@@ -88,6 +90,12 @@ local function ValidateRule(rule, index)
         if value ~= nil and type(value) ~= "boolean" then
             return nil, ("Rule %d has an invalid %s setting."):format(index, key)
         end
+    end
+    if rule.style.classIconSide ~= nil and rule.style.classIconSide ~= "left" and rule.style.classIconSide ~= "right" then
+        return nil, ("Rule %d has an invalid classIconSide setting."):format(index)
+    end
+    if api.ValidateClassIconStyle and not api.ValidateClassIconStyle(rule.style.classIconStyle) then
+        return nil, ("Rule %d has an invalid classIconStyle setting."):format(index)
     end
     for _, key in ipairs(COLOR_STYLE_KEYS) do
         local color = rule.style[key]

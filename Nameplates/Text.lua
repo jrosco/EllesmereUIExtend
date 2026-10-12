@@ -82,6 +82,14 @@ function api.GetRuleTextColor(style, slot, element)
     if color == false then return nil end
     return color or (style.textColors and style.textColors[element])
 end
+local function RenderColor(style, slot, element, unit, preview)
+    if element == "name" and style.nameClassColor == true then
+        if preview then return addon.GetClassColor and addon.GetClassColor("MAGE") end
+        return addon.GetPlayerClassColor and addon.GetPlayerClassColor(unit)
+    end
+    if style.textEnabled ~= true then return nil end
+    return api.GetRuleTextColor(style, slot, element)
+end
 local states, hooked = setmetatable({}, { __mode = "k" }), setmetatable({}, { __mode = "k" })
 local overlayHooks = setmetatable({}, { __mode = "k" })
 local Apply
@@ -431,6 +439,8 @@ local function Position(fs, plate, slot, sample, style)
 end
 api.PositionRuleText = Position
 function api.UpdateRuleTextPreview(preview, style)
+    local nameColor = style.nameClassColor == true and addon.GetClassColor and addon.GetClassColor("MAGE")
+    preview.name:SetTextColor(nameColor and nameColor.r or 1, nameColor and nameColor.g or 1, nameColor and nameColor.b or 1, 1)
     local enabled = style.textEnabled == true and api.ValidateRuleText(style)
     for _, fs in ipairs({ preview.name, preview.level, preview.hp, preview.spell, preview.timer }) do fs:SetShown(not enabled) end
     preview.textFonts, preview.textElements = preview.textFonts or {}, preview.textElements or {}
@@ -447,7 +457,7 @@ function api.UpdateRuleTextPreview(preview, style)
             local element = api.ResolveRuleText(style, slot)
             preview.textElements[slot.key] = element
             Position(fs, plate, slot, true, style)
-            local c = api.GetRuleTextColor(style, slot, element) or Setting(slot.key .. "Color", { r = 1, g = 1, b = 1 })
+            local c = RenderColor(style, slot, element, nil, true) or Setting(slot.key .. "Color", { r = 1, g = 1, b = 1 })
             fs:SetTextColor(c.r, c.g, c.b, 1)
             Write(fs, element, nil, preview)
             fs:SetShown(element ~= "none")
@@ -464,7 +474,7 @@ function api.TickRuleTextPreview(preview)
 end
 local function ApplyBody(plate, state)
     local style = state.style
-    local enabled = style and style.textEnabled == true and state.unit == plate.unit and plate.unit
+    local enabled = style and (style.textEnabled == true or style.nameClassColor == true) and state.unit == plate.unit and plate.unit
     local desired = {}
     if enabled then
         if state.castHost then
@@ -476,7 +486,7 @@ local function ApplyBody(plate, state)
         local bindings = NativeBindings(plate)
         for _, slot in ipairs(SLOTS) do
             if not slot.cast or plate.cast then
-                local choice = type(style.textSlots) == "table" and style.textSlots[slot.key] or "eui"
+                local choice = style.textEnabled == true and type(style.textSlots) == "table" and style.textSlots[slot.key] or "eui"
                 if choice == nil then choice = "eui" end
                 if slot.cast and plate._interrupted then choice = "eui" end
                 local element = api.ResolveRuleText(style, slot)
@@ -485,9 +495,9 @@ local function ApplyBody(plate, state)
                     local d = desired[original] or {}; desired[original] = d
                     d.hide = d.hide or choice ~= "eui"
                     if not (slot.cast and plate._interrupted) then
-                        d.tint = api.GetRuleTextColor(style, slot, element) or d.tint
+                        d.tint = RenderColor(style, slot, element, plate.unit) or d.tint
                         if choice == "eui" and element ~= "none" then
-                            d.layout = style.textSlotLayout and style.textSlotLayout[slot.key]
+                            d.layout = style.textEnabled == true and style.textSlotLayout and style.textSlotLayout[slot.key]
                             d.slot = slot
                         end
                     end
@@ -504,7 +514,7 @@ local function ApplyBody(plate, state)
                         state.fonts[slot.key] = fs
                     end
                     Position(fs, plate, slot, false, style)
-                    local color = api.GetRuleTextColor(style, slot, element) or Setting(slot.key .. "Color", { r = 1, g = 1, b = 1 })
+                    local color = RenderColor(style, slot, element, plate.unit) or Setting(slot.key .. "Color", { r = 1, g = 1, b = 1 })
                     fs:SetTextColor(color.r, color.g, color.b, 1)
                     Write(fs, element, plate.unit)
                     fs:Show()
@@ -523,7 +533,7 @@ local function ApplyBody(plate, state)
     end
     local ticking = false
     state.timerFonts = {}
-    if enabled then
+    if enabled and style.textEnabled == true then
         for _, slot in ipairs(SLOTS) do
             local choice = type(style.textSlots) == "table" and style.textSlots[slot.key]
             if slot.cast and choice and choice:match("^cast") and choice ~= "castTarget" and not plate._interrupted then
@@ -544,7 +554,7 @@ function addon.ApplyRuleText(plate, style)
     if style and style.textEnabled and not api.ValidateRuleText(style) then style = nil end
     local state = states[plate]
     if not state then
-        if not (style and style.textEnabled) then return end
+        if not (style and (style.textEnabled == true or style.nameClassColor == true)) then return end
         state = { fonts = {}, native = setmetatable({}, { __mode = "k" }) }
         state.host = CreateFrame("Frame", nil, plate)
         state.host:SetAllPoints(plate.health); state.host:SetFrameStrata("MEDIUM"); state.host:SetFrameLevel(plate.health:GetFrameLevel() + 5)
