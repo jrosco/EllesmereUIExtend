@@ -61,6 +61,15 @@ Verify paths rather than assuming the earlier standalone-addon repository layout
 
 ## Coverage map
 
+Nameplates `cast-sticky.lua` covers rule-specific observed-cast session memory,
+live cast effects, rule/profile invalidation and readable GUID reuse;
+`cast-sticky-options.lua` covers persistence controls, sharing validation and
+stale callback locks. In game on both Retail and Forever, verify retained
+ordinary appearance after completion/interruption, live-only cast colors/glows,
+same-unit plate reuse versus different-unit recycling, unavailable identity,
+edits/profile switches and restoration on disable. Session memory must not
+survive `/reload`. Mocks do not prove Retail restricted-VM behavior.
+
 Paths below are relative to each addon's `tests/` directory.
 
 ### Core

@@ -549,11 +549,34 @@ local function BuildStylePage(parent, yOffset)
     y = y - h
 
     _, h = W:SectionHeader(parent, "MATCH CONDITIONS", y); y = y - h
+    local function PersistenceLocked()
+        return RuleLocked() or DB() ~= db or GetRule() ~= rule or not addon.SupportsCastPersistence(rule)
+    end
+    local function PersistenceTip()
+        if RuleLocked() then return LockTip() end
+        if DB() ~= db or GetRule() ~= rule then return "This rule is no longer selected." end
+        return "Select an active cast type or cast-color state first."
+    end
+    local function GetPersistence() return rule.style.persistCastColor == true end
+    local function SetPersistence(value)
+        if PersistenceLocked() then return end
+        rule.style.persistCastColor = value; Changed()
+    end
+    local persistenceTooltip = "Remember this rule's appearance after a matching cast. Other non-cast conditions and rule priority still apply; cast effects stay live. Edits, disabling, profile switches and reloads clear session memory."
+    local persistenceFallback
+    if not GetHost().BuildInlineCog then
+        persistenceFallback = {
+            type = "toggle", text = "Keep active after cast ends",
+            getValue = GetPersistence, setValue = SetPersistence,
+            disabled = PersistenceLocked, disabledTooltip = PersistenceTip,
+            tooltip = persistenceTooltip,
+        }
+    end
     _, h = LockedRow({ type = "toggle", text = "Rule enabled",
         tooltip = "Use this rule when all its conditions match. Off keeps its settings but skips the rule.",
         getValue = function() return GetRule().enabled ~= false end,
         setValue = function(value) GetRule().enabled = value; Rebuild(); Changed() end,
-    }, nil, "global")
+    }, persistenceFallback, "global")
     y = y - h
 
     local function ConditionMultiDropdown(label, key, values, keys, tooltip)
@@ -581,12 +604,13 @@ local function BuildStylePage(parent, yOffset)
         end
         return {
             text = label,
+            key = key,
             tooltip = tooltip .. " Any selected option can match. Leave empty for Any.",
             items = items,
             emptyLabel = values.any,
             getSelected = function(option) return GetSelection()[option] == true end,
             setSelected = function(option, selected)
-                if RuleLocked() then return end
+                if RuleLocked() or DB() ~= db or GetRule() ~= rule then return end
                 if key == "castState" and CUSTOM_CAST_STATES[option] and not addon.SupportsCastColorStates() then return end
                 if key == "instanceType" and selected and not addon.SupportsInstanceType(option) then return end
                 local current = GetRule()
@@ -600,6 +624,7 @@ local function BuildStylePage(parent, yOffset)
                     value.casting = nil
                 end
                 Changed()
+                if key == "castState" then Rebuild() end
             end,
         }
     end
@@ -619,6 +644,20 @@ local function BuildStylePage(parent, yOffset)
         PP.Point(ddBtn, "RIGHT", region, "RIGHT", -20, 0)
         GetHost().RegisterWidgetRefresh(refresh)
         AttachLock(ddBtn, RuleLocked, LockTip, label)
+
+        if condition.key == "castState" and GetHost().BuildInlineCog then
+            GetHost().BuildInlineCog(region, {
+                title = "Cast state settings", captureRegion = region, anchorTo = ddBtn,
+                disabled = PersistenceLocked, disabledTooltip = PersistenceTip,
+                tip = "Keep active after cast ends: remember this rule's nameplate appearance for the session.",
+                rows = { {
+                    type = "toggle", label = "Keep active after cast ends",
+                    get = GetPersistence, set = SetPersistence,
+                    disabled = PersistenceLocked, disabledTooltip = PersistenceTip,
+                    tooltip = persistenceTooltip,
+                } },
+            })
+        end
 
         if condition.tooltip then
             local hitFrame = CreateFrame("Frame", nil, region)
@@ -647,7 +686,7 @@ local function BuildStylePage(parent, yOffset)
         ConditionMultiDropdown("Instance Type", "instanceType", INSTANCES, INSTANCE_ORDER,
             "Choose where your character is, not your group type. Arena, scenario and delve are unavailable on Forever."),
         ConditionMultiDropdown("Cast state", "castState", CAST_STATES, CAST_ORDER,
-            "Choose cast types or cast-color states. Color-state choices apply other styling to all active casts."),
+            "Choose cast types or cast-color states. Other styling applies to all active casts. Cog: Keep active after cast ends remembers matching casts."),
         ConditionMultiDropdown("Threat", "threat", THREATS, THREAT_ORDER,
             "Choose who holds the unit's aggro. Unknown threat or roles cannot match the corresponding choice."),
     }

@@ -263,6 +263,9 @@ local function PrebuildTest()
     assert(not index["Name text color"] and not index["Left text"], "compact text search should omit separate colors and unused slots")
     assert(index["Top text"].tooltip:find("color", 1, true), "slot search retains color description")
     assert(index["Unit type"].tooltip:find("Any creature", 1, true), "condition tooltip lost")
+    assert(index["Cast state"].tooltip:find("Keep active after cast ends", 1, true),
+        "persistence searches must route to the Cast state cog's row")
+    assert(not index["Keep active after cast ends"], "cog settings must not index a nonexistent standalone row")
     assert(index["Spell school"] == nil, "retired condition must not appear in search")
     for _, text in ipairs(actions) do assert(index[text], "action search entry lost: " .. text) end
     Build()
@@ -279,6 +282,8 @@ local function PrebuildTest()
         end
     end
     assert(paired, "Cast state and Threat dropdowns must share one settings row")
+    assert(fields["Cast state settings"].region == dropdowns["Cast state"].parent,
+        "persistence cog must live in the searchable Cast state region")
     assert(type(fields["Quest Objective"].set) == "function", "Quest Objective toggle remains available")
     local unit = dropdowns["Unit type"]
     assert(unit.emptyLabel == "Any unit" and #unit.items == 4)

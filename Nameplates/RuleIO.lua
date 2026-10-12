@@ -19,6 +19,7 @@ local BOOLEAN_STYLE_KEYS = {
     "targetArrowsEnabled",
     "healthGlowBackground", "castGlowBackground",
     "textEnabled",
+    "persistCastColor",
 }
 local COLOR_STYLE_KEYS = { "healthColor", "borderColor", "castColor", "castBorderColor",
     "healthGlowColor", "castGlowColor", "healthGlowBackgroundColor", "castGlowBackgroundColor" }

@@ -242,6 +242,10 @@ EllesmereUI.MakeFont = function(parent) return parent:CreateFontString() end
 EllesmereUI.L = function(text) return text end
 EllesmereUI.IsSearchPrebuild = function() return false end
 EllesmereUI.RegisterWidgetRefresh = Noop
+EllesmereUI.GetPluginModuleKey = function() return nil end
+EllesmereUI.RefreshPage = function()
+    spec.modules[1].buildPage("Style", CreateFrame("Frame"), 0)
+end
 EllesmereUI.BuildVisOptsCBDropdown = function(parent, _, _, items, get, set, _, _, _, _, _, opts)
     if opts.label == "Cast state" then castDropdown = { items = items, get = get, set = set } end
     return CreateFrame("Button", nil, parent), Noop

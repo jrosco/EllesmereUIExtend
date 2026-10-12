@@ -62,6 +62,7 @@ end
 local db                 -- active named profile's settings
 local core = EllesmereUIExtend
 local QueueRefresh
+local PrepareCastHistory
 local DEFAULT_PROFILE = { enabled = true, selectedRule = 1, rules = DEFAULT_RULES }
 local MAX_RULES = 100
 local MAX_PROFILES = core.MaxProfiles
@@ -153,6 +154,7 @@ end
 core.RegisterFeature("nameplates", { defaults = DEFAULT_PROFILE, normalize = NormalizeProfile,
     refresh = function()
         GetSettings()
+        if PrepareCastHistory then PrepareCastHistory() end
         if QueueRefresh then QueueRefresh() end
     end })
 
@@ -165,6 +167,7 @@ local states = setmetatable({}, { __mode = "k" })
 local hooked = setmetatable({}, { __mode = "k" })
 local snapshotState
 local watchCastTransitions = false
+local castHistory, historyProfile = {}, nil
 local pendingPlates = setmetatable({}, { __mode = "k" })
 local refreshAllQueued, checkTransitionsQueued = false, false
 
@@ -180,6 +183,47 @@ end
 local function SafeBool(value)
     if IsSecret(value) or type(value) ~= "boolean" then return nil end
     return value
+end
+
+local function SupportsCastPersistence(rule)
+    local selection = rule and rule.conditions and rule.conditions.castState
+    if type(selection) ~= "table" then return false end
+    for _, key in ipairs({ "casting", "channel", "empowered", "interruptible", "interruptOnCD", "uninterruptible" }) do
+        if selection[key] == true then return true end
+    end
+    return false
+end
+addon.SupportsCastPersistence = SupportsCastPersistence
+
+local function SameSettings(a, b)
+    if type(a) ~= type(b) then return false end
+    if type(a) ~= "table" then return a == b end
+    for key, value in pairs(a) do
+        if not SameSettings(value, b[key]) then return false end
+    end
+    for key in pairs(b) do if a[key] == nil then return false end end
+    return true
+end
+
+PrepareCastHistory = function()
+    local settings = GetSettings()
+    if historyProfile ~= settings or settings.enabled == false then
+        castHistory, historyProfile = {}, settings
+    end
+    local present = {}
+    for _, rule in ipairs(settings.rules) do
+        present[rule] = true
+        if rule.enabled and rule.style.persistCastColor == true and SupportsCastPersistence(rule) then
+            local entry = castHistory[rule]
+            if not entry or not SameSettings(entry.conditions, rule.conditions)
+                or not SameSettings(entry.style, rule.style) then
+                castHistory[rule] = { conditions = Copy(rule.conditions), style = Copy(rule.style), units = {} }
+            end
+        else
+            castHistory[rule] = nil
+        end
+    end
+    for rule in pairs(castHistory) do if not present[rule] then castHistory[rule] = nil end end
 end
 
 local function ReadRootValue(plate, method)
@@ -375,6 +419,11 @@ local function GetTraits(unit, checkQuestObjective, checkThreat, checkThreatRole
     elseif type(classification) == "nil" then classification = "normal"
     elseif classification == "worldboss" then classification = "boss" end
     local castState, interruptible = ReadCast(unit)
+    local guid
+    if next(castHistory) and type(UnitGUID) == "function" then
+        local ok, value = pcall(UnitGUID, unit)
+        if ok and not IsSecret(value) and type(value) == "string" and value ~= "" then guid = value end
+    end
     local targetExists = SafeBool(UnitExists("target"))
     local isTarget = SafeBool(UnitIsUnit(unit, "target"))
     local questObjective
@@ -393,6 +442,7 @@ local function GetTraits(unit, checkQuestObjective, checkThreat, checkThreatRole
         questObjective = questObjective,
         tapDenied = UnitIsTapDenied and SafeBool(UnitIsTapDenied(unit)),
         castState = castState,
+        guid = guid,
         interruptible = interruptible,
         castColorState = KnownCastColorState(interruptible),
         playerCombat = checkCombat and ReadPlayerCombat() or nil,
@@ -521,6 +571,17 @@ local function MatchesWithSnapshot(rule, unit, traits, forCastColors, snapshot)
     return results[rule]
 end
 
+local function MatchesRemembered(rule, unit, traits, snapshot)
+    local results = snapshot and snapshot[unit]
+    if results and results[rule] ~= nil then return results[rule] end
+    local value = MatchesReadableConditions(rule, unit, traits)
+    if snapshot then
+        if not results then results = {}; snapshot[unit] = results end
+        results[rule] = value
+    end
+    return value
+end
+
 local function Matches(rule, unit, traits, forCastColors)
     return MatchesWithSnapshot(rule, unit, traits, forCastColors)
 end
@@ -573,7 +634,7 @@ local function FindCastColorOverrides(unit, traits)
 end
 addon.FindCastColorOverrides = FindCastColorOverrides
 
-local function FindRuleWithSnapshot(unit, snapshot)
+local function FindRuleWithSnapshot(unit, snapshot, remember)
     GetSettings()
     if db.enabled == false then return nil end
     local checkQuestObjective = false
@@ -589,13 +650,28 @@ local function FindRuleWithSnapshot(unit, snapshot)
     local checkCombat, checkInstance = ContextRequirements(db.rules)
     local traits = GetTraits(unit, checkQuestObjective, checkThreat, checkRoles, checkCombat, checkInstance)
     local matches = snapshot and MatchesWithSnapshot or Matches
+    local winner, winnerIndex, liveRule
     for index, rule in ipairs(db.rules) do
-        if matches(rule, unit, traits, false, snapshot) then return rule, index, traits end
+        local history = castHistory[rule]
+        -- Preserve first-match predicate evaluation unless a remembered rule
+        -- still needs observation or the live cast appearance needs a winner.
+        if not winner or not liveRule or (remember and history) then
+            local live = matches(rule, unit, traits, false, snapshot)
+            if live and not liveRule then liveRule = rule end
+            if remember and live and history and traits.guid
+                and (traits.castState == "casting" or traits.castState == "channel" or traits.castState == "empowered") then
+                history.units[traits.guid] = true
+            end
+            local retained = not winner and not live and rule.enabled and history and traits.guid and history.units[traits.guid]
+                and MatchesRemembered(rule, unit, traits, snapshot)
+            if not winner and (live or retained) then winner, winnerIndex = rule, index end
+        end
     end
-    return nil, nil, traits
+    return winner, winnerIndex, traits, liveRule
 end
 
 local function FindRule(unit)
+    PrepareCastHistory()
     return FindRuleWithSnapshot(unit)
 end
 
@@ -706,11 +782,22 @@ local function ApplyStyle(plate)
     end
     -- Never retain evaluation results on a plate or across rendering refreshes.
     local snapshot = {}
-    local rule, _, traits = FindRuleWithSnapshot(unit, snapshot)
+    local rule, _, traits, liveRule = FindRuleWithSnapshot(unit, snapshot, true)
     local castColors = FindCastColorOverridesWithSnapshot(unit, traits, snapshot)
     rule = rule and rule or nil
     if not rule then ResetStyle(plate, state, false, castColors); return end
     local style = rule.style or {}
+    -- A retained ordinary appearance must not retain another cast's effects.
+    -- Preserve the existing style identity on the ordinary/live path.
+    if liveRule ~= rule then
+        style = Copy(style)
+        for key in pairs(style) do
+            if type(key) == "string" and key:match("^cast") then style[key] = nil end
+        end
+        for key, value in pairs(liveRule and liveRule.style or {}) do
+            if type(key) == "string" and key:match("^cast") then style[key] = value end
+        end
+    end
     state.rule = rule
     state.writingHealth = true
     local applyHealthColor = style.healthEnabled ~= false
@@ -765,7 +852,8 @@ local function ApplyStyle(plate)
     end
     state.alphaFactor = opacity
     if plate.SetAlpha then ApplyAlpha(plate, state) end
-    if addon.ApplyCastStyle then addon.ApplyCastStyle(plate, style, rule.conditions, castColors) end
+    if addon.ApplyCastStyle then addon.ApplyCastStyle(plate, liveRule and liveRule.style,
+        liveRule and liveRule.conditions, castColors) end
     if addon.ApplyRuleGlows then addon.ApplyRuleGlows(plate, style) end
 end
 
@@ -823,6 +911,7 @@ end
 local function RefreshAll()
     if not GetHost() then return end
     GetSettings()
+    PrepareCastHistory()
     if not NP then NP = _G.EllesmereNameplates_NS end
     if not NP then return end
     if InstallHooks then InstallHooks() end
@@ -851,6 +940,7 @@ local function ScheduleRefresh()
             end
         end
         local pending = pendingPlates
+        PrepareCastHistory()
         pendingPlates = setmetatable({}, { __mode = "k" })
         for plate, unit in pairs(pending) do
             if plate.unit == unit then ApplyPlateSafely(plate) end
@@ -1023,6 +1113,7 @@ addon.RegisterCondition = function(key, predicate)
 end
 local publicAPI = {
     Refresh = function()
+        PrepareCastHistory()
         if InstallHooks then InstallHooks() end
         QueueRefresh()
     end,
@@ -1030,6 +1121,7 @@ local publicAPI = {
     NormalizeRuleConditions = NormalizeRuleConditions,
     ValidateRuleConditions = ValidateRuleConditions,
     SupportsCastColorStates = SupportsCastColorStates,
+    SupportsCastPersistence = SupportsCastPersistence,
     SupportsInstanceType = SupportsInstanceType,
     GetSettings = GetSettings,
     GetRules = function() return GetSettings().rules end,
