@@ -15,13 +15,23 @@ plate.name:SetText("Native player name"); plate.name:SetTextColor(0.8, 0.6, 0.4,
 function plate:UpdateName() end
 np.db = { profile = { textSlotTop = "enemyName" } }
 np.GetTextSlot = function(key) return np.db.profile[key] or "none" end
-local style = { healthEnabled = true, healthClassColor = true, nameClassColor = true, classIconEnabled = true,
-    classIconSide = "left", classIconSize = 24, classIconX = 3, classIconY = -2, borderSize = 0,
-    healthColorEnabled = true, healthColor = { r = 1, g = 0, b = 0 }, scale = 150, opacity = 80 }
+local style = { healthEnabled = false, healthClassColor = true, nameClassColor = true, classIconEnabled = true,
+    classIconSide = "left", classIconSize = 24, classIconX = 3, classIconY = -2, borderSize = 2, texture = "flat",
+    healthColorEnabled = false, healthColor = { r = 1, g = 0, b = 0 }, scale = 150, opacity = 80 }
 api.GetSettings().rules = { { name = "Players", enabled = true, conditions = {}, style = style } }
 local function Refresh() api.Refresh(); f.Flush() end
 Refresh()
 Near(plate.health.color[1], 0.25, "health uses class rather than custom color")
+Check(style.healthColorEnabled == false, "class health applies with Custom health color off")
+Check(style.healthEnabled == false, "class health applies with Override health bar off")
+Check(plate.health.texture == "base", "independent class color leaves native texture untouched")
+local border = addon.GetRuleBorderFrames(plate)
+Check(not border or not border:IsShown(), "independent class color leaves rule border off")
+style.healthClassColor = false; Refresh()
+Near(plate.health.color[1], 0.8, "turning class mode off with custom color off restores native health color")
+style.healthClassColor = true; Refresh()
+Near(plate.health.color[1], 0.25, "class health can be re-enabled without enabling custom color")
+style.healthColorEnabled, style.healthEnabled, style.borderSize, style.texture = true, true, 0, "eui"
 Near(plate.name.textColor[1], 0.25, "native name gets class color without text override")
 Check(plate.name.text == "Native player name", "native name content is untouched")
 local icon = assert(addon.GetClassIconFrame(plate))
@@ -41,6 +51,7 @@ token = "WARRIOR"; Refresh()
 Near(plate.health.color[1], 0.78, "class changes refresh health")
 Near(plate.name.textColor[1], 0.78, "class changes refresh name")
 Check(icon._classIcon.texCoord[1] == 0, "class changes refresh emblem")
+style.healthEnabled = false
 token = f.secret; Refresh()
 Near(plate.health.color[1], 0.4, "secret class releases health to latest native color")
 Near(plate.name.textColor[1], 0.7, "secret class releases name to latest native color")
@@ -78,6 +89,7 @@ icon.SetPoint = function() error("restricted anchor") end; Refresh()
 Check(not icon:IsShown(), "restricted icon anchor hides owned decoration without breaking paint")
 icon.SetPoint = setPoint; Refresh()
 Check(icon:IsShown(), "restricted icon anchor recovery")
+style.healthEnabled = true
 style.textEnabled = true; style.textSlots = { textSlotTop = "name" }
 style.textColors = { name = { r = 1, g = 0, b = 0 } }; Refresh()
 local _, fonts = addon.GetRuleTextFrames(plate)

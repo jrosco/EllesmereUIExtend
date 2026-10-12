@@ -761,7 +761,7 @@ local function BuildStylePage(parent, yOffset)
     _, h = LockedRow({ type = "toggle", text = "Override health bar",
         getValue = function() return GetRule().style.healthEnabled ~= false end,
         setValue = function(value) GetRule().style.healthEnabled = value; Changed(); Rebuild() end,
-        tooltip = "Apply this rule's health-bar appearance. Off restores EUI's health bar; nameplate size and opacity are unchanged.",
+        tooltip = "Apply this rule's health-bar texture, custom color, border and glow. Off restores EUI's appearance for those settings. Class-colored health bar works independently; size and opacity are unchanged.",
     })
     y = y - h
     local function HealthOff() return GetRule().style.healthEnabled == false end
@@ -1157,9 +1157,9 @@ local function BuildStylePage(parent, yOffset)
     local function ColorsUnavailable() return ClassLocked() or not addon.SupportsClassColors() end
     local function IconsUnavailable() return ClassLocked() or not addon.SupportsClassIcons() end
     _, h = LockedRow({ type = "toggle", text = "Class-colored health bar",
-        disabled = function() return HealthOff() or ColorsUnavailable() end,
-        disabledTooltip = "Enable Override health bar. Class APIs must be available; reopen this page after changing rules or profiles.",
-        tooltip = "Use player class color instead of custom fill color. Tapped enemies, NPCs and unavailable/restricted classes retain EUI coloring. Retail PvP may restrict class identity.",
+        disabled = ColorsUnavailable,
+        disabledTooltip = "Class APIs must be available; reopen this page after changing rules or profiles.",
+        tooltip = "Use player class color without enabling Override health bar or Custom health color. Other health-bar styling stays unchanged. Tapped enemies, NPCs and unavailable/restricted classes retain EUI coloring. Retail PvP may restrict identity.",
         getValue = function() return rule.style.healthClassColor == true end,
         setValue = function(value) rule.style.healthClassColor = value; Changed(); Rebuild() end,
     }, { type = "toggle", text = "Class-colored player name", disabled = ColorsUnavailable,

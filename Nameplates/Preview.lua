@@ -168,7 +168,7 @@ function api.BuildRulePreview(parent, parentWidth, getRule, locked)
                 elseif enabled and not isCast and style.healthColorEnabled ~= false then
                     color = style.healthColor or color
                 end
-                if enabled and not isCast and style.healthClassColor == true then
+                if not isCast and style.healthClassColor == true then
                     color = addon.GetClassColor and addon.GetClassColor("MAGE") or Setting("enemyInCombat", { r = 0.8, g = 0.14, b = 0.14 })
                 end
                 surface._bar:SetStatusBarColor(color.r, color.g, color.b, 1)

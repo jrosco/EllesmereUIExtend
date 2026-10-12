@@ -718,8 +718,8 @@ local function ApplyStyle(plate)
     if style.healthClassColor == true then
         healthColor = addon.GetPlayerClassColor and addon.GetPlayerClassColor(unit)
     end
-    local applyHealthColor = style.healthEnabled ~= false and traits.tapDenied ~= true
-        and (style.healthClassColor == true or style.healthColorEnabled) and healthColor
+    local applyHealthColor = traits.tapDenied ~= true and healthColor
+        and (style.healthClassColor == true or (style.healthEnabled ~= false and style.healthColorEnabled))
     if applyHealthColor then
         local c = healthColor
         plate.health:SetStatusBarColor(c.r or 1, c.g or 1, c.b or 1, 1)

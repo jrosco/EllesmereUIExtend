@@ -10,7 +10,21 @@ local first = api.GetRules()[1]
 Check(not rows["Class-colored health bar"].get() and not rows["Class-colored player name"].get()
     and not rows["Show class emblem"].get(), "new settings remain opt-in on existing rules")
 Check(rows["Class emblem size"].disabled(), "icon controls require emblem")
+rows["Custom health color"].set(false)
+rows["Override health bar"].set(false)
+Check(not rows["Class-colored health bar"].disabled(), "class health toggle does not require Custom health color")
 rows["Class-colored health bar"].set(true)
+Check(first.style.healthClassColor and first.style.healthColorEnabled == false and first.style.healthEnabled == false,
+    "enabling class health leaves both health-bar overrides off")
+Check(not rows["Class-colored health bar"].disabled(), "class health does not require Override health bar")
+Check(f.GetPreview().health._bar.color[1] == 0.25, "class-color preview works with health master off")
+rows["Class-colored health bar"].set(false)
+Check(not first.style.healthClassColor and first.style.healthEnabled == false,
+    "class health can be disabled independently of health master")
+rows["Class-colored health bar"].set(true)
+rows["Override health bar"].set(true)
+Check(not rows["Class-colored health bar"].disabled() and first.style.healthColorEnabled == false,
+    "health master does not change independent class-color selection")
 rows["Class-colored player name"].set(true)
 rows["Show class emblem"].set(true)
 rows["Class emblem side"].set("right")
