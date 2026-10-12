@@ -94,6 +94,9 @@ local function ValidateRule(rule, index)
     if rule.style.classIconSide ~= nil and rule.style.classIconSide ~= "left" and rule.style.classIconSide ~= "right" then
         return nil, ("Rule %d has an invalid classIconSide setting."):format(index)
     end
+    if api.ValidateClassIconStyle and not api.ValidateClassIconStyle(rule.style.classIconStyle) then
+        return nil, ("Rule %d has an invalid classIconStyle setting."):format(index)
+    end
     for _, key in ipairs(COLOR_STYLE_KEYS) do
         local color = rule.style[key]
         if color ~= nil then

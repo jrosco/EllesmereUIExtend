@@ -2,6 +2,12 @@
 local f = assert(loadfile("Nameplates/tests/runtime.lua"))("ui-locks")
 local api, rows, checks = f.api, f.rows, 0
 local function Check(value, label) checks = checks + 1; assert(value, label) end
+local function IconControl(label)
+    for _, control in ipairs(assert(rows["Class emblem settings"]).rows) do
+        if control.label == label then return control end
+    end
+    error("Missing emblem cog control: " .. label)
+end
 UnitClass = function() return "Mage", "MAGE", 8 end
 RAID_CLASS_COLORS = { MAGE = { r = 0.25, g = 0.78, b = 0.92 } }
 CLASS_ICON_TCOORDS = { MAGE = { 0.25, 0.5, 0, 0.25 } }
@@ -9,7 +15,10 @@ EllesmereUI:RefreshPage()
 local first = api.GetRules()[1]
 Check(not rows["Class-colored health bar"].get() and not rows["Class-colored player name"].get()
     and not rows["Show class emblem"].get(), "new settings remain opt-in on existing rules")
-Check(rows["Class emblem size"].disabled(), "icon controls require emblem")
+Check(IconControl("Class emblem size").disabled(), "icon cog controls require emblem")
+for _, label in ipairs({ "Class emblem side", "Class emblem size", "Class emblem X offset", "Class emblem Y offset" }) do
+    Check(rows[label] == nil, "emblem geometry is not duplicated on the page: " .. label)
+end
 rows["Custom health color"].set(false)
 rows["Override health bar"].set(false)
 Check(not rows["Class-colored health bar"].disabled(), "class health toggle does not require Custom health color")
@@ -27,10 +36,10 @@ Check(not rows["Class-colored health bar"].disabled() and first.style.healthColo
     "health master does not change independent class-color selection")
 rows["Class-colored player name"].set(true)
 rows["Show class emblem"].set(true)
-rows["Class emblem side"].set("right")
-rows["Class emblem size"].set(32)
-rows["Class emblem X offset"].set(10)
-rows["Class emblem Y offset"].set(-8)
+IconControl("Class emblem side").set("right")
+IconControl("Class emblem size").set(32)
+IconControl("Class emblem X offset").set(10)
+IconControl("Class emblem Y offset").set(-8)
 f.Flush()
 Check(first.style.healthClassColor and first.style.nameClassColor and first.style.classIconEnabled,
     "independent class styling saved")
@@ -50,7 +59,7 @@ EllesmereUI:RefreshPage()
 first = api.GetRules()[1]
 Check(first.style.healthClassColor and first.style.nameClassColor and first.style.classIconSize == 32
     and first.style.classIconY == -8, "sharing retains all class fields")
-local oldSize, oldName = rows["Class emblem size"].set, rows["Class-colored player name"].set
+local oldSize, oldName = IconControl("Class emblem size").set, rows["Class-colored player name"].set
 rows["Rule enabled"].set(false)
 oldSize(40); oldName(false)
 Check(first.style.classIconSize == 32 and first.style.nameClassColor, "disabled rule rejects stale class callbacks")

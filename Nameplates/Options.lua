@@ -1170,27 +1170,72 @@ local function BuildStylePage(parent, yOffset)
     }); y = y - h
     local function IconOff() return IconsUnavailable() or rule.style.classIconEnabled ~= true end
     local iconTip = "Enable Show class emblem. Class APIs and client class-icon artwork must be available; reopen this page after changing rules or profiles."
-    _, h = LockedRow({ type = "toggle", text = "Show class emblem", disabled = IconsUnavailable,
+    local function CogOff() return RuleLocked() or IconOff() end
+    local function CogTip() return RuleLocked() and LockTip() or iconTip end
+    local classValues, classOrder = addon.GetClassIconStyleOptions()
+    local function StyleBlocked(key)
+        if CogOff() then return CogTip() end
+        if not addon.SupportsClassIconStyle(key) then return "This EUI host does not provide this emblem theme. Saved selections fall back to Blizzard artwork." end
+    end
+    local function SetIconStyle(key)
+        if StyleBlocked(key) then return end
+        rule.style.classIconStyle = key
+        Changed()
+    end
+    local styleTip = "Choose class-emblem artwork. Blizzard is the default. Unsupported themes retain their saved selection and use Blizzard artwork when available."
+    local emblemSettings = {
+        { type = "dropdown", label = "Class emblem style", values = classValues, order = classOrder,
+            get = function() return rule.style.classIconStyle or "blizzard" end,
+            set = SetIconStyle, itemDisabled = StyleBlocked,
+            disabled = CogOff, disabledTooltip = CogTip, tooltip = styleTip },
+        { type = "dropdown", label = "Class emblem side", values = { left = "Left", right = "Right" }, order = { "left", "right" },
+            tooltip = "Place the class emblem to the left or right of the health bar, with a six-pixel gap before offsets.",
+            get = function() return rule.style.classIconSide or "left" end,
+            set = function(value)
+                if CogOff() or (value ~= "left" and value ~= "right") then return end
+                rule.style.classIconSide = value; Changed()
+            end,
+            disabled = CogOff, disabledTooltip = CogTip },
+    }
+    local function IconSlider(label, key, default, minimum, maximum)
+        return { type = "slider", label = label, min = minimum, max = maximum, step = 1,
+            disabled = CogOff, disabledTooltip = CogTip,
+            tooltip = "Adjust the class emblem independently. Size is in pixels; offsets are relative to the selected side of the health bar.",
+            get = function() return private.ClampNumber(rule.style[key], default, minimum, maximum) end,
+            set = function(value)
+                if CogOff() then return end
+                rule.style[key] = private.ClampNumber(value, default, minimum, maximum); Changed()
+            end }
+    end
+    emblemSettings[#emblemSettings + 1] = IconSlider("Class emblem size", "classIconSize", 24, 12, 64)
+    emblemSettings[#emblemSettings + 1] = IconSlider("Class emblem X offset", "classIconX", 0, -200, 200)
+    emblemSettings[#emblemSettings + 1] = IconSlider("Class emblem Y offset", "classIconY", 0, -200, 200)
+    local emblemRow
+    emblemRow, h = LockedRow({ type = "toggle", text = "Show class emblem", disabled = IconsUnavailable,
         disabledTooltip = "Class APIs and client class-icon artwork must be available; reopen this page after changing rules or profiles.",
-        tooltip = "Show a class symbol beside player health bars. Unknown/restricted classes and NPCs have no emblem. Uses Other elements scaling; preview shows a sample Mage.",
+        tooltip = "Show a player class symbol. Cog: Style, Side, Size, X/Y offsets; Blizzard, Modern, Pixel, Pixels Comic, Glyph, Arcade, Legend, Midnight, Runic. Unknown/restricted classes have no emblem. Uses Other elements scaling; preview uses Mage.",
         getValue = function() return rule.style.classIconEnabled == true end,
         setValue = function(value) rule.style.classIconEnabled = value; Changed(); Rebuild() end,
-    }, { type = "dropdown", text = "Class emblem side", disabled = IconOff, disabledTooltip = iconTip,
-        values = { left = "Left", right = "Right" }, order = { "left", "right" },
-        tooltip = "Place the class emblem to the left or right of the health bar, with a six-pixel gap before offsets.",
-        getValue = function() return rule.style.classIconSide or "left" end,
-        setValue = function(value) if value ~= "left" and value ~= "right" then return end; rule.style.classIconSide = value; Changed() end,
     }); y = y - h
-    local function IconSlider(label, key, default, minimum, maximum)
-        return { type = "slider", text = label, min = minimum, max = maximum, step = 1,
-            disabled = IconOff, disabledTooltip = iconTip,
-            tooltip = "Adjust the class emblem independently. Size is in pixels; offsets are relative to the selected side of the health bar.",
-            getValue = function() return private.ClampNumber(rule.style[key], default, minimum, maximum) end,
-            setValue = function(value) rule.style[key] = private.ClampNumber(value, default, minimum, maximum); Changed() end }
+    if not GetHost().IsSearchPrebuild() and GetHost().BuildInlineCog then
+        GetHost().BuildInlineCog(emblemRow._leftRegion, { title = "Class emblem settings",
+            captureRegion = emblemRow._leftRegion, disabled = CogOff, disabledTooltip = CogTip,
+            tip = "Choose class-emblem style, side, size and X/Y offsets. The preview uses a sample Mage.",
+            rows = emblemSettings })
     end
-    _, h = LockedRow(IconSlider("Class emblem size", "classIconSize", 24, 12, 64),
-        IconSlider("Class emblem X offset", "classIconX", 0, -200, 200)); y = y - h
-    _, h = LockedRow(IconSlider("Class emblem Y offset", "classIconY", 0, -200, 200)); y = y - h
+    if not GetHost().BuildInlineCog then
+        -- Reuse the same guarded callbacks on hosts without popup helpers.
+        local function Inline(setting)
+            if not setting then return end
+            local cfg = CopyRule(setting)
+            cfg.text, cfg.getValue, cfg.setValue = setting.label, setting.get, setting.set
+            cfg.disabledValues = setting.itemDisabled
+            return cfg
+        end
+        for index = 1, #emblemSettings, 2 do
+            _, h = LockedRow(Inline(emblemSettings[index]), Inline(emblemSettings[index + 1])); y = y - h
+        end
+    end
 
     _, h = W:SectionHeader(parent, "APPEARANCE - TARGET ARROWS", y); y = y - h
     local arrowValues, arrowOrder = addon.GetTargetArrowOptions()
