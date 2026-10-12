@@ -6,7 +6,8 @@ local hookedTooltip, processorInstalled, legacyInstalled
 local function Enabled()
     if not ns.GetHost() then return false end
     local settings = ns.Addon.Settings()
-    return settings and not ns.Secret(settings.tooltipBankCounts) and settings.tooltipBankCounts == true
+    if not settings then return false end
+    return not ns.Secret(settings.tooltipBankCounts) and settings.tooltipBankCounts == true
 end
 function ns.ClearCountTooltip(tooltip) marked[tooltip] = nil end
 local function ClassColor(key)
@@ -20,40 +21,47 @@ local function ClassColor(key)
     end
     return 0.75, 0.75, 0.75 -- Do not guess classes for previously captured alts.
 end
-local function BankWindowOpen()
-    return ns.BankOpen == true
-        or ns.Read(EUI_BankFrame and EUI_BankFrame.IsShown, EUI_BankFrame) == true
-        or ns.Read(EllesmereUIExtendBagsViewer and EllesmereUIExtendBagsViewer.IsShown, EllesmereUIExtendBagsViewer) == true
-end
-function ns.AddBankSnapshotCount(tooltip, itemID, named)
+function ns.AddSnapshotCounts(tooltip, itemID)
     if not Enabled() or marked[tooltip] or type(tooltip.AddLine) ~= "function" then return end
-    local stock = ns.BankStock(itemID)
-    if not stock or stock.total <= 0 then return end
+    local bank = ns.BankStock(itemID)
+    local bags = ns.AltBagsEnabled() and ns.BagStock(itemID) or nil
+    if not bank and not bags then return end
     local current = ns.CharacterKey()
     if not current then return end
     ns.Read(tooltip.AddLine, tooltip, " ")
-    local _, headingOK = ns.Read(tooltip.AddLine, tooltip, "Bank stock (snapshots)", 1, 0.82, 0.45)
+    local _, headingOK = ns.Read(tooltip.AddLine, tooltip, "Snapshot stock", 1, 0.82, 0.45)
     if headingOK then marked[tooltip] = true end
-    local function Row(label, count, r, g, b)
-        if count <= 0 then return end
-        local text = string.format("%.0f", count)
+    local function Row(label, bagCount, bankCount, r, g, b)
+        if bagCount <= 0 and bankCount <= 0 then return end
+        local text = string.format("Bags: %.0f / Bank: %.0f", bagCount, bankCount)
         local _, ok = ns.Read(tooltip.AddDoubleLine, tooltip, label, text, r, g, b, 1, 0.92, 0.72)
         if not ok then
             _, ok = ns.Read(tooltip.AddLine, tooltip, label .. ": |cffffebb8" .. text .. "|r", r, g, b)
         end
         if ok then marked[tooltip] = true end
     end
-    local own = 0
-    for _, character in ipairs(stock.characters) do if character.key == current then own = character.count; break end end
-    if named or BankWindowOpen() then
-        -- Current player first, then the stable name/realm order in the index.
-        if own > 0 then Row(current .. " (you)", own, ClassColor(current)) end
-        for _, character in ipairs(stock.characters) do
-            if character.key ~= current then Row(character.key, character.count, ClassColor(character.key)) end
+    local counts, keys = {}, {}
+    local function Include(stock, field)
+        for _, character in ipairs(stock and stock.characters or {}) do
+            if not counts[character.key] then
+                counts[character.key] = { bags = 0, bank = 0 }
+                keys[#keys + 1] = character.key
+            end
+            counts[character.key][field] = character.count
         end
+    end
+    Include(bank, "bank"); Include(bags, "bags")
+    local own = counts[current] or { bags = 0, bank = 0 }
+    local settings = ns.Addon.Settings()
+    if not ns.Secret(settings.compressTooltipCounts) and settings.compressTooltipCounts ~= false then
+        Row("Current", own.bags, own.bank, 0.4, 0.85, 0.72)
+        Row("Other", (bags and bags.total or 0) - own.bags, (bank and bank.total or 0) - own.bank, 0.65, 0.72, 0.95)
     else
-        Row("Current bank", own, 0.4, 0.85, 0.72)
-        Row("Other banks", stock.total - own, 0.65, 0.72, 0.95)
+        Row(current .. " (you)", own.bags, own.bank, ClassColor(current))
+        table.sort(keys)
+        for _, key in ipairs(keys) do
+            if key ~= current then Row(key, counts[key].bags, counts[key].bank, ClassColor(key)) end
+        end
     end
 end
 local function TooltipContext(tooltip)
@@ -72,7 +80,7 @@ local function PostItem(tooltip, data)
     if not Enabled() or ns.Secret(data) or type(data) ~= "table" then return end
     local context = TooltipContext(tooltip)
     if not context then return end
-    ns.AddBankSnapshotCount(tooltip, ns.Number(data.id), context == "bank")
+    ns.AddSnapshotCounts(tooltip, ns.Number(data.id))
     if marked[tooltip] then ns.Read(tooltip.Show, tooltip) end
 end
 local function LegacyItem(tooltip)
@@ -83,7 +91,7 @@ local function LegacyItem(tooltip)
     link = ok and ns.String(link) or nil
     if not link then return end
     local id = tonumber(link:match("item:(%d+)"))
-    ns.AddBankSnapshotCount(tooltip, id, context == "bank")
+    ns.AddSnapshotCounts(tooltip, id)
     if marked[tooltip] then ns.Read(tooltip.Show, tooltip) end
 end
 function ns.InstallCountTooltips()
@@ -114,6 +122,7 @@ end
 function ns.RefreshCountTooltips()
     ns.InstallCountTooltips()
     if not Enabled() then ns.InvalidateBankCounts() end
+    if not Enabled() or not ns.AltBagsEnabled() then ns.InvalidateBagCounts() end
     -- Remove an already-visible added line after profile/reset/capture changes;
     -- native content is rebuilt on its next hover/update, never edited in place.
     if GameTooltip and marked[GameTooltip] then

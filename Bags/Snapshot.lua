@@ -9,6 +9,7 @@ function ns.InitializeDB()
     -- Unsupported data is preserved, not silently migrated or overwritten.
     if type(db) == "table" and db.format == 1 and type(db.characters) == "table" then ns.DB = db end
     if ns.InvalidateBankCounts then ns.InvalidateBankCounts() end
+    if ns.InvalidateBagCounts then ns.InvalidateBagCounts() end
     if ns.RememberCharacterClass then ns.RememberCharacterClass() end
 end
 
@@ -108,10 +109,7 @@ local function Discover()
     return tabs
 end
 
-function ns.Scan()
-    if not ns.CanCapture() then return end
-    local tabs = Discover()
-    if not tabs then return end
+local function ScanTabs(tabs)
     local manager = EUI_CategoryManager
     local lookup = manager and ns.Read(manager.GetSetGearLookup, manager)
     for _, tab in ipairs(tabs) do
@@ -146,6 +144,104 @@ function ns.Scan()
     return tabs
 end
 
+function ns.Scan()
+    if not ns.CanCapture() then return end
+    local tabs = Discover()
+    if tabs then return ScanTabs(tabs) end
+end
+
+function ns.AltBagsEnabled()
+    local settings = ns.Addon.Settings()
+    return ns.GetHost() and settings and not ns.Secret(settings.altBagsEnabled) and settings.altBagsEnabled == true
+end
+
+function ns.InventoryAvailable()
+    local indices = Enum and Enum.BagIndex
+    if not indices or not C_Container or type(C_Container.GetContainerNumSlots) ~= "function"
+        or type(C_Container.GetContainerItemInfo) ~= "function" then return false end
+    local seen = {}
+    for _, field in ipairs({ "Backpack", "Bag_1", "Bag_2", "Bag_3", "Bag_4" }) do
+        local id = ns.Number(indices[field])
+        if not id or seen[id] then return false end
+        seen[id] = true
+    end
+    return true
+end
+
+-- Inventory is a new, independent section. Never import or overwrite historical
+-- db.bags data, and leave unsupported sections/database formats untouched.
+function ns.Snapshot(source, key)
+    local store
+    if ns.DB then
+        if source == "bags" then store = ns.DB.inventories else store = ns.DB.characters end
+    end
+    local snapshot = type(store) == "table" and key and store[key]
+    if ns.ValidSnapshot(snapshot) then return snapshot end
+end
+
+function ns.ScanBags()
+    if not ns.AltBagsEnabled() or not ns.InventoryAvailable() or not ns.DB
+        or (ns.DB.inventories ~= nil and type(ns.DB.inventories) ~= "table") then return end
+    local indices = Enum and Enum.BagIndex
+    local tabs, seen = {}, {}
+    for _, field in ipairs({ "Backpack", "Bag_1", "Bag_2", "Bag_3", "Bag_4", "ReagentBag" }) do
+        local id = ns.Number(indices[field])
+        if not id and field ~= "ReagentBag" then return end
+        if id and not seen[id] then
+            seen[id] = true
+            local slots = Integer(ns.Read(C_Container.GetContainerNumSlots, id), 0, MAX_SLOTS)
+            if not slots or (field == "Backpack" and slots == 0) then return end
+            if slots > 0 then
+                tabs[#tabs + 1] = { bagID = id, name = field == "Backpack" and "Backpack"
+                    or (field == "ReagentBag" and "Reagent Bag" or ("Bag " .. field:sub(-1))), numSlots = slots, items = {} }
+            end
+        end
+    end
+    return ScanTabs(tabs)
+end
+
+local inventoryFrame, inventoryEnabled, inventoryPending, inventoryElapsed, inventoryAge
+function ns.StopInventoryCapture()
+    inventoryPending = nil
+    if inventoryFrame then inventoryFrame:SetScript("OnUpdate", nil) end
+end
+function ns.CaptureBags()
+    local key = ns.CharacterKey()
+    if not key then inventoryPending = nil; return false end
+    local tabs = ns.ScanBags()
+    if not tabs then inventoryPending = nil; return false end
+    if not inventoryPending or not Equal(inventoryPending, tabs) then inventoryPending = tabs; return false end
+    ns.StopInventoryCapture()
+    ns.DB.inventories = ns.DB.inventories or {}
+    ns.DB.inventories[key] = { tabs = tabs, updatedAt = Integer(ns.Read(GetServerTime), 0, 9007199254740990) }
+    ns.InvalidateBagCounts()
+    ns.RememberCharacterClass()
+    ns.Addon.Refresh()
+    return true
+end
+function ns.RequestInventoryCapture()
+    if not ns.AltBagsEnabled() or not ns.InventoryAvailable() or not ns.DB
+        or (ns.DB.inventories ~= nil and type(ns.DB.inventories) ~= "table") then ns.StopInventoryCapture(); return end
+    if not inventoryFrame then
+        inventoryFrame = CreateFrame("Frame")
+        ns.InventoryEventFrame = inventoryFrame
+    end
+    inventoryPending, inventoryElapsed, inventoryAge = nil, 0, 0
+    inventoryFrame:SetScript("OnUpdate", function(_, delta)
+        if not ns.AltBagsEnabled() then ns.StopInventoryCapture(); return end
+        inventoryElapsed, inventoryAge = inventoryElapsed + delta, inventoryAge + delta
+        if inventoryAge > 8 then ns.StopInventoryCapture(); return end
+        if inventoryElapsed >= 0.25 then inventoryElapsed = 0; ns.CaptureBags() end
+    end)
+end
+function ns.RefreshInventoryCapture()
+    local enabled = ns.AltBagsEnabled() == true
+    if enabled ~= inventoryEnabled then
+        inventoryEnabled = enabled
+        if enabled then ns.RequestInventoryCapture() else ns.StopInventoryCapture(); ns.InvalidateBagCounts() end
+    end
+end
+
 function ns.Capture()
     if not ns.DB then return false end
     local key = ns.CharacterKey()
@@ -165,12 +261,18 @@ function ns.Capture()
     return true
 end
 
-function ns.Characters()
-    local keys = {}
+function ns.Characters(source)
+    local keys, seen = {}, {}
     if ns.DB then
-        for key, snapshot in pairs(ns.DB.characters) do
-            if type(key) == "string" and ns.ValidSnapshot(snapshot) then
-                keys[#keys + 1] = key
+        local stores = { source == "bags" and (ns.DB.inventories or {}) or ns.DB.characters }
+        if source == "all" then stores[#stores + 1] = ns.DB.inventories or {} end
+        for _, store in ipairs(stores) do
+            if type(store) == "table" then
+                for key, snapshot in pairs(store) do
+                    if ns.String(key) and not seen[key] and ns.ValidSnapshot(snapshot) then
+                        keys[#keys + 1], seen[key] = key, true
+                    end
+                end
             end
         end
     end
@@ -178,8 +280,9 @@ function ns.Characters()
     return keys
 end
 
-local bankIndex, indexedDB
-function ns.InvalidateBankCounts() bankIndex, indexedDB = nil, nil end
+local indexes, indexedDBs = {}, {}
+function ns.InvalidateBankCounts() indexes.bank, indexedDBs.bank = nil, nil end
+function ns.InvalidateBagCounts() indexes.bags, indexedDBs.bags = nil, nil end
 function ns.RememberCharacterClass()
     local key = ns.CharacterKey()
     if not key or not ns.DB or type(UnitClass) ~= "function" then return end
@@ -190,18 +293,22 @@ function ns.RememberCharacterClass()
     ns.DB.classes = ns.DB.classes or {}
     ns.DB.classes[key] = token
 end
-function ns.BankStock(itemID)
+function ns.Stock(source, itemID)
     itemID = Integer(itemID, 1, 2147483647)
     if not itemID or not ns.DB then return end
-    if not bankIndex or indexedDB ~= ns.DB then
-        bankIndex, indexedDB = {}, ns.DB
+    local store
+    if source == "bags" then store = ns.DB.inventories else store = ns.DB.characters end
+    if type(store) ~= "table" then return end
+    if not indexes[source] or indexedDBs[source] ~= ns.DB then
+        indexes[source], indexedDBs[source] = {}, ns.DB
+        local index = indexes[source]
         local keys = {}
-        for key in pairs(ns.DB.characters) do if ns.String(key) then keys[#keys + 1] = key end end
+        for key in pairs(store) do if ns.String(key) then keys[#keys + 1] = key end end
         table.sort(keys)
         -- Build once on demand after load/capture. Hovers subsequently read only
         -- this item-ID index, never live bags or every stored inventory again.
         for _, key in ipairs(keys) do
-            local snapshot = ns.DB.characters[key]
+            local snapshot = store[key]
             local valid, ok = ns.Read(ns.ValidSnapshot, snapshot)
             if ok and valid == true then
                 local counts = {}
@@ -209,17 +316,19 @@ function ns.BankStock(itemID)
                     for _, item in pairs(tab.items) do counts[item.itemID] = (counts[item.itemID] or 0) + item.count end
                 end
                 for id, count in pairs(counts) do
-                    local entry = bankIndex[id] or { total = 0, characters = {} }
-                    bankIndex[id] = entry
+                    local entry = index[id] or { total = 0, characters = {} }
+                    index[id] = entry
                     entry.total = entry.total + count
                     entry.characters[#entry.characters + 1] = { key = key, count = count }
                 end
             end
         end
     end
-    local entry = bankIndex[itemID]
+    local entry = indexes[source][itemID]
     if entry and entry.total <= 9007199254740990 then return entry end
 end
+function ns.BankStock(itemID) return ns.Stock("bank", itemID) end
+function ns.BagStock(itemID) return ns.Stock("bags", itemID) end
 function ns.BankSnapshotCount(itemID)
     local entry = ns.BankStock(itemID)
     return entry and entry.total or 0

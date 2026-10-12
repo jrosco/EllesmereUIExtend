@@ -4,6 +4,23 @@ local EllesmereUI = ns.GetHost() -- private adapter, never a global host alias
 local viewer, selectedCharacter, currentCharacter, selectedTab = nil, nil, nil, nil
 local selectedCategory
 local resetScroll = true
+local source = "bank"
+function ns.ViewSettings()
+    return ns.Addon.Settings()
+end
+function ns.BankViewerEnabled()
+    local settings = ns.Addon.Settings()
+    return settings and not ns.Secret(settings.bankViewerEnabled) and settings.bankViewerEnabled ~= false
+end
+function ns.OpenSettings()
+    local host = ns.GetHost()
+    if not host or ns.Editing() or type(host.OpenPlugin) ~= "function" then return end
+    if type(InCombatLockdown) == "function" then
+        local combat, ok = ns.Read(InCombatLockdown)
+        if not ok or combat ~= false then return end
+    end
+    ns.Read(host.OpenPlugin, EllesmereUIExtend.PluginID or "EllesmereUIExtend", "Bags", "Snapshot Bags")
+end
 local function ViewHeight(f) return math.max(1, f:GetHeight() - 180) end
 local function WindowSettings()
     return ns.Addon.Settings().window or { width = 620, height = 510, x = 0, y = 0, locked = false }
@@ -14,9 +31,13 @@ local function EUIProfile()
     return (EllesmereUI and EllesmereUI._bagsDB and EllesmereUI._bagsDB.profile) or {}
 end
 function ns.DisplayMode()
-    local mode = ns.Addon.Settings().display
+    local mode = ns.ViewSettings().display
     if mode == "grid" or mode == "compact" or mode == "list" then return mode end
     local profile = EUIProfile()
+    if source == "bags" then
+        if profile.bagDisplayMode == "list" or profile.bagDisplayMode == "compact" then return profile.bagDisplayMode end
+        return "grid"
+    end
     if profile.bankListView == true then return "list" end
     return profile.bankCompactView == true and "compact" or "grid"
 end
@@ -149,10 +170,10 @@ end
 function ns.Layout(items, columns)
     columns = columns or 10
     local mode = ns.DisplayMode()
-    local groups = ns.Addon.Settings().groupByCategory and ns.CategoryGroups(items) or { { items = items } }
+    local groups = ns.ViewSettings().groupByCategory and ns.CategoryGroups(items) or { { items = items } }
     local layout, x, y, band = { slots = {}, headings = {}, height = 0 }, 0, 0, 0
     for _, group in ipairs(groups) do
-        local collapsed = mode == "list" and group.key and (ns.Addon.Settings().collapsedCategories or {})[group.key] == true
+        local collapsed = mode == "list" and group.key and (ns.ViewSettings().collapsedCategories or {})[group.key] == true
         local visibleItems = collapsed and {} or group.items
         local width = mode == "compact" and math.min(columns, math.max(1, math.ceil(math.sqrt(#group.items)))) or columns
         local cellHeight = mode == "list" and 24 or 40
@@ -226,23 +247,30 @@ local function HideTooltip()
 end
 local function CurrentSnapshot()
     local key = ns.CharacterKey()
-    local snapshot = ns.DB and key and ns.DB.characters[key]
-    if not ns.ValidSnapshot(snapshot) then snapshot = nil end
-    return snapshot, key
+    -- The footer bank button always describes the current player's bank,
+    -- regardless of which source is currently displayed in the shared viewer.
+    return ns.Snapshot("bank", key), key
 end
 local function CharacterChoices()
     local current = ns.CharacterKey()
     if not current then return {} end
     -- Keep the current player selectable even before their first bank visit.
     local keys = { current }
-    for _, key in ipairs(ns.Characters()) do
+    for _, key in ipairs(ns.Characters(ns.AltBagsEnabled() and "all" or "bank")) do
         if key ~= current then keys[#keys + 1] = key end
     end
     return keys
 end
 local function CharacterLabel(key, query)
     if not key then return "Current character unavailable" end
-    local snapshot = ns.DB and ns.DB.characters[key]
+    if query ~= "" and ns.AltBagsEnabled() then
+        local function Count(kind)
+            local saved = ns.Snapshot(kind, key)
+            return saved and string.format("%.0f", #ns.Items(saved, nil, query)) or "No snapshot"
+        end
+        return key .. " (Bags: " .. Count("bags") .. " / Bank: " .. Count("bank") .. ")"
+    end
+    local snapshot = ns.Snapshot(source, key)
     local valid, ok = ns.Read(ns.ValidSnapshot, snapshot)
     if not ok or valid ~= true then return key .. " (No snapshot)" end
     -- Count occupied slots matching the item view's literal name/ID search,
@@ -320,6 +348,20 @@ local function Build()
     f.title:SetPoint("LEFT", 12, 0)
     local close = Button(header, "X", 24, function() f:Hide() end)
     close:SetPoint("RIGHT", -8, 0)
+    f.switchButton = Button(header, "", 24, function()
+        if ns.Editing() or not ns.AltBagsEnabled() or not ns.BankViewerEnabled() then return end
+        ns.SwitchViewer(source == "bank" and "bags" or "bank")
+    end, "Switch snapshot source", "header")
+    f.switchButton:SetPoint("LEFT", header, "LEFT", 8, 0)
+    f.switchButton.icon = f.switchButton:CreateTexture(nil, "ARTWORK")
+    f.switchButton.icon:SetAllPoints()
+    f.settingsButton = Button(header, "", 24, function() ns.OpenSettings() end,
+        "Open Extend Bags settings", "header")
+    f.settingsButton:SetPoint("RIGHT", close, "LEFT", -8, 0)
+    f.settingsButton.icon = f.settingsButton:CreateTexture(nil, "ARTWORK")
+    f.settingsButton.icon:SetAllPoints()
+    local settingsArt = ns.Read(f.settingsButton.icon.SetTexture, f.settingsButton.icon, ns.MediaPath("icons\\cogs-3.png"))
+    f.settingsButton.label:SetText(settingsArt == true and "" or "S")
     f.lock = Button(f, "", 13, function()
         if ns.Editing() then return end
         StopGesture()
@@ -468,7 +510,7 @@ local function Build()
     f.updated:SetPoint("TOPLEFT", 12, -74)
     f.grouping = Button(f, "Group by Category", 170, function()
         if ns.Editing() then return end
-        local settings = ns.Addon.Settings()
+        local settings = ns.ViewSettings()
         settings.groupByCategory = not settings.groupByCategory
         resetScroll = true
         ns.Addon.Refresh()
@@ -479,7 +521,7 @@ local function Build()
     f.grouping.label:SetWordWrap(false)
     f.display = Button(f, "", 225, function()
         if ns.Editing() then return end
-        local settings = ns.Addon.Settings()
+        local settings = ns.ViewSettings()
         local index = 1
         for i, mode in ipairs(DISPLAY_ORDER) do if settings.display == mode then index = i end end
         settings.display = DISPLAY_ORDER[index % #DISPLAY_ORDER + 1]
@@ -656,7 +698,7 @@ local function Build()
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             if ns.ClearCountTooltip then ns.ClearCountTooltip(GameTooltip) end
             if not pcall(GameTooltip.SetHyperlink, GameTooltip, entry.item.link) then HideTooltip(); return end
-            if ns.AddBankSnapshotCount then ns.AddBankSnapshotCount(GameTooltip, entry.item.itemID, true) end
+            if ns.AddSnapshotCounts then ns.AddSnapshotCounts(GameTooltip, entry.item.itemID) end
             GameTooltip:Show()
         end)
         button:SetScript("OnLeave", HideTooltip)
@@ -692,10 +734,32 @@ end
 function ns.RefreshViewer()
     if not viewer or not viewer:IsShown() then return end
     local f = viewer
+    local host = ns.GetHost()
+    if not host then f:Hide(); return end
     -- Search, item-name arrival and capture refreshes invalidate open choices
     -- rather than leaving a stale count/menu callback on either EUI generation.
     f.CloseCharacterMenu()
     local settings = ns.Addon.Settings()
+    if source == "bags" and not ns.AltBagsEnabled() then
+        source, selectedTab, selectedCategory, resetScroll = "bank", nil, nil, true
+    end
+    if source == "bank" and not ns.BankViewerEnabled() then
+        if not ns.AltBagsEnabled() then f:Hide(); return end
+        source, selectedTab, selectedCategory, resetScroll = "bags", nil, nil, true
+    end
+    f.source = source
+    f.title:SetText(source == "bags" and "Alt Bags" or "Bank Snapshot")
+    f.switchButton:SetShown(ns.AltBagsEnabled() == true and ns.BankViewerEnabled())
+    f.title:ClearAllPoints()
+    f.title:SetPoint("LEFT", f.header, "LEFT", f.switchButton:IsShown() and 44 or 12, 0)
+    f.switchButton:SetEnabled(not ns.Editing())
+    f.settingsButton:SetEnabled(not ns.Editing() and type(host.OpenPlugin) == "function")
+    f.settingsButton.tip = type(host.OpenPlugin) == "function" and "Open Extend Bags settings"
+        or "Update EUI to open Extend Bags settings directly."
+    f.switchButton.tip = source == "bank" and "Switch to Alt Bags" or "Switch to Bank Snapshot"
+    ns.PaintCategoryIcon(f.switchButton.icon, source == "bank" and "Interface\\Icons\\INV_Misc_Bag_10"
+        or "Interface\\Icons\\INV_Misc_Coin_01", false)
+    local viewSettings = ns.ViewSettings()
     if f.characterMenuToken and (ns.Editing() or f.characterMenuSettings ~= settings
         or f.characterMenuIdentity ~= ns.CharacterKey()) then f.CloseCharacterMenu() end
     local window = WindowSettings()
@@ -741,15 +805,17 @@ function ns.RefreshViewer()
         f.applyingGeometry = false
     end
     local current = ns.CharacterKey()
-    local snapshot = ns.DB and selectedCharacter and ns.DB.characters[selectedCharacter]
-    if currentCharacter ~= current or (selectedCharacter ~= current and not ns.ValidSnapshot(snapshot)) then
+    local known = selectedCharacter == current or ns.Snapshot("bank", selectedCharacter)
+        or (ns.AltBagsEnabled() and ns.Snapshot("bags", selectedCharacter))
+    if currentCharacter ~= current or not known then
         currentCharacter = current
         selectedCharacter, selectedTab, resetScroll = current, nil, true
         selectedCategory = nil
         HideTooltip()
     end
-    snapshot = ns.DB and selectedCharacter and ns.DB.characters[selectedCharacter]
-    if not ns.ValidSnapshot(snapshot) then snapshot = nil end
+    local snapshot = ns.Snapshot(source, selectedCharacter)
+    local query = f.search:GetText()
+    local combined = query ~= "" and ns.AltBagsEnabled() and ns.DB ~= nil
     f.character:SetText(CharacterLabel(selectedCharacter, f.search:GetText()))
     f.clearSearch:SetShown(f.search:GetText() ~= "")
     f.clearSearch:SetEnabled(not ns.Editing() and f.search:GetText() ~= "")
@@ -782,7 +848,8 @@ function ns.RefreshViewer()
         local button = f.tabs[index]
         if not button then
             button = Button(f.sidebarChild, "", 145, function(self)
-                if ns.Editing() or not self:IsShown() or self.ownerSettings ~= ns.Addon.Settings() then return end
+                if ns.Editing() or not self:IsShown() or self.ownerSettings ~= ns.Addon.Settings()
+                    or (f.search:GetText() ~= "" and ns.AltBagsEnabled()) then return end
                 selectedTab, resetScroll = self.tabID, true
                 HideTooltip()
                 ns.RefreshViewer()
@@ -791,11 +858,19 @@ function ns.RefreshViewer()
         end
         button.tabID = id
         button.ownerSettings = settings
+        button:SetEnabled(not ns.Editing() and not combined)
         button.tip = nil -- Sidebar tabs intentionally have no hover tooltip.
         local title = i == 0 and "All tabs" or tabs[i].name
         f.StyleNavigation(button, 20 + i * 28, title, "Interface\\Icons\\INV_Misc_Bag_10", selectedTab == id)
     end
-    local groups = ns.CategoryGroups(ns.Items(snapshot, selectedTab, ""))
+    local categoryItems = ns.Items(snapshot, selectedTab, "")
+    if combined then
+        categoryItems = ns.Items(snapshot, nil, "")
+        for _, entry in ipairs(ns.Items(ns.Snapshot(source == "bank" and "bags" or "bank", selectedCharacter), nil, "")) do
+            categoryItems[#categoryItems + 1] = entry
+        end
+    end
+    local groups = ns.CategoryGroups(categoryItems)
     local categoryFound = selectedCategory == nil
     for _, group in ipairs(groups) do if group.key == selectedCategory then categoryFound = true end end
     if not categoryFound then selectedCategory, resetScroll = nil, true end
@@ -822,24 +897,50 @@ function ns.RefreshViewer()
     f.sidebarChild:SetSize(sidebarWidth, categoryTop + 20 + (#groups + 1) * 28)
     f.sidebarScroll:SetVerticalScroll(math.min(f.sidebarScroll:GetVerticalScroll(),
         math.max(0, f.sidebarChild:GetHeight() - f.sidebarScroll:GetHeight())))
-    local items = ns.Items(snapshot, selectedTab, f.search:GetText())
-    if selectedCategory then
+    local function Filter(items)
+        if not selectedCategory then return items end
         local filtered = {}
         for _, group in ipairs(ns.CategoryGroups(items)) do if group.key == selectedCategory then filtered = group.items; break end end
-        items = filtered
+        return filtered
     end
+    local items = Filter(ns.Items(snapshot, selectedTab, query))
     local availableWidth = math.max(420, f:GetWidth() - contentLeft - 30)
-    local layout, mode = ns.Layout(items, math.max(1, math.floor(availableWidth / 42)))
-    local layoutKey = mode .. ":" .. tostring(ns.Addon.Settings().groupByCategory == true)
+    local columnsCount = math.max(1, math.floor(availableWidth / 42))
+    local layout, mode = ns.Layout(items, columnsCount)
+    if combined then
+        layout, items = { slots = {}, headings = {}, height = 0 }, {}
+        for _, kind in ipairs({ "bags", "bank" }) do
+            local saved = ns.Snapshot(kind, selectedCharacter)
+            local matches = Filter(ns.Items(saved, nil, query))
+            local section = ns.Layout(matches, columnsCount)
+            local y = layout.height
+            layout.headings[#layout.headings + 1] = { text = (kind == "bags" and "Inventory Bags" or "Bank Snapshot")
+                .. (saved and (" (" .. #matches .. (#matches == 1 and " slot)" or " slots)")) or " (No snapshot)"), x = 0, y = y, width = availableWidth }
+            for _, heading in ipairs(section.headings) do
+                heading.y = heading.y + y + 24
+                layout.headings[#layout.headings + 1] = heading
+            end
+            for _, placement in ipairs(section.slots) do
+                placement.y = placement.y + y + 24
+                placement.entry.source = kind
+                layout.slots[#layout.slots + 1] = placement
+            end
+            for _, entry in ipairs(matches) do items[#items + 1] = entry end
+            layout.height = y + 24 + section.height + 8
+        end
+    end
+    local layoutKey = source .. ":" .. mode .. ":" .. tostring(viewSettings.groupByCategory == true)
     if f.layoutKey ~= layoutKey then resetScroll = true; f.layoutKey = layoutKey end
-    f.grouping.label:SetText("Group by Category: " .. (ns.Addon.Settings().groupByCategory and "On" or "Off"))
-    f.display.label:SetText(DISPLAY_NAMES[ns.Addon.Settings().display or "match"] or DISPLAY_NAMES.match)
+    f.grouping.label:SetText("Group by Category: " .. (viewSettings.groupByCategory and "On" or "Off"))
+    f.display.label:SetText(source == "bags" and (viewSettings.display == "match" or not viewSettings.display) and "Match EUI bags"
+        or (DISPLAY_NAMES[viewSettings.display or "match"] or DISPLAY_NAMES.match))
+    f.display.tip = source == "bags" and "Cycle Match EUI bags, Grid, Compact and List." or "Cycle Match EUI bank, Grid, Compact and List."
     for _, heading in ipairs(f.headings) do heading:Hide() end
     for i, data in ipairs(layout.headings) do
         local heading = f.headings[i]
         if not heading then
             heading = Button(f.scrollChild, "", 420, function(self)
-                local currentSettings = ns.Addon.Settings()
+                local currentSettings = ns.ViewSettings()
                 if ns.Editing() or not self:IsShown() or self.ownerSettings ~= currentSettings
                     or ns.DisplayMode() ~= "list" or not currentSettings.groupByCategory or not self.categoryKey then return end
                 currentSettings.collapsedCategories = currentSettings.collapsedCategories or {}
@@ -857,15 +958,15 @@ function ns.RefreshViewer()
             heading:SetScript("OnMouseWheel", f.scrollFrame:GetScript("OnMouseWheel"))
         end
         f.headings[i] = heading
-        heading.ownerSettings, heading.categoryKey = settings, data.key
+        heading.ownerSettings, heading.categoryKey = viewSettings, data.key
         heading:ClearAllPoints()
         heading:SetPoint("TOPLEFT", data.x, -data.y)
         heading:SetSize(mode == "list" and availableWidth or data.width, 20)
         heading.label:SetWidth((mode == "list" and availableWidth or data.width) - 4)
-        heading.label:SetText(mode == "list" and ((data.collapsed and "+ " or "- ") .. (data.text or "Other") .. " (" .. data.count .. ")")
+        heading.label:SetText(mode == "list" and data.key and ((data.collapsed and "+ " or "- ") .. (data.text or "Other") .. " (" .. data.count .. ")")
             or (data.text or "Other"))
-        heading:EnableMouse(mode == "list")
-        heading.tip = mode == "list" and (data.collapsed and "Expand category" or "Collapse category") or nil
+        heading:EnableMouse(mode == "list" and data.key ~= nil)
+        heading.tip = mode == "list" and data.key and (data.collapsed and "Expand category" or "Collapse category") or nil
         heading:Show()
     end
     local columns = ns.ListColumns()
@@ -947,23 +1048,46 @@ function ns.RefreshViewer()
     end
     local message = ""
     if not ns.DB then message = "Snapshot storage is unavailable (unsupported database format)."
-    elseif not snapshot then message = "Visit the banker first"
-    elseif #items == 0 then message = "No items in this view." end
+    elseif source == "bags" and not combined and ns.DB.inventories ~= nil and type(ns.DB.inventories) ~= "table" then
+        message = "Inventory snapshot storage is unavailable (unsupported section)."
+    elseif source == "bags" and not snapshot and not combined and not ns.InventoryAvailable() then
+        message = "Inventory capture is unavailable on this client. Saved snapshots remain available."
+    elseif not snapshot and not combined then message = source == "bags" and "Log into this character with Alt Bags enabled to capture inventory." or "Visit the banker first"
+    elseif #items == 0 and not combined then message = "No items in this view." end
     f.message:SetText(message)
     f.scrollFrame:SetVerticalScroll(resetScroll and 0 or math.min(f.scrollFrame:GetVerticalScroll(), math.max(0, layout.height - ViewHeight(f))))
     resetScroll = false
     f.updateScrollbar()
 end
 
-function ns.ToggleViewer()
+function ns.SwitchViewer(kind)
+    if not ns.GetHost() or ns.Editing() or (kind ~= "bank" and kind ~= "bags")
+        or (kind == "bags" and not ns.AltBagsEnabled()) or (kind == "bank" and not ns.BankViewerEnabled()) then return end
+    source, selectedTab, selectedCategory, resetScroll = kind, nil, nil, true
+    if viewer and viewer:IsShown() then
+        viewer.CloseCharacterMenu()
+        viewer.sidebarScroll:SetVerticalScroll(0)
+        HideTooltip()
+        ns.RefreshViewer()
+    else
+        local f = viewer or Build()
+        f:Show(); f:Raise()
+    end
+end
+
+function ns.ToggleViewer(kind)
     if not ns.GetHost() or ns.Editing() then return end
+    kind = kind or "bank"
+    if kind == "bank" and not ns.BankViewerEnabled() then return end
+    if kind == "bags" and not ns.AltBagsEnabled() then return end
     local f = viewer or Build()
-    if f:IsShown() then f:Hide() else f:Show(); f:Raise() end
+    if f:IsShown() and source == kind then f:Hide() else ns.SwitchViewer(kind) end
 end
 
 function ns.AttachButton()
     if not ns.GetHost() then
         if ns.BagButton then ns.BagButton:Hide() end
+        if ns.AltBagButton then ns.AltBagButton:Hide() end
         if viewer then viewer:Hide() end
         return
     end
@@ -988,5 +1112,17 @@ function ns.AttachButton()
         or (ns.DB and "Visit the banker first"
             or "Bank snapshot storage is unavailable (unsupported database format).")
     button:SetEnabled(true) -- Keep the empty-state guidance accessible before the first visit.
-    ns.BagButton:SetShown(ns.Addon.Settings().showButton)
+    ns.BagButton:SetShown(ns.Addon.Settings().showButton and ns.BankViewerEnabled())
+    if ns.AltBagsEnabled() and not ns.AltBagButton then
+        local altButton = Button(bags, "Alt Bags", 125, function() ns.ToggleViewer("bags") end,
+            "View saved inventory bags for characters you have logged into with Alt Bags enabled.")
+        altButton:SetClampedToScreen(true)
+        ns.AltBagButton = altButton
+    end
+    if ns.AltBagButton then
+        ns.AltBagButton:ClearAllPoints()
+        if ns.Addon.Settings().showButton and ns.BankViewerEnabled() then ns.AltBagButton:SetPoint("RIGHT", ns.BagButton, "LEFT", -6, 0)
+        else ns.AltBagButton:SetPoint("TOPRIGHT", bags, "BOTTOMRIGHT", -8, -4) end
+        ns.AltBagButton:SetShown(ns.AltBagsEnabled() == true)
+    end
 end

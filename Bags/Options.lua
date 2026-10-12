@@ -41,20 +41,18 @@ local function BuildAboutPage(parent, yOffset)
     local metadata = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
     local version = ns.String(ns.Read(metadata, addonName, "Version"))
     Section("BAGS EXTENSION", (version and ("Version " .. version .. ". ") or "") ..
-        "Read-only personal bank snapshots for EllesmereUI Bags. Requires EllesmereUI with its Bags module, or EUI Standalone Bags; no other Extend addon or standalone Core installation is needed. Supports Retail and WoW Forever.")
-    Section("BANK SNAPSHOTS",
-        "Visit a banker on each character to capture personal bank tabs and supported reagent storage. Complete stable scans preserve the previous snapshot when reads are unavailable. Warband, guild storage and carried bags are excluded; snapshots may be outdated until your next banker visit. Snapshot items cannot be used or transferred.")
-    Section("VIEWER AND SEARCH",
-        "Use /ebags or the Bank Snapshot button below EUI bags. Opening selects your current character; missing snapshots show Visit the banker first. Browse characters, Tabs and Categories, and choose Grid, Compact or List. Character names show occupied bank slots; searching names or item IDs replaces these with full-bank matching slot counts. The x clears the search and restores slot totals.")
-    Section("BANK STOCK TOOLTIPS",
-        "Enable Show bank stock in tooltips on Bank Snapshot (off by default). Bags show positive current/other-bank counts; opening the live bank or snapshot viewer shows named, class-coloured character counts. Only saved personal-bank stock is counted. Cached item-ID lookups avoid live container reads and carried-bag scanning; unknown classes use neutral grey until that character logs in.")
-    Section("PROFILES AND WINDOW",
-        "Extend profiles remember your display, grouping, category collapse, sidebar, window position/size, lock, scale, strata and tooltip settings. Drag the heading to move the viewer, use the bottom-right grip to resize, or lock both position and size. Profile changes and resets never erase captured bank inventory. Settings and window editing respect EUI Edit Mode.")
-    Section("HELP", "Use /eextend for shared profiles. See README.md for setup and snapshot details. Retail and Forever both require in-game verification of native tooltips, bank timing, rendering and secure behaviour.")
+        "Browse saved bank and optional Alt Bags inventory snapshots across characters. Requires the full suite's Bags module or EUI Standalone Bags. Supports Retail and WoW Forever.")
+    Section("SNAPSHOTS AND SEARCH",
+        "Visit a banker to save each character's bank. Enable Alt Bags and log into each character to save carried inventory. Open with the bag-window buttons or /ebags for bank snapshots; switch modes with the left header icon. Browse tabs and categories, or search both sources. Snapshots are read-only and exclude equipped gear, Warband and guild storage.")
+    Section("TOOLTIP COUNTS",
+        "Enable Show snapshot counts in tooltips to display Bags: quantity / Bank: quantity. Compress tooltip counts combines totals into Current/Other rows; turn it off to list characters. Inventory counts require Alt Bags enabled. Counts reflect saved snapshots and may be outdated.")
+    Section("SETTINGS AND PROFILES",
+        "Use Snapshot Bags or the viewer's settings icon to choose shared layouts and window options. Enable Bank Bags controls bank viewer access without stopping bank capture; Show Bank button hides only its entry button. Enable Alt Bags controls inventory capture and access. Use /eextend for shared profiles. Profile changes and resets never erase snapshots.")
     return math.abs(y - yOffset)
 end
 EllesmereUIExtend.RegisterModule({
-    key = "Bags", title = "Bags", pages = { "Bank Snapshot", "About" },
+    key = "Bags", title = "Bags", pages = { "Snapshot Bags", "About" },
+    onReset = function() return ns.Addon.Reset() end,
     buildPage = function(page, parent, yOffset)
         if not EllesmereUI.IsSearchPrebuild or not EllesmereUI.IsSearchPrebuild() then
             if EllesmereUI.ClearContentHeader then EllesmereUI:ClearContentHeader() end
@@ -62,14 +60,39 @@ EllesmereUIExtend.RegisterModule({
         if page == "About" then return BuildAboutPage(parent, yOffset) end
         local W, y = EllesmereUI.Widgets, yOffset
         local ownerSettings = ns.Addon.Settings()
-        local _, height = W:SectionHeader(parent, "BANK SNAPSHOT", y)
+        local function Locked(value)
+            return ns.Editing() or ownerSettings ~= ns.Addon.Settings() or ns.Secret(value)
+        end
+        local _, height = W:SectionHeader(parent, "SNAPSHOT BAGS", y)
+        y = y - height
+        _, height = W:DualRow(parent, y, {
+            type = "toggle", text = "Enable Bank Bags",
+            tooltip = "On by default. Disable to block the bank viewer, its footer button, header switching and /ebags. Bank capture and saved snapshots remain intact; bank search results and tooltip stock stay available in Alt Bags.",
+            getValue = function() return ns.BankViewerEnabled() end,
+            setValue = function(value)
+                if Locked(value) then return end
+                ns.Addon.Settings().bankViewerEnabled = value == true
+                ns.Addon.Refresh()
+            end,
+        }, {
+            type = "toggle", text = "Enable Alt Bags",
+            tooltip = "Off by default. Capture your backpack, inventory bags and carried reagent bag at login and after bag changes. Log into each character with this enabled to record them. Disabling stops capture and hides access without deleting snapshots.",
+            disabled = function() return not ns.InventoryAvailable() and not ns.AltBagsEnabled() end,
+            disabledTooltip = "Inventory capture APIs or bag enums are unavailable on this client.",
+            getValue = function() return ns.Addon.Settings().altBagsEnabled == true end,
+            setValue = function(value)
+                if Locked(value) or (value == true and not ns.InventoryAvailable()) then return end
+                ns.Addon.Settings().altBagsEnabled = value == true
+                ns.Addon.Refresh()
+            end,
+        })
         y = y - height
         _, height = W:DualRow(parent, y, {
             type = "slider", text = "Window Scale", min = 50, max = 150, step = 5,
-            tooltip = "Scale the bank snapshot window only. 100% is the default; EUI's live bags and bank are unchanged.",
+            tooltip = "Scale the shared Bank Snapshot / Alt Bags window. 100% is the default; EUI's live bags and bank are unchanged.",
             getValue = function() return math.floor(ns.WindowScale(ns.Addon.Settings().windowScale) * 100 + 0.5) end,
             setValue = function(value)
-                if ns.Editing() or not ns.Number(value) then return end
+                if Locked(value) or not ns.Number(value) then return end
                 ns.Addon.Settings().windowScale = ns.WindowScale(value / 100)
                 ns.Addon.Refresh()
             end,
@@ -80,7 +103,7 @@ EllesmereUIExtend.RegisterModule({
             order = EllesmereUI.FRAME_STRATA_ORDER_BASE or ns.FrameStrataOrder,
             getValue = function() return ns.WindowStrata(ns.Addon.Settings().frameStrata) end,
             setValue = function(value)
-                if ns.Editing() or not ns.String(value) or not ns.FrameStrataValues[value] then return end
+                if Locked(value) or not ns.String(value) or not ns.FrameStrataValues[value] then return end
                 ns.Addon.Settings().frameStrata = value
                 ns.Addon.Refresh()
             end,
@@ -88,21 +111,21 @@ EllesmereUIExtend.RegisterModule({
         y = y - height
         _, height = W:DualRow(parent, y, {
             type = "toggle", text = "Group by Category",
-            tooltip = "Use the current EUI bag categories within the selected bank tabs.",
+            tooltip = "Use the current EUI bag categories in both snapshot modes. Display, grouping and category-collapse preferences are shared.",
             getValue = function() return ns.Addon.Settings().groupByCategory == true end,
             setValue = function(value)
-                if ns.Editing() then return end
+                if Locked(value) then return end
                 ns.Addon.Settings().groupByCategory = value == true
                 ns.Addon.Refresh()
             end,
         }, {
-            type = "dropdown", text = "Bank display",
-            values = { match = "Match EUI bank", grid = "Grid", compact = "Compact", list = "List" },
+            type = "dropdown", text = "Snapshot display",
+            values = { match = "Match EUI", grid = "Grid", compact = "Compact", list = "List" },
             order = { "match", "grid", "compact", "list" },
-            tooltip = "Match EUI's bank display or choose a read-only snapshot layout.",
+            tooltip = "Choose a layout shared by both snapshot modes. Match EUI follows live inventory for Alt Bags and live bank for Bank Snapshot.",
             getValue = function() return ns.Addon.Settings().display or "match" end,
             setValue = function(value)
-                if ns.Editing() then return end
+                if Locked(value) then return end
                 if value ~= "match" and value ~= "grid" and value ~= "compact" and value ~= "list" then return end
                 ns.Addon.Settings().display = value
                 ns.Addon.Refresh()
@@ -110,27 +133,43 @@ EllesmereUIExtend.RegisterModule({
         })
         y = y - height
         _, height = W:DualRow(parent, y, {
-            type = "toggle", text = "Show Bank Viewer button",
-            tooltip = "Add a read-only bank viewer button below the EUI bag window. /ebags also opens the viewer.",
+            type = "toggle", text = "Show Bank button",
+            tooltip = "Show the bank entry button below EUI bags while its viewer is enabled. Hiding only this button does not block header switching or /ebags and never stops bank capture.",
+            disabled = function() return not ns.BankViewerEnabled() end,
+            disabledTooltip = "Enable Bank Bags first.",
             getValue = function() return ns.Addon.Settings().showButton end,
             setValue = function(value)
-                if ns.Editing() then return end
+                if Locked(value) or not ns.BankViewerEnabled() then return end
                 ns.Addon.Settings().showButton = value == true
                 ns.Addon.Refresh()
             end,
-        }, {
-            type = "toggle", text = "Show bank stock in tooltips",
-            tooltip = "Show current/other saved bank counts in EUI bags. While the live bank or snapshot viewer is open, list stock by character with class-coloured names. Only positive saved personal-bank quantities are shown; snapshots may be outdated. No bag scanning, Warband or guild storage.",
-            getValue = function() return ns.Addon.Settings().tooltipBankCounts == true end,
-            setValue = function(value)
-                if ns.Editing() or ns.Secret(value) or ownerSettings ~= ns.Addon.Settings() then return end
-                ns.Addon.Settings().tooltipBankCounts = value == true
-                ns.Addon.Refresh()
-            end,
-        })
+        }, { type = "spacer", text = "Settings apply to both snapshot modes.",
+            tooltip = "Bank capture continues when its viewer is disabled. Alt Bags captures carried inventory only while enabled. Shared profile changes and reset never erase either source." })
         y = y - height
         _, height = W:DualRow(parent, y, { type = "spacer", text = "Visit a banker to capture personal storage.",
             tooltip = "Opens on your current character, showing Visit the banker first before capture. Use the character dropdown to browse other captured banks. Snapshots update during banker visits; profile resets never clear inventory. No Warband storage." })
+        y = y - height
+        _, height = W:DualRow(parent, y, {
+            type = "toggle", text = "Show snapshot counts in tooltips",
+            tooltip = "Off by default. Show saved Bags: quantity / Bank: quantity together in EUI bag/bank and snapshot tooltips. Zero sources remain explicit; rows with both zero are omitted. Inventory counts require Alt Bags enabled. Snapshots may be outdated; tooltip hovers never scan containers.",
+            getValue = function() return ns.Addon.Settings().tooltipBankCounts == true end,
+            setValue = function(value)
+                if Locked(value) then return end
+                ns.Addon.Settings().tooltipBankCounts = value == true
+                ns.Addon.Refresh()
+            end,
+        }, {
+            type = "toggle", text = "Compress tooltip counts",
+            tooltip = "On by default: combine quantities into Current and Other rows. Turn off to list each character with class-coloured names. This setting controls all supported tooltips, even with live bank or snapshot windows open.",
+            disabled = function() return ns.Addon.Settings().tooltipBankCounts ~= true end,
+            disabledTooltip = "Enable Show snapshot counts in tooltips first.",
+            getValue = function() return ns.Addon.Settings().compressTooltipCounts ~= false end,
+            setValue = function(value)
+                if Locked(value) or ns.Addon.Settings().tooltipBankCounts ~= true then return end
+                ns.Addon.Settings().compressTooltipCounts = value == true
+                ns.Addon.Refresh()
+            end,
+        })
         return math.abs(y - height)
     end,
 })
