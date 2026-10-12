@@ -25,8 +25,9 @@ function CreateFrame(kind, name, parent)
     function frame:CreateTexture() return CreateFrame("Texture", nil, self) end
     function frame:GetFrameLevel() return 1 end
     function frame:ClearAllPoints() self.point = nil end
+    function frame:SetPoint(...) self.point = { ... } end
     function frame:GetWidth() return self.width or 600 end
-    for _, method in ipairs({ "RegisterEvent", "SetPoint", "SetSize", "SetWidth", "SetHeight", "SetAllPoints",
+    for _, method in ipairs({ "RegisterEvent", "SetSize", "SetWidth", "SetHeight", "SetAllPoints",
         "SetFrameStrata", "EnableMouse", "SetJustifyV", "SetWordWrap" }) do frame[method] = Noop end
     return frame
 end
@@ -237,6 +238,43 @@ questCount = 1; count = 3; objectiveText = "Collect samples: 3/3"
 beforeMessages = #messages; ns.ScanNotifications(false)
 Check(#messages == beforeMessages, "re-added quest seeds a fresh baseline without stale progress notification")
 
+-- Final objective progress must not compete with the ready message/sound/send.
+cfg.sounds = true; cfg.statusSounds.progress = "complete"; cfg.statusSounds.ready = "tell"
+cfg.notificationDestinations.instance = true
+ready = false; ns.ScanNotifications(true)
+beforeMessages, beforeSounds, start = #messages, #sounds, #sends
+ready = true; Progress()
+Check(#messages == beforeMessages + 1 and messages[#messages]:find("Ready for turn-in", 1, true)
+    and #sounds == beforeSounds + 1 and sounds[#sounds].id == 3
+    and #sends == start + 1 and sends[#sends].text:find("Ready for turn-in", 1, true),
+    "simultaneous readiness replaces final progress across text sound and shared output")
+beforeMessages = #messages; Progress()
+Check(#messages == beforeMessages, "already-ready quests do not emit further objective progress")
+ready = false; ns.ScanNotifications(true)
+cfg.statusSounds.ready = "none"; beforeMessages, beforeSounds = #messages, #sounds
+ready = true; Progress()
+Check(#messages == beforeMessages and #sounds == beforeSounds,
+    "disabled ready status does not fall back to final progress")
+cfg.statusSounds.ready = "tell"
+ready = false; finished = true; ns.ScanNotifications(true)
+beforeMessages = #messages; Progress()
+Check(#messages == beforeMessages + 1 and messages[#messages]:find("Objective progress", 1, true),
+    "completed objective retains progress when quest is not ready for turn-in")
+ready = secret; beforeMessages = #messages; Progress()
+Check(#messages == beforeMessages + 1 and messages[#messages]:find("Objective progress", 1, true),
+    "unreadable readiness never invents quest completion")
+ready = false; ns.ScanNotifications(true)
+local readyAPI = C_QuestLog.ReadyForTurnIn
+C_QuestLog.ReadyForTurnIn = nil; C_QuestLog.IsComplete = function() return ready end
+ns.RefreshNotifications(); beforeMessages = #messages
+ready = true; Progress()
+Check(#messages == beforeMessages + 1 and messages[#messages]:find("Ready for turn-in", 1, true),
+    "missing ReadyForTurnIn preserves completion precedence with client fallback")
+C_QuestLog.ReadyForTurnIn = readyAPI; C_QuestLog.IsComplete = nil
+ready, finished, cfg.sounds = false, false, false
+cfg.statusSounds.progress = "ready"
+ns.RefreshNotifications()
+
 -- Toast lifecycle: three reusable, non-clickable local frames with timed fade.
 for key in pairs(cfg.notificationDestinations) do cfg.notificationDestinations[key] = key == "toast" end
 start = #sends; beforeMessages = #messages
@@ -265,6 +303,43 @@ for _, frame in ipairs(toastFrames) do if frame.scripts.OnUpdate then frame.scri
 Check(not toastFrames[3].shown, "message disable stops active toast")
 cfg.messages = true
 cfg.toastOpacity = 0.92; cfg.toastAccentColor = { r = 0.9, g = 0.62, b = 0.16 }
+
+local function ActiveToasts()
+    local active = {}
+    for _, frame in ipairs(toastFrames) do if frame.shown then active[#active + 1] = frame end end
+    table.sort(active, function(a, b) return a.startedAt < b.startedAt end)
+    return active
+end
+cfg.toastX, cfg.toastY = 125, 325
+ns.RefreshNotificationOutput()
+for _ = 1, 5 do
+    Progress()
+    local active = ActiveToasts()
+    Check(#active == 1 and active[1].point[4] == 125 and active[1].point[5] == 325,
+        "isolated toast stays at saved position across frame reuse")
+    now = now + 5; active[1].scripts.OnUpdate(active[1])
+end
+Progress(); Progress(); Progress()
+local active = ActiveToasts()
+Check(#active == 3 and active[1].point[5] == 325 and active[2].point[5] == 221
+    and active[3].point[5] == 117, "simultaneous toasts stack below saved anchor")
+now = now + 1; active[1].scripts.OnUpdate(active[1])
+active = ActiveToasts()
+Check(#active == 2 and active[1].point[5] == 325 and active[2].point[5] == 221,
+    "expiry compacts surviving toasts to saved anchor")
+ns.RefreshNotificationOutput()
+for index = 1, 4 do
+    now = now + 0.1
+    ns.DeliverQuestNotification("progress", 100, title, "Burst " .. index, now)
+end
+active = ActiveToasts()
+Check(#active == 3 and active[1].body.text:find("Burst 2", 1, true)
+    and active[1].point[5] == 325 and active[3].point[5] == 117,
+    "full toast pool replaces oldest and keeps compact arrival order")
+ns.RefreshNotificationOutput()
+Progress(); active = ActiveToasts()
+Check(#active == 1 and active[1].point[5] == 325, "refresh restarts stack at saved anchor")
+ns.RefreshNotificationOutput(); cfg.toastX, cfg.toastY = 0, 210
 
 -- EUI multi-choice row, search prebuild and already-open callback locks.
 prebuild = true; local nframes = #frames

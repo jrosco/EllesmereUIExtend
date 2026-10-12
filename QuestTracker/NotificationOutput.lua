@@ -13,7 +13,8 @@ ns.NotificationDestinations = {
 }
 local colors = { progress = "ffcc66", ready = "ffd100" }
 local chatTypes = { party = "PARTY", raid = "RAID", instance = "INSTANCE_CHAT", guild = "GUILD" }
-local lastSent, toasts, nextToast = {}, {}, 0
+local lastSent, toasts = {}, {}
+local RefreshToastPositions
 local toastPreview, toastEditing, toastSnapshot, toastMoverElement, toastMoverRegistered, toastMoverHidden
 local TOAST_KEY, TOAST_WIDTH, TOAST_HEIGHT = "EQTX_NotificationToast", 400, 96
 
@@ -101,7 +102,11 @@ local function ToastFrame(parent, isPreview)
     frame.bg = bg
     frame.heading, frame.body, frame.isPreview = heading, body, isPreview == true
     frame:SetScript("OnHide", function(self)
-        if not self.isPreview then self:SetScript("OnUpdate", nil) end
+        if not self.isPreview then
+            self.toastActive = false
+            self:SetScript("OnUpdate", nil)
+            RefreshToastPositions()
+        end
     end)
     return frame
 end
@@ -152,9 +157,15 @@ local function CreateToastPreview()
     return toastPreview
 end
 
-local function RefreshToastPositions()
+RefreshToastPositions = function()
     if toastPreview then PositionToast(toastPreview, 1) end
-    for i, frame in ipairs(toasts) do PositionToast(frame, i) end
+    local index = 0
+    for _, frame in ipairs(toasts) do
+        if frame.toastActive then
+            index = index + 1
+            PositionToast(frame, index)
+        end
+    end
 end
 
 function ns.RefreshToastAppearance()
@@ -170,14 +181,23 @@ end
 
 local function ShowToast(message, now)
     if toastEditing then return end
-    nextToast = nextToast % 3 + 1
-    local frame = toasts[nextToast]
+    -- Pool identity is not a screen slot. Reuse hidden frames first, keeping
+    -- active messages in arrival order and compacting gaps after expiry.
+    local frame
+    for _, toast in ipairs(toasts) do
+        if toast.toastActive and now - toast.startedAt >= 5 then toast:Hide() end
+    end
+    for index, toast in ipairs(toasts) do
+        if not toast.toastActive then frame = table.remove(toasts, index); break end
+    end
+    if not frame and #toasts >= 3 then frame = table.remove(toasts, 1) end
     if not frame then
         frame = ToastFrame(UIParent, false)
-        toasts[nextToast] = frame
     end
+    toasts[#toasts + 1] = frame
     frame.message, frame.startedAt = message, now
-    PositionToast(frame, nextToast)
+    frame.toastActive = true
+    RefreshToastPositions()
     StyleToast(frame, message)
     frame:Show()
     frame:SetScript("OnUpdate", function(self)
