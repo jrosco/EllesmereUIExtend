@@ -97,7 +97,7 @@ Paths below are relative to each addon's `tests/` directory.
 | `runtime.lua` | Settings, navigation identity, shared quest-area OR navigation proximity, secret/missing area fallbacks, diagnostic-only quest distance, no zone/POI dependency, menus, color restoration, capability gates, secure selection, combat recovery, previews and EUI mover Save/Discard. |
 | `objective-structures.lua` | Retail tracker block/line contract, failed/ineligible preservation, missing/secret structures, native ownership and latest-color restoration. |
 | `item-combat-recovery.lua` | Deferred navigation/bag/proximity/settings updates, recovery, driver contract, edit suspension and non-clickable preview isolation; not native hardware-click verification. |
-| `notifications.lua` | Per-status/None/global switches, sounds/channels, multi-destination routing, restrictions, UTF-8 formatting, throttling, toast lifecycle, search and UI locks. |
+| `notifications.lua` | Per-status/None/global switches, ready-over-progress precedence, sounds/channels, multi-destination routing, restrictions, UTF-8 formatting, throttling, toast lifecycle/anchored stack compaction, search and UI locks. |
 | `visibility.lua` | Real upstream shared compiler, native-driver conditions and mouseover semantics. |
 | `packaging.ps1` | TOC identity/dependencies, source files and native-ownership invariants (no layout/collapse/tracking/reparenting writes). |
 
@@ -156,6 +156,7 @@ Mocks do not reproduce Retail's secret-value VM, native rendering/menu/mover eng
 ### Quest Tracker
 
 - Exercise native quest/log/achievement menus, objective colors and notification destinations, sounds, None, throttling, toast appearance/movement and silent login baselines.
+- Complete the final objective with both notification statuses enabled: only Ready for turn-in should appear/play/send when the quest becomes ready; a completed objective on a quest not yet ready must retain progress. Move/save the toast, then trigger isolated messages, three-message bursts and expiry: lone toasts and the oldest surviving toast must use the saved anchor without lower-slot drift. Check Save/Discard, Reset, reload and UI scales on both clients.
 - Follow different navigation quests and user waypoints; cross raw distance thresholds and use quests without map POIs. Missing items/ineligible quests must hide gameplay, including with Always/Match Any.
 - On both clients, enter/leave a highlighted quest area (quest 6381 on Forever is a known test case): `insideArea=true`/`source=quest-area` must permit an eligible item even above the navigation threshold. Outside, verify inclusive navigation thresholds and `source=navigation`; missing/unreadable area checks must use valid navigation distance only. `questDistance`/`onContinent` must not affect eligibility. Cross an area boundary in combat and verify recovery after combat.
 - Test artwork on/off; minimum/default/maximum sizes; Solid/textured/None borders, tints, opacity, cooldown and hover geometry. No green outline by default; opacity zero must not be mistaken for disabling the action.

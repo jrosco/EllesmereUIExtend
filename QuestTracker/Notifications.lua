@@ -192,10 +192,14 @@ function ns.ScanNotifications(silent)
         local current, old = ReadSnapshot(id), snapshots[id]
         if initialized and not silent and old then
             if old.ready == false and current.ready == true then Notify("ready", id, title) end
-            for index, objective in pairs(current.objectives) do
-                local previous = old.objectives[index]
-                if previous and previous.count and objective.count and objective.count > previous.count then
-                    Notify("progress", id, title, objective.text)
+            -- Readiness wins over simultaneous objective changes, including
+            -- their sounds/shared sends. Unreadable readiness is not completion.
+            if current.ready ~= true then
+                for index, objective in pairs(current.objectives) do
+                    local previous = old.objectives[index]
+                    if previous and previous.count and objective.count and objective.count > previous.count then
+                        Notify("progress", id, title, objective.text)
+                    end
                 end
             end
         end

@@ -33,7 +33,9 @@ Under **Notifications**, message and sound switches are independent. Ready for t
 
 Select any combination of local chat, local toast, party, raid, instance/battleground and guild. Only local chat starts enabled. Empty destinations produce no text; unavailable/restricted destinations are skipped without fallback. Shared channels send real chat to other players; local toasts are private.
 
-Toasts support heading color, background opacity and text alignment. Move **Quest Notification Toast** in EUI **Edit/Unlock Mode > Extend Quest Tracker**, or reset its position. Up to three toasts display for five seconds with a final fade. Duplicate messages and shared sends are throttled; sounds are limited to one per second. Login/reload and notification-setting changes establish a silent baseline, not a burst of existing progress.
+When progress makes a quest ready for turn-in, only the ready notification is delivered, not the final objective-progress message or sound. Earlier objective progress stays unchanged; completing an objective alone does not imply the quest is ready.
+
+Toasts support heading color, background opacity and text alignment. Move **Quest Notification Toast** in EUI **Edit/Unlock Mode > Extend Quest Tracker**, or reset its position. Up to three toasts display for five seconds with a final fade. The oldest active toast uses the saved position; additional toasts stack below it and close gaps as earlier messages expire. Duplicate messages and shared sends are throttled; sounds are limited to one per second. Login/reload and notification-setting changes establish a silent baseline, not a burst of existing progress.
 
 ## Quest-item button
 

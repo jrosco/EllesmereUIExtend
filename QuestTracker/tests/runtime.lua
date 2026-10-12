@@ -336,6 +336,7 @@ Event("QUEST_LOG_UPDATE")
 Check(#messages == before, "secret status/objective data skipped")
 Event("PLAYER_ENTERING_WORLD")
 Check(#messages == before, "zone/login baseline is silent")
+complete[10] = false -- Independent output checks need a quest still in progress.
 cfg.messages = false; cfg.sounds = true; addon.Refresh(); Pump()
 local beforeIndependentSound = #sounds
 objective[10] = { { finished = false, numFulfilled = 4, text = "4/3 things" } }
@@ -358,8 +359,8 @@ complete[20], objective[20] = false, { { finished = false, numFulfilled = 0, tex
 addon.Refresh(); Pump(); before = #messages
 complete[20], objective[20] = true, { { finished = true, numFulfilled = 1, text = "One task" } }
 Event("QUEST_LOG_UPDATE")
-Check(#messages == before + 2 and messages[before + 1]:find("Ready for turn-in", 1, true)
-    and messages[before + 2]:find("Objective progress", 1, true), "progress and ready are the retained notification statuses")
+Check(#messages == before + 1 and messages[before + 1]:find("Ready for turn-in", 1, true),
+    "readiness replaces simultaneous final objective progress")
 
 -- Navigation identity and distance must belong to the same quest.
 complete[10], complete[20], complete[30] = false, false, false
