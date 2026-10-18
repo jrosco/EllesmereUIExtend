@@ -10,6 +10,7 @@ local MULTI_CONDITION_VALUES = {
     reaction = { enemy = true, friendly = true, neutral = true },
     classification = { normal = true, elite = true, rare = true, rareelite = true, boss = true, minus = true },
     target = { yes = true, no = true, none = true },
+    castTarget = { me = true, notMe = true },
     threat = { nonTank = true, tank = true, me = true },
     playerCombat = { inCombat = true, outOfCombat = true },
     instanceType = { world = true, dungeon = true, raid = true, battleground = true, arena = true, scenario = true, delve = true },
@@ -494,15 +495,17 @@ local function MatchesReadableConditions(rule, unit, traits)
             if not ok or SafeBool(matches) ~= true then return false end
         elseif key ~= "unitType" and key ~= "reaction" and key ~= "classification"
            and key ~= "target" and key ~= "threat" and key ~= "questObjective" and key ~= "castState"
-           and key ~= "playerCombat" and key ~= "instanceType" then
+           and key ~= "playerCombat" and key ~= "instanceType" and key ~= "castTarget" then
             return false
         end
     end
     return true
 end
 
-local function MatchesWithSnapshot(rule, unit, traits, forCastColors, snapshot)
+local function MatchesWithSnapshot(rule, unit, traits, includeTargeted, snapshot)
     if not rule.enabled then return false end
+    local targetSelection = addon.CastTargetSelection(rule)
+    if targetSelection and (targetSelection ~= includeTargeted or traits.castState == "none") then return false end
     local c = rule.conditions or {}
     -- Color-state choices imply active Casting for appearance eligibility.
     -- Their precise state is consumed only by the native cast-color renderer.
@@ -521,8 +524,8 @@ local function MatchesWithSnapshot(rule, unit, traits, forCastColors, snapshot)
     return results[rule]
 end
 
-local function Matches(rule, unit, traits, forCastColors)
-    return MatchesWithSnapshot(rule, unit, traits, forCastColors)
+local function Matches(rule, unit, traits, includeTargeted)
+    return MatchesWithSnapshot(rule, unit, traits, includeTargeted)
 end
 
 local function CastColorMask(selection, traits)
@@ -544,7 +547,7 @@ local function CastColorMask(selection, traits)
 end
 addon.CastColorMask = CastColorMask
 
-local function FindCastColorOverridesWithSnapshot(unit, traits, snapshot)
+local function FindCastColorOverridesWithSnapshot(unit, traits, snapshot, targeted)
     local settings = GetSettings()
     local colors = {}
     if settings.enabled == false then return colors end
@@ -557,7 +560,7 @@ local function FindCastColorOverridesWithSnapshot(unit, traits, snapshot)
     for index, rule in ipairs(settings.rules) do
         local style = rule.style
         if style and style.castEnabled and style.castColorEnabled
-           and matches(rule, unit, traits, true, snapshot) then
+           and matches(rule, unit, traits, targeted, snapshot) then
             local mask = CastColorMask(rule.conditions and rule.conditions.castState, traits)
             local candidate = { rule = rule, style = style, index = index }
             for _, key in ipairs(CAST_COLOR_STATES) do
@@ -572,8 +575,14 @@ local function FindCastColorOverrides(unit, traits)
     return FindCastColorOverridesWithSnapshot(unit, traits)
 end
 addon.FindCastColorOverrides = FindCastColorOverrides
+addon.FindTargetedCastColorOverrides = function(unit, traits, snapshot)
+    return FindCastColorOverridesWithSnapshot(unit, traits, snapshot, "me")
+end
 
 local function FindRuleWithSnapshot(unit, snapshot)
+    -- Both target alternatives share readable predicates, including direct
+    -- diagnostic callers that did not supply a rendering snapshot.
+    snapshot = snapshot or {}
     GetSettings()
     if db.enabled == false then return nil end
     local checkQuestObjective = false
@@ -589,10 +598,22 @@ local function FindRuleWithSnapshot(unit, snapshot)
     local checkCombat, checkInstance = ContextRequirements(db.rules)
     local traits = GetTraits(unit, checkQuestObjective, checkThreat, checkRoles, checkCombat, checkInstance)
     local matches = snapshot and MatchesWithSnapshot or Matches
+    local winner, winnerIndex, targetedWinner, notTargetedWinner
     for index, rule in ipairs(db.rules) do
-        if matches(rule, unit, traits, false, snapshot) then return rule, index, traits end
+        if not targetedWinner and matches(rule, unit, traits, "me", snapshot) then
+            targetedWinner = rule
+        end
+        if not notTargetedWinner and matches(rule, unit, traits, "notMe", snapshot) then
+            notTargetedWinner = rule
+        end
+        if not winner then
+            local live = matches(rule, unit, traits, false, snapshot)
+            if live then winner, winnerIndex = rule, index end
+            if not targetedWinner and live then targetedWinner = rule end
+        end
+        if winner and targetedWinner and notTargetedWinner then break end
     end
-    return nil, nil, traits
+    return winner, winnerIndex, traits, targetedWinner, notTargetedWinner
 end
 
 local function FindRule(unit)
@@ -655,7 +676,89 @@ local function ApplyAlpha(plate, state)
     return ApplyRootFactor(plate, state, "Alpha", state.alphaFactor)
 end
 
+local targetContexts = setmetatable({}, { __mode = "k" })
+local targetUpdater, targetElapsed
+local function HealthColorFor(rule, state, traits)
+    local style = rule and rule.style
+    if style and style.healthEnabled ~= false and style.healthColorEnabled and style.healthColor
+        and traits.tapDenied ~= true then
+        local c = style.healthColor
+        return { c.r or 1, c.g or 1, c.b or 1, 1 }
+    end
+    local c = state.baseColor
+    return c and { c.r, c.g, c.b, c.a }
+end
+local function UpdateTargetContext(plate, context)
+    local ok, flag = addon.ReadSpellTarget(plate.unit)
+    -- This is filter eligibility, not a claim about an unavailable cast target.
+    -- Unavailable information cannot satisfy Targeting me; Any stays eligible.
+    if not ok then flag = false end
+    context.flag, context.available = flag, ok
+    local state = context.state
+    local yes = HealthColorFor(ok and context.rule or context.fallback, state, context.traits)
+    local no = HealthColorFor(ok and context.notRule or context.fallback, state, context.traits)
+    if yes and no and plate.health then
+        local selected, r, g, b, a = addon.SelectTargetColor(flag, yes, no)
+        if not selected then
+            local fallback = HealthColorFor(context.fallback, state, context.traits)
+            if not fallback then return end
+            r, g, b, a = fallback[1], fallback[2], fallback[3], fallback[4]
+        end
+        state.writingHealth = true
+        local painted, err = pcall(plate.health.SetStatusBarColor, plate.health, r, g, b, a)
+        state.writingHealth = nil
+        if not painted then error(err) end
+        state.hadColor = true
+    end
+    if addon.RefreshConditionalCastColors then addon.RefreshConditionalCastColors(plate) end
+    if addon.RefreshConditionalRuleGlows then addon.RefreshConditionalRuleGlows(plate) end
+end
+local function SetTargetContext(plate, context)
+    targetContexts[plate] = context
+    if context then
+        if not targetUpdater then
+            targetElapsed = 0
+            targetUpdater = CreateFrame("Frame")
+            targetUpdater:SetScript("OnUpdate", function(_, elapsed)
+                targetElapsed = targetElapsed + elapsed
+                if targetElapsed < 0.1 then return end
+                targetElapsed = 0
+                local settings = GetSettings()
+                for owner, current in pairs(targetContexts) do
+                    if owner.unit == current.unit and settings == current.settings then
+                        local updated, err = pcall(UpdateTargetContext, owner, current)
+                        if not updated then
+                            -- Stop retrying a broken renderer every 100 ms. The
+                            -- next ordinary refresh can build a fresh context.
+                            targetContexts[owner] = nil
+                            local color = HealthColorFor(current.fallback, current.state, current.traits)
+                            if color and owner.health then
+                                current.state.writingHealth = true
+                                pcall(owner.health.SetStatusBarColor, owner.health, unpack(color))
+                                current.state.writingHealth = nil
+                            end
+                            local fallback = current.fallback
+                            if addon.ApplyCastStyle then pcall(addon.ApplyCastStyle, owner,
+                                fallback and fallback.style, fallback and fallback.conditions, current.fallbackCastColors) end
+                            if addon.ApplyRuleGlows then pcall(addon.ApplyRuleGlows, owner, fallback and fallback.style) end
+                            local report = geterrorhandler and geterrorhandler()
+                            if report then report(err) end
+                        end
+                    else targetContexts[owner] = nil end
+                end
+                if not next(targetContexts) then targetUpdater:Hide() end
+            end)
+        end
+        targetUpdater:Show()
+    elseif targetUpdater and not next(targetContexts) then targetUpdater:Hide() end
+end
+addon.GetCastTargetRuleCandidates = function(plate)
+    local context = targetContexts[plate]
+    if context then return context.rule, context.fallback, context.notRule end
+end
+
 local function ResetStyle(plate, state, released, castColors)
+    SetTargetContext(plate, nil)
     if addon.ApplyRuleText then addon.ApplyRuleText(plate, nil) end
     if addon.ApplyRuleGlows then addon.ApplyRuleGlows(plate, nil) end
     if addon.ApplyRuleBorders then addon.ApplyRuleBorders(plate, nil) end
@@ -706,10 +809,38 @@ local function ApplyStyle(plate)
     end
     -- Never retain evaluation results on a plate or across rendering refreshes.
     local snapshot = {}
-    local rule, _, traits = FindRuleWithSnapshot(unit, snapshot)
+    local rule, _, traits, targetedRule, notTargetedRule = FindRuleWithSnapshot(unit, snapshot)
     local castColors = FindCastColorOverridesWithSnapshot(unit, traits, snapshot)
+    local targetColors = FindCastColorOverridesWithSnapshot(unit, traits, snapshot, "me")
+    local notTargetColors = FindCastColorOverridesWithSnapshot(unit, traits, snapshot, "notMe")
+    local paletteChanged = false
+    for _, key in ipairs(CAST_COLOR_STATES) do
+        if (castColors[key] and castColors[key].rule) ~= (targetColors[key] and targetColors[key].rule) then paletteChanged = true end
+        if (castColors[key] and castColors[key].rule) ~= (notTargetColors[key] and notTargetColors[key].rule) then paletteChanged = true end
+    end
+    local context
+    if targetedRule ~= rule or notTargetedRule ~= rule or paletteChanged then
+        context = { unit = unit, settings = db, rule = targetedRule, fallback = rule,
+            style = targetedRule and addon.TargetedAppearanceStyle(targetedRule.style), castColors = targetColors,
+            notRule = notTargetedRule, notStyle = notTargetedRule and addon.TargetedAppearanceStyle(notTargetedRule.style),
+            notCastColors = notTargetColors, fallbackStyle = rule and rule.style,
+            fallbackCastColors = castColors,
+            glowChanged = targetedRule ~= rule or notTargetedRule ~= rule, state = state, traits = traits }
+        local ok, flag = addon.ReadSpellTarget(unit)
+        if not ok then flag = false end
+        context.flag, context.available = flag, ok
+    end
     rule = rule and rule or nil
-    if not rule then ResetStyle(plate, state, false, castColors); return end
+    if not rule then
+        ResetStyle(plate, state, false, castColors)
+        if context then
+            SetTargetContext(plate, context)
+            if addon.ApplyCastStyle then addon.ApplyCastStyle(plate, nil, nil, castColors, context) end
+            if addon.ApplyRuleGlows then addon.ApplyRuleGlows(plate, nil, context) end
+            UpdateTargetContext(plate, context)
+        end
+        return
+    end
     local style = rule.style or {}
     state.rule = rule
     state.writingHealth = true
@@ -765,8 +896,10 @@ local function ApplyStyle(plate)
     end
     state.alphaFactor = opacity
     if plate.SetAlpha then ApplyAlpha(plate, state) end
-    if addon.ApplyCastStyle then addon.ApplyCastStyle(plate, style, rule.conditions, castColors) end
-    if addon.ApplyRuleGlows then addon.ApplyRuleGlows(plate, style) end
+    if addon.ApplyCastStyle then addon.ApplyCastStyle(plate, style, rule.conditions, castColors, context) end
+    if addon.ApplyRuleGlows then addon.ApplyRuleGlows(plate, style, context) end
+    SetTargetContext(plate, context)
+    if context then UpdateTargetContext(plate, context) end
 end
 
 local InstallHooks
@@ -974,6 +1107,7 @@ local events = {
     "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "PLAYER_ENTERING_WORLD",
     "ZONE_CHANGED_NEW_AREA", "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "PLAYER_DIFFICULTY_CHANGED", "UPDATE_INSTANCE_INFO",
     "UNIT_FLAGS", "UNIT_FACTION", "UNIT_NAME_UPDATE",
+    "UNIT_TARGET",
     "UNIT_THREAT_LIST_UPDATE", "UNIT_THREAT_SITUATION_UPDATE",
     "GROUP_ROSTER_UPDATE", "PLAYER_ROLES_ASSIGNED", "ROLE_CHANGED_INFORM",
     "PLAYER_SPECIALIZATION_CHANGED", "ACTIVE_TALENT_GROUP_CHANGED", "PLAYER_REGEN_ENABLED", "PLAYER_REGEN_DISABLED",
@@ -1030,6 +1164,7 @@ local publicAPI = {
     NormalizeRuleConditions = NormalizeRuleConditions,
     ValidateRuleConditions = ValidateRuleConditions,
     SupportsCastColorStates = SupportsCastColorStates,
+    SupportsCastTarget = addon.SupportsSpellTarget,
     SupportsInstanceType = SupportsInstanceType,
     GetSettings = GetSettings,
     GetRules = function() return GetSettings().rules end,
@@ -1049,6 +1184,20 @@ _G.EllesmereUIExtendNameplates = publicAPI
 SLASH_EXTENDNAMEPLATES1 = "/enp"
 SLASH_EXTENDNAMEPLATES2 = "/extendnameplates"
 SlashCmdList.EXTENDNAMEPLATES = function(message)
+    if type(message) == "string" and message:lower():match("^%s*layers%s*$") then
+        local targetPlate
+        for _, plate in pairs((_G.EllesmereNameplates_NS and _G.EllesmereNameplates_NS.plates) or {}) do
+            if plate.unit then
+                local ok, same = pcall(UnitIsUnit, plate.unit, "target")
+                if ok and SafeBool(same) == true then targetPlate = plate; break end
+            end
+        end
+        if addon.ToggleTargetLayerPrototype then
+            local _, result = addon.ToggleTargetLayerPrototype(targetPlate)
+            print("Extend Nameplates: " .. result)
+        else print("Extend Nameplates: target-layer prototype unavailable.") end
+        return
+    end
     if type(message) == "string" and message:lower():match("^%s*cast%s*$") then
         local function ReportCast(text) print("Extend Nameplates: " .. text) end
         if not UnitExists("target") then ReportCast("Cast debug: select a target first."); return end
@@ -1080,6 +1229,26 @@ SlashCmdList.EXTENDNAMEPLATES = function(message)
                     ("rule " .. candidate.index .. " (" .. tostring(candidate.rule.name) .. ")") or "EUI default"))
             end
         else ReportCast("Cast color evaluation failed.") end
+        ReportCast("Targeting API: PlayerIsSpellTarget=" .. tostring(type(PlayerIsSpellTarget) == "function")
+            .. "; UnitIsSpellTarget=" .. tostring(type(UnitIsSpellTarget) == "function")
+            .. "; native alpha evaluator=" .. tostring(C_CurveUtil and type(C_CurveUtil.EvaluateColorValueFromBoolean) == "function" or false))
+        local targetFound = false
+        for _, plate in pairs((_G.EllesmereNameplates_NS and _G.EllesmereNameplates_NS.plates) or {}) do
+            local sameOK, same = pcall(UnitIsUnit, plate.unit, "target")
+            if sameOK and SafeBool(same) == true then
+                targetFound = true
+                if addon.GetTargetedCastGlowStatus then ReportCast("Targeted cast glow: " .. addon.GetTargetedCastGlowStatus(plate)) end
+                if addon.GetCastTargetRuleCandidates then
+                    local candidate, fallback, notCandidate = addon.GetCastTargetRuleCandidates(plate)
+                    if candidate or notCandidate then ReportCast("Conditional colors/glows: targeting me="
+                        .. (candidate and tostring(candidate.name) or "EUI")
+                        .. "; not targeting me=" .. (notCandidate and tostring(notCandidate.name) or "EUI")
+                        .. "; unavailable=" .. (fallback and tostring(fallback.name) or "EUI")) end
+                end
+                break
+            end
+        end
+        if not targetFound then ReportCast("Targeted cast glow: no visible EUI target plate.") end
         return
     end
     GetSettings()

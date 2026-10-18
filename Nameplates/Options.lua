@@ -16,6 +16,8 @@ local CLASSIFICATIONS = { any = "Any rank", normal = "Normal", elite = "Elite", 
 local CLASSIFICATION_ORDER = { "any", "normal", "elite", "rare", "rareelite", "boss", "minus" }
 local TARGETS = { any = "Any target state", yes = "Current target", no = "Not current target", none = "No target selected" }
 local TARGET_ORDER = { "any", "yes", "no", "none" }
+local CAST_TARGETS = { any = "Any cast target", me = "Targeting Me", notMe = "Not Targeting Me" }
+local CAST_TARGET_ORDER = { "any", "me", "notMe" }
 local THREATS = { any = "Any threat", nonTank = "Non-tank threat", tank = "Tank threat", me = "Threat on me" }
 local THREAT_ORDER = { "any", "nonTank", "tank", "me" }
 local PLAYER_COMBAT = { any = "Any combat state", inCombat = "In combat", outOfCombat = "Out of combat" }
@@ -24,6 +26,10 @@ local INSTANCES = { any = "Any instance type", world = "Open world", dungeon = "
     battleground = "Battleground", arena = "Arena", scenario = "Scenario", delve = "Delve" }
 local INSTANCE_ORDER = { "any", "world", "dungeon", "raid", "battleground", "arena", "scenario", "delve" }
 local CONDITION_TIPS = {
+    castTarget = {
+        me = "Blizzard identifies you as the spell target. Untargeted AoE and aggro alone do not qualify. Applies supported colors/glows in normal rule order.",
+        notMe = "An active cast that Blizzard reports is not targeting you, including untargeted AoE. Missing targeting data does not qualify. Both choices or neither means Any cast target.",
+    },
     unitType = {
         player = "Player characters.", npc = "Non-player characters, excluding player-controlled pets.",
         pet = "Player-controlled pets.", creature = "NPCs and player-controlled pets.",
@@ -229,13 +235,22 @@ local function BuildStylePage(parent, yOffset)
         if GlobalLocked() then return "Enable Nameplate styling to edit rules." end
         return "Enable this rule to edit its settings."
     end
+    local appearanceControls = false
+    local function TargetedRule() return private.IsTargetedRule(rule) end
+    local TARGET_LOCK_TIP = "A single Cast target choice supports fill colors and glows only. Select both or neither for unrestricted appearance."
     local function LockConfig(cfg, scope)
         if not cfg or cfg.type == "spacer" then return cfg end
         local locked = scope == "global" and GlobalLocked or RuleLocked
         local disabled, disabledTip, setValue = cfg.disabled, cfg.disabledTooltip, cfg.setValue
-        cfg.disabled = function() return locked() or (disabled and disabled()) or false end
+        local appearance = appearanceControls
+        local unsupported = appearance and not cfg.targetSupported
+        cfg.disabled = function()
+            return locked() or (appearance and TargetedRule() and (DB() ~= db or GetRule() ~= rule))
+                or (unsupported and private.IsTargetedRule(GetRule())) or (disabled and disabled()) or false
+        end
         cfg.disabledTooltip = function()
             if locked() then return LockTip() end
+            if unsupported and private.IsTargetedRule(GetRule()) then return TARGET_LOCK_TIP end
             if type(disabledTip) == "function" then return disabledTip() end
             return disabledTip
         end
@@ -296,7 +311,7 @@ local function BuildStylePage(parent, yOffset)
             local value = rule.style[prefix .. "GlowStyle"] or 0
             return Locked() or value == 0 or not addon.ValidateRuleGlowStyle(value)
         end
-        local row, height = LockedRow({ type = "dropdown", text = title .. " border glow", values = glowValues, order = glowOrder,
+        local row, height = LockedRow({ type = "dropdown", targetSupported = true, text = title .. " border glow", values = glowValues, order = glowOrder,
             disabled = Locked, disabledTooltip = Tip,
             getValue = function()
                 local value = GetRule().style[prefix .. "GlowStyle"] or 0
@@ -308,9 +323,9 @@ local function BuildStylePage(parent, yOffset)
                 GetRule().style[prefix .. "GlowStyle"] = value; Changed(); Rebuild()
             end,
             tooltip = (prefix == "health" and "Add an animated glow around the health bar. No custom border is required."
-                or "Add an animated glow around the cast bar. Replaces EUI's Important Cast Glow while active.")
+                or "Add a cast-bar glow. The Cast target condition gates supported colors/glows; conditional glows preserve EUI's Important Cast Glow.")
                 .. " Retail may use Pixel Glow when Shine cannot animate.",
-        }, { type = "colorpicker", text = title .. " glow color", hasAlpha = false,
+        }, { type = "colorpicker", targetSupported = true, text = title .. " glow color", hasAlpha = false,
             tooltip = "Choose the " .. title:lower() .. " bar's glow color.",
             disabled = NoGlow, disabledTooltip = function() return Locked() and Tip() or "Choose a border glow first." end,
             getValue = function()
@@ -327,7 +342,7 @@ local function BuildStylePage(parent, yOffset)
                 rule.style[prefix .. key] = value
                 Changed()
             end
-            GetHost().BuildInlineCog(row._leftRegion, {
+            local popup = {
                 title = title .. " glow settings", captureRegion = row._leftRegion,
                 tip = "Adjust the glow's appearance and animation.",
                 disabled = function() return Locked() or (NotPixel() and NotShine()) end,
@@ -368,7 +383,8 @@ local function BuildStylePage(parent, yOffset)
                             Set("GlowBackgroundColor", { r = r, g = g, b = b })
                         end },
                 },
-            })
+            }
+            GetHost().BuildInlineCog(row._leftRegion, popup)
         end
         return height
     end
@@ -563,10 +579,12 @@ local function BuildStylePage(parent, yOffset)
                 local item = { key = value, label = values[value] }
                 item.tooltip = CONDITION_TIPS[key] and CONDITION_TIPS[key][value]
                 local requiresStyle = key == "castState" and CUSTOM_CAST_STATES[value]
+                local unavailableTarget = function() return key == "castTarget" and not addon.SupportsCastTarget() end
                 local unavailableInstance = function() return key == "instanceType" and not addon.SupportsInstanceType(value) end
-                item.lockedFn = function() return RuleLocked() or (requiresStyle and not addon.SupportsCastColorStates()) or unavailableInstance() or false end
+                item.lockedFn = function() return RuleLocked() or (requiresStyle and not addon.SupportsCastColorStates()) or unavailableInstance() or unavailableTarget() or false end
                 item.lockedTooltip = function()
                     if RuleLocked() then return LockTip() end
+                    if unavailableTarget() then return "This client does not expose spell targeting. Saved selections are preserved." end
                     if unavailableInstance() then return "This instance type is not available on WoW Forever." end
                     return CUSTOM_CAST_STYLE_TIP
                 end
@@ -586,7 +604,8 @@ local function BuildStylePage(parent, yOffset)
             emptyLabel = values.any,
             getSelected = function(option) return GetSelection()[option] == true end,
             setSelected = function(option, selected)
-                if RuleLocked() then return end
+                if RuleLocked() or DB() ~= db or GetRule() ~= rule then return end
+                if key == "castTarget" and not addon.SupportsCastTarget() then return end
                 if key == "castState" and CUSTOM_CAST_STATES[option] and not addon.SupportsCastColorStates() then return end
                 if key == "instanceType" and selected and not addon.SupportsInstanceType(option) then return end
                 local current = GetRule()
@@ -600,6 +619,7 @@ local function BuildStylePage(parent, yOffset)
                     value.casting = nil
                 end
                 Changed()
+                if key == "castTarget" then Rebuild() end
             end,
         }
     end
@@ -667,7 +687,10 @@ local function BuildStylePage(parent, yOffset)
         end
         y = y - rowHeight
     end
-    _, h = LockedRow({
+    local castTarget = ConditionMultiDropdown("Cast target", "castTarget", CAST_TARGETS, CAST_TARGET_ORDER,
+        "One choice conditionally selects fill colors and glows during active casts. Both or neither means Any cast target, including non-casting units; other rule conditions still apply.")
+    local castTargetRow
+    castTargetRow, h = LockedRow({ type = "spacer", text = castTarget.text, tooltip = castTarget.tooltip }, {
         type = "toggle", text = "Quest Objective",
         getValue = function() return GetRule().conditions.questObjective == "yes" end,
         setValue = function(value)
@@ -676,7 +699,11 @@ local function BuildStylePage(parent, yOffset)
         end,
         tooltip = "Match only incomplete objectives in your quest log. Follows EUI's Show In Instances setting. Off ignores quest status.",
     })
+    if not GetHost().IsSearchPrebuild() then
+        BuildConditionMultiDropdown(castTargetRow._leftRegion, castTarget)
+    end
     y = y - h
+    appearanceControls = true
     _, h = W:SectionHeader(parent, "APPEARANCE - NAMEPLATE", y); y = y - h
     local sizeRow
     sizeRow, h = LockedRow({
@@ -693,7 +720,7 @@ local function BuildStylePage(parent, yOffset)
     if not GetHost().IsSearchPrebuild() and GetHost().BuildInlineCog then
         -- A popup can outlive its page/profile. Bind it to the rule that opened
         -- it and recheck both editor locks and selection on every write.
-        local function CogLocked() return RuleLocked() or DB() ~= db or GetRule() ~= rule end
+        local function CogLocked() return RuleLocked() or DB() ~= db or GetRule() ~= rule or TargetedRule() end
         local cogRows = {
             { type = "toggle", label = "Scale all", disabled = CogLocked, disabledTooltip = LockTip,
                 tooltip = "Select all elements for scaling. Off clears every selection.",
@@ -738,7 +765,7 @@ local function BuildStylePage(parent, yOffset)
     end
     y = y - h
     _, h = W:SectionHeader(parent, "APPEARANCE - HEALTH BAR", y); y = y - h
-    _, h = LockedRow({ type = "toggle", text = "Override health bar",
+    _, h = LockedRow({ type = "toggle", targetSupported = true, text = "Override health bar",
         getValue = function() return GetRule().style.healthEnabled ~= false end,
         setValue = function(value) GetRule().style.healthEnabled = value; Changed(); Rebuild() end,
         tooltip = "Apply this rule's health-bar appearance. Off restores EUI's health bar; nameplate size and opacity are unchanged.",
@@ -756,13 +783,13 @@ local function BuildStylePage(parent, yOffset)
         return HealthOff() or style.borderEnabled == false or (style.borderSize or 0) <= 0 or not addon.SupportsBorderStyles()
     end
     _, h = LockedRow({
-        type = "toggle", text = "Custom health color", disabled = HealthOff,
+        type = "toggle", targetSupported = true, text = "Custom health color", disabled = HealthOff,
         tooltip = "Use this rule's health-bar color. Tapped enemies keep EUI's tapped color.",
         disabledTooltip = "Enable Override health bar first.",
         getValue = function() return GetRule().style.healthColorEnabled ~= false end,
         setValue = function(value) GetRule().style.healthColorEnabled = value; Changed(); Rebuild() end,
     }, {
-        type = "colorpicker", text = "Health-bar color", hasAlpha = false,
+        type = "colorpicker", targetSupported = true, text = "Health-bar color", hasAlpha = false,
         tooltip = "Choose the health bar's fill color.",
         disabled = function() return HealthOff() or GetRule().style.healthColorEnabled == false end,
         disabledTooltip = "Enable Custom health color first.",
@@ -820,7 +847,7 @@ local function BuildStylePage(parent, yOffset)
 
     h = GlowRow("health", HealthOff, "Enable Override health bar first."); y = y - h
     _, h = W:SectionHeader(parent, "APPEARANCE - CAST BAR", y); y = y - h
-    _, h = LockedRow({ type = "toggle", text = "Override cast bar",
+    _, h = LockedRow({ type = "toggle", targetSupported = true, text = "Override cast bar",
         getValue = function() return GetRule().style.castEnabled == true end,
         setValue = function(value) GetRule().style.castEnabled = value; Changed(); Rebuild() end,
         tooltip = "Apply this rule's cast-bar appearance. Off restores EUI's cast bar. Does not add cast bars to friendly plates.",
@@ -830,7 +857,7 @@ local function BuildStylePage(parent, yOffset)
     local function CastOff() return GetRule().style.castEnabled ~= true end
     local function CastToggle(text, key, tooltip)
         return {
-            type = "toggle", text = text, disabled = CastOff,
+            type = "toggle", targetSupported = key == "castColorEnabled", text = text, disabled = CastOff,
             tooltip = tooltip,
             disabledTooltip = "Enable Override cast bar first.",
             getValue = function() return GetRule().style[key] == true end,
@@ -839,7 +866,7 @@ local function BuildStylePage(parent, yOffset)
     end
     local function CastColor(text, key, enabledKey)
         return {
-            type = "colorpicker", text = text, hasAlpha = false,
+            type = "colorpicker", targetSupported = key == "castColor", text = text, hasAlpha = false,
             tooltip = key == "castColor" and "Choose the cast bar's fill color." or "Choose the cast bar's border color.",
             disabled = function() return CastOff() or GetRule().style[enabledKey] ~= true end,
             disabledTooltip = key == "castBorderColor" and BorderTip("Override cast border")
@@ -903,6 +930,7 @@ local function BuildStylePage(parent, yOffset)
         tooltip = "Apply this rule's text content, colors, sizes and offsets. Off restores EUI's text. Bar overrides are not required.",
     }); y = y - h
     local function TextOff()
+        if TargetedRule() then return true end
         return RuleLocked() or DB() ~= db or GetRule() ~= rule or rule.style.textEnabled ~= true
     end
     local function TextTip()

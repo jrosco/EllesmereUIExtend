@@ -88,6 +88,7 @@ function api.BuildRulePreview(parent, parentWidth, getRule, locked)
             parent._extrasRulePreview = preview -- restored header-cache child becomes current again
             local rule, index = getRule()
             local style = rule.style or {}
+            if addon.IsTargetedRule(rule) then style = addon.TargetedAppearanceStyle(style) end
             local np = EllesmereNameplates_NS or {}
             local profile, defaults = np.db and np.db.profile or {}, np.defaults or {}
             local castDefaults = api.CastStyleDefaults or {}

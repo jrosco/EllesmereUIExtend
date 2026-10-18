@@ -61,6 +61,71 @@ Verify paths rather than assuming the earlier standalone-addon repository layout
 
 ## Coverage map
 
+Targeted Shine: `cast-target.lua` checks both secret-target alternatives retain
+Auto-Cast Shine, independent sparkle sizes, inverse native alpha gates, stable
+animation starts across target changes, restricted/throwing visibility fallback
+to engine Pixel, recovery and native Important Cast preservation. In game on
+Retail and Forever confirm sparkles actually animate (not merely appear), both
+target choices switch mid-cast, hidden/released plates stop effects and no native
+driver errors occur. The upstream EUI driver must tolerate secret alpha; mocked
+renderers cannot prove native geometry/visibility behavior or animation safety.
+
+Cast-target regressions cover both single choices, native true/false secret
+selection, untargeted casts, unavailable-target fallback, both/none unrestricted
+matching outside casts, editor unlocking, sharing and normal rule priority.
+On Retail and Forever test Targeting Me, Not Targeting Me, both and neither;
+verify untargeted AoE qualifies only Not Targeting Me, and both/none restore
+ordinary controls and allow non-casting units when Cast state is Any.
+
+Nameplates `cast-target.lua` covers rule-priority conditional health/cast fill
+colors and dual glow alternatives, native secret-boolean gating, mid-cast updates,
+missing/throwing APIs, native important-cast preservation, latest-color restoration
+and recycling;
+it also distinguishes untargeted/AoE casts with player aggro from spells whose
+explicit target is the player. User testing in a Retail follower dungeon confirmed the
+earlier glow-only player-targeted path; the new rule-based colors/dual glows require
+retesting. The Living Earth Elemental's Heavy Impacts returned false
+in a native visual probe. This is evidence about the target flag, not a general
+classification of the spell's effects. Forever native rendering remains an
+in-game verification item.
+
+`cast-options.lua` covers
+the Cast target rule condition, unsupported appearance locks, supported preview,
+live-only targeting, sharing and older-EUI fallback. In game on both Retail
+and Forever, verify casts at you versus others/untargeted spells, target changes
+mid-cast, unavailable targeting, live-only cast glows, same-unit plate reuse versus
+different-unit recycling, edits/profile switches, and restoration on disable.
+Place a Targeting me rule above/below an ordinary rule: check fill colors and both
+glow alternatives respect priority, while textures/borders/text/opacity/scaling
+remain owned by ordinary rules/EUI. Without an ordinary rule, check the latest
+native colors return when targeting no longer qualifies. Confirm native
+interrupted flashes and Important Cast Glow remain intact. The Cast target
+dropdown replaces the earlier development glow-only toggle without migration.
+Mocks do not prove restricted-VM or
+custom Forever API availability.
+
+`target-layers.lua` covers the opt-in `/enp layers` proof of concept: separate
+texture/border/fixed-text layers, native secret alpha and direct boolean fallback,
+forbidden-anchor and missing-media gates, bounded frame reuse, native ownership,
+interrupted-cast priority, profile/disable/hide/release cleanup and stale-fill
+shutdown. On both Retail and Forever, select a visible enemy and run `/enp layers`:
+check purple fills track native progress, additive borders and TARGET LAYER TEST
+labels appear only for spells explicitly aimed at you, and other-player/untargeted
+casts hide them. Test EUI/Classic and stock-art styles, combat, lifted casts,
+interruptions, recycling, profile switches and native health/cast repaints. Run the
+command again to stop. Watch for taint/errors and report the setup message plus
+which of texture/border/text actually rendered. Borders can be silently skipped
+by EUI's restricted-geometry guard. This demo deliberately leaves original
+regions untouched; it does not yet verify production replacement, conditional
+text content/layout, or suppression/restoration of ordinary/native alternatives.
+Additional regressions check native cast-texture refresh retains the targeting
+palette, failed demo layers stay quarantined until restart, all-failed sessions
+stop polling, direct-start cleanup hooks, bar replacement and cast-lift shutdown.
+They also check conditional health-setter failures release polling/glows, report
+once, restore fallback paint and accept later native writes; prototype anchor
+failures must include an actionable setup reason. `style-capability.lua` verifies
+Cast state selection without a targeting-only page rebuild.
+
 Paths below are relative to each addon's `tests/` directory.
 
 ### Core

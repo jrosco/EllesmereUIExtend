@@ -21,6 +21,7 @@ Text.lua
 Scaling.lua
 TargetArrows.lua
 CastStyles.lua
+TargetLayers.lua
 RuleIO.lua
 Preview.lua
 Options.lua
