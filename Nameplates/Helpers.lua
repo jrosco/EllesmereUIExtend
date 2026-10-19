@@ -26,6 +26,13 @@ function addon.IsTargetedRule(rule)
     return addon.CastTargetSelection(rule) ~= nil
 end
 
+-- A single Cast target choice requires an active cast even when Cast state is
+-- Any. Keep this separate from the explicit Cast state checklist and renderer
+-- capability gates. "unknown" is still an active cast with an unreadable kind.
+function addon.IsActiveCastState(value)
+    return not addon.IsSecret(value) and type(value) == "string" and value ~= "none"
+end
+
 function addon.SupportsSpellTarget()
     return type(PlayerIsSpellTarget) == "function" or type(UnitIsSpellTarget) == "function"
 end
@@ -83,18 +90,23 @@ end
 -- all the way to native setters; never use them as Lua rule-selection facts.
 function addon.SelectTargetColor(flag, yes, no)
     local evaluate = C_CurveUtil and C_CurveUtil.EvaluateColorValueFromBoolean
-    if type(evaluate) ~= "function" then
-        if addon.IsSecret(flag) or type(flag) ~= "boolean" then return false end
-        if flag then return true, yes[1], yes[2], yes[3], yes[4] end
-        return true, no[1], no[2], no[3], no[4]
+    if type(evaluate) == "function" then
+        local result = {}
+        for index = 1, 4 do
+            local ok, value = pcall(evaluate, flag, yes[index], no[index])
+            if not ok or (not addon.IsSecret(value) and type(value) ~= "number") then
+                result = nil
+                break
+            end
+            result[index] = value
+        end
+        if result then return true, result[1], result[2], result[3], result[4] end
     end
-    local result = {}
-    for index = 1, 4 do
-        local ok, value = pcall(evaluate, flag, yes[index], no[index])
-        if not ok or (not addon.IsSecret(value) and type(value) ~= "number") then return false end
-        result[index] = value
-    end
-    return true, result[1], result[2], result[3], result[4]
+    -- A missing or failing native evaluator does not prevent readable selection.
+    -- Discard any partial native palette; secret flags still require that sink.
+    if addon.IsSecret(flag) or type(flag) ~= "boolean" then return false end
+    if flag then return true, yes[1], yes[2], yes[3], yes[4] end
+    return true, no[1], no[2], no[3], no[4]
 end
 
 function addon.ClampNumber(value, fallback, minimum, maximum)

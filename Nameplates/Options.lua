@@ -27,7 +27,7 @@ local INSTANCES = { any = "Any instance type", world = "Open world", dungeon = "
 local INSTANCE_ORDER = { "any", "world", "dungeon", "raid", "battleground", "arena", "scenario", "delve" }
 local CONDITION_TIPS = {
     castTarget = {
-        me = "Blizzard identifies you as the spell target. Untargeted AoE and aggro alone do not qualify. Applies supported colors/glows in normal rule order.",
+        me = "An active cast that Blizzard identifies as targeting you. Untargeted AoE and aggro alone do not qualify. Applies supported colors/glows in normal rule order.",
         notMe = "An active cast that Blizzard reports is not targeting you, including untargeted AoE. Missing targeting data does not qualify. Both choices or neither means Any cast target.",
     },
     unitType = {

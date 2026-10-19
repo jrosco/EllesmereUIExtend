@@ -10,6 +10,15 @@ Rebuild()
 local target = assert(rows["Cast target"])
 assert(target.emptyLabel == "Any cast target" and #target.items == 2 and target.items[1].key == "me"
     and target.items[2].key == "notMe")
+for _, item in ipairs(target.items) do
+    assert(item.tooltip:find("An active cast", 1, true), item.label .. " explains active-cast eligibility")
+end
+assert(target.tooltip:find("fill colors and glows during active casts", 1, true),
+    "single-choice tooltip explains supported effects and active-cast eligibility")
+assert(target.tooltip:find("Both or neither means Any cast target, including non-casting units", 1, true),
+    "both or neither leaves cast targeting unrestricted outside casts")
+assert(target.tooltip:find("other rule conditions still apply", 1, true),
+    "unrestricted cast targeting does not bypass other conditions")
 target.set("me", true); f.Flush()
 assert(rule.conditions.castTarget.me)
 assert(target.items[1].tooltip:find("Untargeted AoE", 1, true))

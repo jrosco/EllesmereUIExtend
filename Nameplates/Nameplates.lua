@@ -505,7 +505,7 @@ end
 local function MatchesWithSnapshot(rule, unit, traits, includeTargeted, snapshot)
     if not rule.enabled then return false end
     local targetSelection = addon.CastTargetSelection(rule)
-    if targetSelection and (targetSelection ~= includeTargeted or traits.castState == "none") then return false end
+    if targetSelection and (targetSelection ~= includeTargeted or not addon.IsActiveCastState(traits.castState)) then return false end
     local c = rule.conditions or {}
     -- Color-state choices imply active Casting for appearance eligibility.
     -- Their precise state is consumed only by the native cast-color renderer.
@@ -575,9 +575,6 @@ local function FindCastColorOverrides(unit, traits)
     return FindCastColorOverridesWithSnapshot(unit, traits)
 end
 addon.FindCastColorOverrides = FindCastColorOverrides
-addon.FindTargetedCastColorOverrides = function(unit, traits, snapshot)
-    return FindCastColorOverridesWithSnapshot(unit, traits, snapshot, "me")
-end
 
 local function FindRuleWithSnapshot(unit, snapshot)
     -- Both target alternatives share readable predicates, including direct
@@ -598,22 +595,35 @@ local function FindRuleWithSnapshot(unit, snapshot)
     local checkCombat, checkInstance = ContextRequirements(db.rules)
     local traits = GetTraits(unit, checkQuestObjective, checkThreat, checkRoles, checkCombat, checkInstance)
     local matches = snapshot and MatchesWithSnapshot or Matches
-    local winner, winnerIndex, targetedWinner, notTargetedWinner
+    -- Entries always exist; palettes are attached only by the rendering refresh.
+    local candidates = { fallback = { castColors = {} }, me = { castColors = {} }, notMe = { castColors = {} } }
+    local function SetCandidate(key, rule, index)
+        local candidate = candidates[key]
+        candidate.rule, candidate.index = rule, index
+        if key == "fallback" then candidate.style = rule.style
+        else candidate.style = addon.TargetedAppearanceStyle(rule.style) end
+    end
+    local winner, winnerIndex
     for index, rule in ipairs(db.rules) do
-        if not targetedWinner and matches(rule, unit, traits, "me", snapshot) then
-            targetedWinner = rule
+        if not candidates.me.rule and matches(rule, unit, traits, "me", snapshot) then
+            SetCandidate("me", rule, index)
         end
-        if not notTargetedWinner and matches(rule, unit, traits, "notMe", snapshot) then
-            notTargetedWinner = rule
+        if not candidates.notMe.rule and matches(rule, unit, traits, "notMe", snapshot) then
+            SetCandidate("notMe", rule, index)
         end
         if not winner then
             local live = matches(rule, unit, traits, false, snapshot)
-            if live then winner, winnerIndex = rule, index end
-            if not targetedWinner and live then targetedWinner = rule end
+            if live then
+                winner, winnerIndex = rule, index
+                SetCandidate("fallback", rule, index)
+            end
+            if not candidates.me.rule and live then
+                SetCandidate("me", rule, index)
+            end
         end
-        if winner and targetedWinner and notTargetedWinner then break end
+        if winner and candidates.me.rule and candidates.notMe.rule then break end
     end
-    return winner, winnerIndex, traits, targetedWinner, notTargetedWinner
+    return winner, winnerIndex, traits, candidates
 end
 
 local function FindRule(unit)
@@ -695,12 +705,13 @@ local function UpdateTargetContext(plate, context)
     if not ok then flag = false end
     context.flag, context.available = flag, ok
     local state = context.state
-    local yes = HealthColorFor(ok and context.rule or context.fallback, state, context.traits)
-    local no = HealthColorFor(ok and context.notRule or context.fallback, state, context.traits)
+    local candidates = context.candidates
+    local yes = HealthColorFor((ok and candidates.me or candidates.fallback).rule, state, context.traits)
+    local no = HealthColorFor((ok and candidates.notMe or candidates.fallback).rule, state, context.traits)
     if yes and no and plate.health then
         local selected, r, g, b, a = addon.SelectTargetColor(flag, yes, no)
         if not selected then
-            local fallback = HealthColorFor(context.fallback, state, context.traits)
+            local fallback = HealthColorFor(candidates.fallback.rule, state, context.traits)
             if not fallback then return end
             r, g, b, a = fallback[1], fallback[2], fallback[3], fallback[4]
         end
@@ -731,16 +742,16 @@ local function SetTargetContext(plate, context)
                             -- Stop retrying a broken renderer every 100 ms. The
                             -- next ordinary refresh can build a fresh context.
                             targetContexts[owner] = nil
-                            local color = HealthColorFor(current.fallback, current.state, current.traits)
+                            local fallback = current.candidates.fallback
+                            local color = HealthColorFor(fallback.rule, current.state, current.traits)
                             if color and owner.health then
                                 current.state.writingHealth = true
                                 pcall(owner.health.SetStatusBarColor, owner.health, unpack(color))
                                 current.state.writingHealth = nil
                             end
-                            local fallback = current.fallback
                             if addon.ApplyCastStyle then pcall(addon.ApplyCastStyle, owner,
-                                fallback and fallback.style, fallback and fallback.conditions, current.fallbackCastColors) end
-                            if addon.ApplyRuleGlows then pcall(addon.ApplyRuleGlows, owner, fallback and fallback.style) end
+                                fallback.style, fallback.rule and fallback.rule.conditions, fallback.castColors) end
+                            if addon.ApplyRuleGlows then pcall(addon.ApplyRuleGlows, owner, fallback.style) end
                             local report = geterrorhandler and geterrorhandler()
                             if report then report(err) end
                         end
@@ -754,7 +765,7 @@ local function SetTargetContext(plate, context)
 end
 addon.GetCastTargetRuleCandidates = function(plate)
     local context = targetContexts[plate]
-    if context then return context.rule, context.fallback, context.notRule end
+    if context then return context.candidates.me.rule, context.candidates.fallback.rule, context.candidates.notMe.rule end
 end
 
 local function ResetStyle(plate, state, released, castColors)
@@ -809,23 +820,25 @@ local function ApplyStyle(plate)
     end
     -- Never retain evaluation results on a plate or across rendering refreshes.
     local snapshot = {}
-    local rule, _, traits, targetedRule, notTargetedRule = FindRuleWithSnapshot(unit, snapshot)
+    local rule, _, traits, candidates = FindRuleWithSnapshot(unit, snapshot)
+    candidates = candidates or { fallback = {}, me = {}, notMe = {} }
     local castColors = FindCastColorOverridesWithSnapshot(unit, traits, snapshot)
-    local targetColors = FindCastColorOverridesWithSnapshot(unit, traits, snapshot, "me")
-    local notTargetColors = FindCastColorOverridesWithSnapshot(unit, traits, snapshot, "notMe")
+    candidates.fallback.castColors = castColors
+    candidates.me.castColors = FindCastColorOverridesWithSnapshot(unit, traits, snapshot, "me")
+    candidates.notMe.castColors = FindCastColorOverridesWithSnapshot(unit, traits, snapshot, "notMe")
     local paletteChanged = false
     for _, key in ipairs(CAST_COLOR_STATES) do
-        if (castColors[key] and castColors[key].rule) ~= (targetColors[key] and targetColors[key].rule) then paletteChanged = true end
-        if (castColors[key] and castColors[key].rule) ~= (notTargetColors[key] and notTargetColors[key].rule) then paletteChanged = true end
+        local fallback = castColors[key] and castColors[key].rule
+        for _, branch in ipairs({ "me", "notMe" }) do
+            local color = candidates[branch].castColors[key]
+            if fallback ~= (color and color.rule) then paletteChanged = true end
+        end
     end
+    local glowChanged = candidates.me.rule ~= rule or candidates.notMe.rule ~= rule
     local context
-    if targetedRule ~= rule or notTargetedRule ~= rule or paletteChanged then
-        context = { unit = unit, settings = db, rule = targetedRule, fallback = rule,
-            style = targetedRule and addon.TargetedAppearanceStyle(targetedRule.style), castColors = targetColors,
-            notRule = notTargetedRule, notStyle = notTargetedRule and addon.TargetedAppearanceStyle(notTargetedRule.style),
-            notCastColors = notTargetColors, fallbackStyle = rule and rule.style,
-            fallbackCastColors = castColors,
-            glowChanged = targetedRule ~= rule or notTargetedRule ~= rule, state = state, traits = traits }
+    if glowChanged or paletteChanged then
+        context = { unit = unit, settings = db, candidates = candidates,
+            glowChanged = glowChanged, state = state, traits = traits }
         local ok, flag = addon.ReadSpellTarget(unit)
         if not ok then flag = false end
         context.flag, context.available = flag, ok
@@ -1184,20 +1197,6 @@ _G.EllesmereUIExtendNameplates = publicAPI
 SLASH_EXTENDNAMEPLATES1 = "/enp"
 SLASH_EXTENDNAMEPLATES2 = "/extendnameplates"
 SlashCmdList.EXTENDNAMEPLATES = function(message)
-    if type(message) == "string" and message:lower():match("^%s*layers%s*$") then
-        local targetPlate
-        for _, plate in pairs((_G.EllesmereNameplates_NS and _G.EllesmereNameplates_NS.plates) or {}) do
-            if plate.unit then
-                local ok, same = pcall(UnitIsUnit, plate.unit, "target")
-                if ok and SafeBool(same) == true then targetPlate = plate; break end
-            end
-        end
-        if addon.ToggleTargetLayerPrototype then
-            local _, result = addon.ToggleTargetLayerPrototype(targetPlate)
-            print("Extend Nameplates: " .. result)
-        else print("Extend Nameplates: target-layer prototype unavailable.") end
-        return
-    end
     if type(message) == "string" and message:lower():match("^%s*cast%s*$") then
         local function ReportCast(text) print("Extend Nameplates: " .. text) end
         if not UnitExists("target") then ReportCast("Cast debug: select a target first."); return end

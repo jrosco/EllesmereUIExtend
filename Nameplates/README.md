@@ -47,6 +47,8 @@ Conditional glows prefer native boolean-to-alpha evaluation and `Frame:SetAlpha`
 
 Unreadable root scale values temporarily suspend all scaling categories and release child compensation; unreadable alpha suspends the root opacity multiplier. Saved rules remain unchanged and styling resumes when native values become readable. Latest native secret writes stay native-owned rather than being replaced by older readable snapshots.
 
+Cast-bar opacity follows the same readable-value safeguard: restricted or failed alpha reads suspend multiplication, native secret writes remain untouched, and a later readable native state permits recovery. Target colour and glow capabilities are independent; a client with boolean-alpha support but no colour evaluator can still show a conditional glow while colours use ordinary/native fallback.
+
 The pinned **Style preview** displays the selected rule's saved appearance without evaluating conditions. Health, repeating casts/timers, text, glows and arrows update immediately; hidden previews stop animating. Overrides off, unmatched rules, disabled styling and recycled plates restore the **latest EUI-authored state**, not an initial snapshot. If native cast-spark anchors are restricted, texture styling continues while spark retargeting waits for a later refresh with readable anchors; native anchors are never cleared or guessed.
 
 Text rows include inherited EUI slots and explicit rule content, omitting hidden positions. Different slots may show the same content with different colors. Existing content-wide saved colors remain a fallback; turning a slot's color override off keeps EUI coloring for that slot without deleting other colors. Older EUI versions without slot-menu helpers add the first free position and offer Move through the popup's Position dropdown.
@@ -73,9 +75,8 @@ State checkboxes require EUI or Classic WoW UI nameplate style; Blizzard/WoW For
 
 - `/enp` or `/extendnameplates`: diagnostics and style reapplication for a visible enemy target; does **not** open settings.
 - `/enp cast`: target cast details, ordinary winners per cast-color state, conditional rule candidates, spell-target API availability and the targeted-glow rendering path for a visible EUI target plate. Secret states may report unknown while native rendering still works; candidates are not proof of which secret branch is displayed.
-- `/enp layers`: opt-in **experimental** native-layer test on the selected visible nameplate; run again to stop. Shows purple fill overlays, additive Solid borders and a fixed **TARGET LAYER TEST** label when Blizzard identifies you as the spell target. It ignores rule filters, changes no saved settings, and does not replace/suppress native textures, borders or text. Restricted anchors or missing assets disable affected layers; interrupted casts hide cast demo layers. Plate hide/release, native fill replacement, profile switch and disabling styling stop the demo. A successful setup message does not prove visibility. This is a proof of concept for Retail/Forever testing, not permission to unlock unsupported rule controls yet.
 
-The layer prototype quarantines failed layers until explicitly restarted and stops polling when none remain. Setup failures include readable error details; update exceptions stop the demo and report the reason. Native bar replacement or cast-lifting changes also stop it; restart `/enp layers` after the native layout settles.
+The experimental native-layer prototype is development-only: its source and regression tests remain in the repository, but it is excluded from addon packages and the release TOC. Normal installs do not expose `/enp layers`. See [Testing](../TESTING.md) for the developer-only harness.
 
 If a conditional rule renderer throws during polling, the addon stops polling that context, attempts to restore ordinary-rule/EUI appearance and reports the error once. A subsequent ordinary styling refresh can retry with a fresh context.
 

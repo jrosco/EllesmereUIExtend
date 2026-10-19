@@ -1,5 +1,7 @@
 local f = assert(loadfile("Nameplates/tests/runtime.lua"))("traits")
 local addon, api, plate = f.namespace, f.api, f.plate
+assert(addon.ToggleTargetLayerPrototype == nil and addon.GetTargetLayerPrototype == nil,
+    "normal runtime fixture does not load the development-only prototype")
 -- The general fixture's health getter returns a path-only table each call.
 -- Model a real, stable StatusBar texture region for anchor/replacement checks.
 local healthFill = plate.health:CreateTexture()
@@ -148,10 +150,8 @@ for _, entry in ipairs(session.layers) do
     assert(not entry.frame:IsShown() and entry.frame:GetAlpha() == 0)
     entry.frame.SetAlpha, entry.frame.SetAlphaFromBoolean = alpha, booleanAlpha
 end
-f.mocks.target = true
-EllesmereNameplates_NS.plates = { plate }
-SlashCmdList.EXTENDNAMEPLATES("layers")
-assert(addon.GetTargetLayerPrototype(), "opt-in slash finds the selected plate")
-SlashCmdList.EXTENDNAMEPLATES("layers")
-assert(not addon.GetTargetLayerPrototype(), "slash toggles off")
-print("PASS: opt-in native texture/border/text layers, secrets, forbidden anchors, assets, bounded reuse, native ownership and lifecycle")
+assert(addon.ToggleTargetLayerPrototype(plate))
+assert(addon.GetTargetLayerPrototype(), "manually loaded development prototype starts through its namespace")
+addon.ToggleTargetLayerPrototype(plate)
+assert(not addon.GetTargetLayerPrototype(), "namespace toggle stops the development prototype")
+print("PASS: manually loaded development native texture/border/text layers, secrets, forbidden anchors, assets, bounded reuse, native ownership and lifecycle")

@@ -104,16 +104,20 @@ dropdown replaces the earlier development glow-only toggle without migration.
 Mocks do not prove restricted-VM or
 custom Forever API availability.
 
-`target-layers.lua` covers the opt-in `/enp layers` proof of concept: separate
+`target-layers.lua` manually loads the development-only proof of concept: separate
 texture/border/fixed-text layers, native secret alpha and direct boolean fallback,
 forbidden-anchor and missing-media gates, bounded frame reuse, native ownership,
 interrupted-cast priority, profile/disable/hide/release cleanup and stale-fill
-shutdown. On both Retail and Forever, select a visible enemy and run `/enp layers`:
+shutdown. It is excluded from the TOC, local ZIPs and release packager; normal
+installs have no `/enp layers` command. Native prototype checks require a separate
+developer harness that explicitly loads `TargetLayers.lua` into the feature's
+private namespace and invokes `ToggleTargetLayerPrototype(plate)` on a visible
+enemy plate. Do not add this harness to release packages. On Retail and Forever,
 check purple fills track native progress, additive borders and TARGET LAYER TEST
 labels appear only for spells explicitly aimed at you, and other-player/untargeted
 casts hide them. Test EUI/Classic and stock-art styles, combat, lifted casts,
-interruptions, recycling, profile switches and native health/cast repaints. Run the
-command again to stop. Watch for taint/errors and report the setup message plus
+interruptions, recycling, profile switches and native health/cast repaints. Invoke
+the toggle again to stop. Watch for taint/errors and report the setup message plus
 which of texture/border/text actually rendered. Borders can be silently skipped
 by EUI's restricted-geometry guard. This demo deliberately leaves original
 regions untouched; it does not yet verify production replacement, conditional
@@ -125,6 +129,20 @@ They also check conditional health-setter failures release polling/glows, report
 once, restore fallback paint and accept later native writes; prototype anchor
 failures must include an actionable setup reason. `style-capability.lua` verifies
 Cast state selection without a targeting-only page rebuild.
+
+Review regressions: `cast-target-priority.lua` exercises palette-only contexts
+without changing higher-priority unrestricted health colour under polling;
+`cast-target-eligibility.lua` covers both single choices versus explicit cast
+conditions and both/neither unrestricted semantics; `target-capabilities.lua`
+tests independent native alpha/colour sinks and readable curve-failure recovery.
+Different supported sinks may legitimately expose different effects: do not
+disable working boolean-alpha glows just because native colour selection is
+unavailable. `cast-opacity-secrets.lua` verifies secret/throwing native alpha,
+safe suspension, fresh-state recovery and write-guard cleanup. These require
+Retail/Forever native verification; no mock test proves secret VM behavior.
+`target-candidates.lua` verifies the shared branch table, lazy diagnostic matching,
+palette identity and unchanged glow ownership; `glow-target-gates.lua` verifies
+per-bar gate reuse, inverse alpha, cast-only diagnostics and teardown.
 
 Paths below are relative to each addon's `tests/` directory.
 

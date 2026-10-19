@@ -12,35 +12,33 @@ local hooked = setmetatable({}, { __mode = "k" })
 local Apply
 local Secret = addon.IsSecret
 local Number = addon.ClampNumber
-local function TargetGate(state, host, bar, prefix)
-    local context = state.targetContext
-    local gateKey = prefix == "health" and "healthTargetGate" or "targetGate"
-    local parentKey = prefix == "health" and "healthGated" or "gated"
-    local enabled = context ~= nil
-    if not enabled then
-        state.targetStatus = "targeting disabled"
-        state.targetSecret = false
-        if state[parentKey] then host:SetParent(bar); state[parentKey] = nil end
-        if state[gateKey] then state[gateKey]:SetAlpha(0) end
-        return true
+local function TargetGate(state, host, bar, prefix, context, expected)
+    local gate = state.gates[prefix]
+    if not context then
+        if gate then
+            gate.status = "targeting disabled"
+            if gate.parented then host:SetParent(bar); gate.parented = nil end
+            gate.frame:SetAlpha(0)
+        end
+        return true, false, "targeting disabled"
     end
-    local gate = state[gateKey]
     if not gate then
-        gate = CreateFrame("Frame", nil, bar)
-        gate:SetAllPoints(bar)
-        gate:EnableMouse(false)
-        state[gateKey] = gate
+        local frame = CreateFrame("Frame", nil, bar)
+        frame:SetAllPoints(bar)
+        frame:EnableMouse(false)
+        gate = { frame = frame }
+        state.gates[prefix] = gate
     end
-    if not state[parentKey] then host:SetParent(gate); state[parentKey] = true end
-    gate:SetAlpha(0)
-    gate:Show()
+    if not gate.parented then host:SetParent(gate.frame); gate.parented = true end
+    gate.frame:SetAlpha(0)
+    gate.frame:Show()
     local value = context.flag
     -- A secret boolean is forwarded to the native sink, never compared or
     -- negated. The separate parent survives alpha writes by the glow renderer.
-    state.targetSecret = Secret(value) == true
+    local secret = Secret(value) == true
     local written
-    written, state.targetStatus = addon.SetTargetAlpha(gate, value, state.targetExpected)
-    return written
+    written, gate.status = addon.SetTargetAlpha(gate.frame, value, expected)
+    return written, secret, gate.status
 end
 function api.SupportsRuleGlows()
     local G = GetHost() and GetHost().Glows
@@ -200,7 +198,7 @@ local function Host(plate, state, prefix, bar)
         host:SetScript("OnHide", function()
             ClearGlow(host)
             if prefix == "cast" then
-                ReleaseImportant(state); state.castRunning = false
+                ReleaseImportant(state); state.castRunning = false; state.targetStatus = nil
             end
         end)
         host:SetScript("OnShow", function() if not state.busy then Apply(plate, state) end end)
@@ -211,6 +209,7 @@ local function Host(plate, state, prefix, bar)
 end
 Apply = function(plate, state)
     if state.busy then return end
+    state.targetStatus = nil
     if state.unit ~= plate.unit then
         Stop(state.health); Stop(state.cast); ReleaseImportant(state)
         return
@@ -221,9 +220,9 @@ Apply = function(plate, state)
         if state.targetContext then
             local context = state.targetContext
             if not context.available then
-                style = not state.targetExpected and context.fallbackStyle or nil
-            elseif state.targetExpected then style = context.style
-            else style = context.notStyle end
+                style = not state.targetExpected and context.candidates.fallback.style or nil
+            elseif state.targetExpected then style = context.candidates.me.style
+            else style = context.candidates.notMe.style end
         end
         for _, prefix in ipairs({ "health", "cast" }) do
             local bar = prefix == "health" and plate.health or plate.cast
@@ -248,7 +247,9 @@ Apply = function(plate, state)
                 end
                 if visible or restricted then
                     local width, height = AuthoredDimensions(plate, prefix, state.sizes[prefix])
-                    if TargetGate(state, host, bar, prefix) then
+                    local written, secret, status = TargetGate(state, host, bar, prefix, state.targetContext, state.targetExpected)
+                    if prefix == "cast" then state.targetStatus = status end
+                    if written then
                         -- Probe again after parenting beneath the alpha gate.
                         -- EUI's Shine driver supports secret alpha, but skips
                         -- secret visibility and drops throwing visibility getters.
@@ -259,7 +260,7 @@ Apply = function(plate, state)
                         -- targeting. Shine only falls back for actual visibility
                         -- restrictions, not merely an unreadable alpha value.
                         running = Render(host, spec, width, height, false,
-                            restricted or (targetOnly and state.targetSecret and spec.style ~= 3))
+                            restricted or (targetOnly and secret and spec.style ~= 3))
                     else Stop(host) end
                 else Stop(host) end
             else Stop(host) end
@@ -285,7 +286,7 @@ function addon.ApplyRuleGlows(plate, style, context)
     local state = states[plate]
     if not state then
         if not context and not Spec(style, "health") and not Spec(style, "cast") then return end
-        state = { sizes = { health = {}, cast = {} } }
+        state = { sizes = { health = {}, cast = {} }, gates = {} }
         states[plate] = state
     end
     state.style, state.unit = style, plate.unit
@@ -294,10 +295,10 @@ function addon.ApplyRuleGlows(plate, style, context)
     local targetState = targetedStates[plate]
     if context then
         if not targetState then
-            targetState = { sizes = state.sizes }
+            targetState = { sizes = state.sizes, gates = {} }
             targetedStates[plate] = targetState
         end
-        targetState.style, targetState.unit = context.style, plate.unit
+        targetState.style, targetState.unit = context.candidates.me.style, plate.unit
         targetState.targetContext, targetState.targetExpected = context, true
         Apply(plate, targetState)
     elseif targetState then
@@ -358,7 +359,8 @@ addon.GetRuleGlowFrames = function(plate)
 end
 addon.GetRuleCastGlowGate = function(plate)
     local state = targetedStates[plate]
-    return state and state.targetGate
+    local gate = state and state.gates.cast
+    return gate and gate.frame
 end
 addon.GetTargetedCastGlowStatus = function(plate)
     local state = targetedStates[plate]
