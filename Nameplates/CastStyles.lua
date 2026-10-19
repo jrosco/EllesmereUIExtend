@@ -45,8 +45,7 @@ local function ReanchorSpark(spark, staleFills, fill)
     return true
 end
 
-local function PaintColor(plate, state, texture, entry)
-    local colors = state.castColors
+local function PaletteColor(plate, colors, entry)
     local override = colors and next(colors) and not plate._interrupted
     local r, g, b = entry.color[1], entry.color[2], entry.color[3]
     if override then
@@ -80,14 +79,33 @@ local function PaintColor(plate, state, texture, entry)
             else override = false end
         end
     end
+    if not override then return false, entry.color[1], entry.color[2], entry.color[3] end
+    return true, r, g, b
+end
+
+local function PaintColor(plate, state, texture, entry)
+    local context = state.targetContext
+    local colors = context and context.available and context.candidates.notMe.castColors or state.castColors
+    local override, r, g, b = PaletteColor(plate, colors, entry)
+    if context and context.available and not plate._interrupted then
+        local targeted, tr, tg, tb = PaletteColor(plate, context.candidates.me.castColors, entry)
+        if override or targeted then
+            local selected, sr, sg, sb = addon.SelectTargetColor(context.flag,
+                { tr, tg, tb, entry.color[4] }, { r, g, b, entry.color[4] })
+            if selected then r, g, b, override = sr, sg, sb, true
+            else override, r, g, b = PaletteColor(plate, state.castColors, entry) end
+        end
+    end
     if not override and not entry.owned then return end
     state.writing = true
+    local ok, err
     if override then
-        texture:SetVertexColor(r, g, b, entry.color[4])
+        ok, err = pcall(texture.SetVertexColor, texture, r, g, b, entry.color[4])
     else
-        texture:SetVertexColor(unpack(entry.color))
+        ok, err = pcall(texture.SetVertexColor, texture, unpack(entry.color))
     end
     state.writing = nil
+    if not ok then error(err) end
     entry.owned = override and true or false
 end
 
@@ -111,18 +129,48 @@ local function WatchColor(plate, state, texture)
     return entry
 end
 
+local function ReadAlpha(cast)
+    if type(cast.GetAlpha) ~= "function" then return nil end
+    local ok, alpha = pcall(cast.GetAlpha, cast)
+    if ok then return alpha end
+end
+
+local function ReadableAlpha(alpha)
+    return not IsSecret(alpha) and type(alpha) == "number"
+end
+
 local function ApplyOpacity(plate, state)
     local style = state.style
     local override = style and style.castOpacityEnabled
     if not override and not state.opacityOwned then return end
+    if not state.opacityHooked then return end
+    local current = ReadAlpha(plate.cast)
+    -- Recapture only while our paint is absent, never from our multiplied alpha.
+    if not state.opacityOwned and not ReadableAlpha(state.baseAlpha) and ReadableAlpha(current) then
+        state.baseAlpha = current
+    end
+    local readable = ReadableAlpha(state.baseAlpha) and ReadableAlpha(current)
     local factor = override and math.max(0, math.min(100, tonumber(style.castOpacity) or defaults.castOpacity)) / 100 or 1
+    local target
+    if readable then
+        target = state.baseAlpha * factor
+    elseif state.opacityOwned and ReadableAlpha(state.baseAlpha) then
+        -- Release owned paint on a restricted getter using the latest native base.
+        target = state.baseAlpha
+    else
+        return
+    end
+    if ReadableAlpha(current) and current == target then
+        state.opacityOwned = readable and factor ~= 1 or nil
+        return
+    end
     state.writing = true
-    plate.cast:SetAlpha(state.baseAlpha * factor)
+    local ok = pcall(plate.cast.SetAlpha, plate.cast, target)
     state.writing = nil
-    state.opacityOwned = override and true or false
+    if ok then state.opacityOwned = readable and factor ~= 1 or nil end
 end
 
-function addon.ApplyCastStyle(plate, style, conditions, castColors)
+function addon.ApplyCastStyle(plate, style, conditions, castColors, targetContext)
     local cast = plate.cast
     if not cast then return end -- EUI friendly/name-only plates have no cast bar.
     if not (style and style.castEnabled) then style = nil end
@@ -137,20 +185,16 @@ function addon.ApplyCastStyle(plate, style, conditions, castColors)
     end
     local state = states[plate]
     if not state then
-        if not style and not next(castColors) then return end
+        if not style and not next(castColors) and not (targetContext and
+            (next(targetContext.candidates.me.castColors) or next(targetContext.candidates.notMe.castColors))) then return end
         local fill = cast:GetStatusBarTexture()
         state = {
             colors = setmetatable({}, { __mode = "k" }),
             baseTexture = fill and fill:GetTexture(),
             baseOverlay = plate.castBarOverlay and plate.castBarOverlay:GetTexture(),
-            baseAlpha = cast:GetAlpha(),
+            baseAlpha = ReadAlpha(cast),
         }
         states[plate] = state
-        hooksecurefunc(cast, "SetAlpha", function(_, alpha)
-            if state.writing then return end
-            state.baseAlpha = alpha
-            ApplyOpacity(plate, state)
-        end)
         if type(plate.ApplyCastColor) == "function" then
             hooksecurefunc(plate, "ApplyCastColor", function()
                 -- Interruptibility can flip without repainting the overlay RGB.
@@ -164,9 +208,20 @@ function addon.ApplyCastStyle(plate, style, conditions, castColors)
             end)
         end
     end
+    if not state.opacityHooked and type(cast.SetAlpha) == "function" then
+        hooksecurefunc(cast, "SetAlpha", function(_, alpha)
+            if state.writing then return end
+            -- A new native write relinquishes our paint, including secret writes.
+            state.baseAlpha = alpha
+            state.opacityOwned = nil
+            ApplyOpacity(plate, state)
+        end)
+        state.opacityHooked = true
+    end
     state.style = style
     state.conditions = style and conditions or nil
     state.castColors = castColors
+    state.targetContext = targetContext
     local fill = cast:GetStatusBarTexture()
     local engineFill, previousFill = fill, state.fill or fill
     local fillEntry = WatchColor(plate, state, fill)
@@ -211,6 +266,15 @@ function addon.ApplyCastStyle(plate, style, conditions, castColors)
 
 end
 
+function addon.RefreshConditionalCastColors(plate)
+    local state = states[plate]
+    if not state or not state.targetContext then return end
+    for _, texture in ipairs({ plate.cast:GetStatusBarTexture(), plate.castBarOverlay }) do
+        local entry = state.colors[texture]
+        if entry then PaintColor(plate, state, texture, entry) end
+    end
+end
+
 local NP = EllesmereNameplates_NS
 if NP and NP.ApplyCastBarTexture then
     hooksecurefunc(NP, "ApplyCastBarTexture", function(plate)
@@ -220,6 +284,6 @@ if NP and NP.ApplyCastBarTexture then
         state.baseTexture = fill and fill:GetTexture()
         state.baseOverlay = plate.castBarOverlay and plate.castBarOverlay:GetTexture()
         state.appliedTexture = nil
-        addon.ApplyCastStyle(plate, state.style, state.conditions, state.castColors)
+        addon.ApplyCastStyle(plate, state.style, state.conditions, state.castColors, state.targetContext)
     end)
 end

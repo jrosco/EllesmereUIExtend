@@ -21,6 +21,7 @@ ignore:
   - dist
   - Core/tests
   - Nameplates/tests
+  - Nameplates/TargetLayers.lua
 
 manual-changelog:
   filename: docs/NAMEPLATES-CHANGELOG.md

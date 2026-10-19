@@ -72,6 +72,7 @@ local choices = {
     reaction = { "enemy", "friendly", "neutral" },
     classification = { "normal", "elite", "rare", "rareelite", "boss", "minus" },
     target = { "yes", "no", "none" },
+    castTarget = { "me", "notMe" },
     threat = { "nonTank", "tank", "me" },
     playerCombat = { "inCombat", "outOfCombat" },
     instanceType = { "world", "dungeon", "raid", "battleground", "arena", "scenario", "delve" },
@@ -148,7 +149,8 @@ for key, values in pairs(choices) do
         assert(not ok and err:find(key, 1, true) and api.GetRules() == before,
             key .. " invalid import mutated live rules")
     end
-    local dirty = { conditions = { [key] = { [values[1]] = true, [values[2]] = false, unknown = true } } }
+    local dirty = { conditions = { [key] = { [values[1]] = true, unknown = true } } }
+    dirty.conditions[key][values[2] or "invalid"] = false
     api.NormalizeRuleConditions(dirty)
     Same(dirty.conditions[key], { [values[1]] = true }, key .. " saved-data cleanup")
 end

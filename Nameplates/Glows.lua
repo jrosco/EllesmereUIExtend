@@ -6,11 +6,40 @@ local STYLES = { [0] = "None", [1] = "Pixel Glow", [3] = "Auto-Cast Shine" }
 local ORDER = { 0, 1, 3 }
 local DEFAULT_COLOR = { r = 1, g = 0.788, b = 0.137 }
 local states = setmetatable({}, { __mode = "k" })
+local targetedStates = setmetatable({}, { __mode = "k" })
 local hidden = setmetatable({}, { __mode = "k" })
 local hooked = setmetatable({}, { __mode = "k" })
 local Apply
 local Secret = addon.IsSecret
 local Number = addon.ClampNumber
+local function TargetGate(state, host, bar, prefix, context, expected)
+    local gate = state.gates[prefix]
+    if not context then
+        if gate then
+            gate.status = "targeting disabled"
+            if gate.parented then host:SetParent(bar); gate.parented = nil end
+            gate.frame:SetAlpha(0)
+        end
+        return true, false, "targeting disabled"
+    end
+    if not gate then
+        local frame = CreateFrame("Frame", nil, bar)
+        frame:SetAllPoints(bar)
+        frame:EnableMouse(false)
+        gate = { frame = frame }
+        state.gates[prefix] = gate
+    end
+    if not gate.parented then host:SetParent(gate.frame); gate.parented = true end
+    gate.frame:SetAlpha(0)
+    gate.frame:Show()
+    local value = context.flag
+    -- A secret boolean is forwarded to the native sink, never compared or
+    -- negated. The separate parent survives alpha writes by the glow renderer.
+    local secret = Secret(value) == true
+    local written
+    written, gate.status = addon.SetTargetAlpha(gate.frame, value, expected)
+    return written, secret, gate.status
+end
 function api.SupportsRuleGlows()
     local G = GetHost() and GetHost().Glows
     return G and type(G.StartSpecGlow) == "function" and type(G.StopGlow) == "function"
@@ -49,6 +78,7 @@ local function ClearGlow(host)
     local G = host._extrasGlowEngine
     if G and G.StopGlow then G.StopGlow(host) end
     host._extrasGlowEngine = nil
+    host._extrasGlowKind = nil
     host._extrasShineSignature = nil
 end
 local function Stop(host)
@@ -88,6 +118,7 @@ local function Render(host, spec, width, height, preview, restricted)
         G.StartSpecGlow(host, spec, width, height, kind, preview and G.PANEL_EXTRA or nil)
     end
     host:Show()
+    host._extrasGlowKind = kind
     return true
 end
 function api.RenderRuleGlowPreview(host, style, prefix, width, height)
@@ -166,7 +197,9 @@ local function Host(plate, state, prefix, bar)
         state[prefix] = host
         host:SetScript("OnHide", function()
             ClearGlow(host)
-            if prefix == "cast" then ReleaseImportant(state); state.castRunning = false end
+            if prefix == "cast" then
+                ReleaseImportant(state); state.castRunning = false; state.targetStatus = nil
+            end
         end)
         host:SetScript("OnShow", function() if not state.busy then Apply(plate, state) end end)
     end
@@ -176,17 +209,27 @@ local function Host(plate, state, prefix, bar)
 end
 Apply = function(plate, state)
     if state.busy then return end
+    state.targetStatus = nil
     if state.unit ~= plate.unit then
         Stop(state.health); Stop(state.cast); ReleaseImportant(state)
         return
     end
     state.busy = true
     local ok, err = pcall(function()
+        local style = state.style
+        if state.targetContext then
+            local context = state.targetContext
+            if not context.available then
+                style = not state.targetExpected and context.candidates.fallback.style or nil
+            elseif state.targetExpected then style = context.candidates.me.style
+            else style = context.candidates.notMe.style end
+        end
         for _, prefix in ipairs({ "health", "cast" }) do
             local bar = prefix == "health" and plate.health or plate.cast
-            local spec = bar and Spec(state.style, prefix)
+            local spec = bar and Spec(style, prefix)
             local host = state[prefix]
             local running = false
+            local targetOnly = state.targetContext ~= nil
             if spec and api.SupportsRuleGlows() then
                 host = Host(plate, state, prefix, bar)
                 local visible, restricted = true, false
@@ -204,12 +247,28 @@ Apply = function(plate, state)
                 end
                 if visible or restricted then
                     local width, height = AuthoredDimensions(plate, prefix, state.sizes[prefix])
-                    running = Render(host, spec, width, height, false, restricted)
+                    local written, secret, status = TargetGate(state, host, bar, prefix, state.targetContext, state.targetExpected)
+                    if prefix == "cast" then state.targetStatus = status end
+                    if written then
+                        -- Probe again after parenting beneath the alpha gate.
+                        -- EUI's Shine driver supports secret alpha, but skips
+                        -- secret visibility and drops throwing visibility getters.
+                        local probeOK, shown = false, nil
+                        if host.IsVisible then probeOK, shown = pcall(host.IsVisible, host) end
+                        restricted = restricted or not probeOK or Secret(shown) or type(shown) ~= "boolean"
+                        -- Keep Pixel's tested native engine path for secret
+                        -- targeting. Shine only falls back for actual visibility
+                        -- restrictions, not merely an unreadable alpha value.
+                        running = Render(host, spec, width, height, false,
+                            restricted or (targetOnly and secret and spec.style ~= 3))
+                    else Stop(host) end
                 else Stop(host) end
             else Stop(host) end
             if prefix == "cast" then
                 state.castRunning = running
-                if running then SuppressImportant(plate._importantCastOverlay, state) else ReleaseImportant(state) end
+                -- Never suppress the native effect based on a secret target:
+                -- the replacement could be transparent for this cast.
+                if running and not targetOnly then SuppressImportant(plate._importantCastOverlay, state) else ReleaseImportant(state) end
             end
         end
     end)
@@ -222,15 +281,35 @@ Apply = function(plate, state)
         error(err)
     end
 end
-function addon.ApplyRuleGlows(plate, style)
+function addon.ApplyRuleGlows(plate, style, context)
+    if context and not context.glowChanged then context = nil end
     local state = states[plate]
     if not state then
-        if not Spec(style, "health") and not Spec(style, "cast") then return end
-        state = { sizes = { health = {}, cast = {} } }
+        if not context and not Spec(style, "health") and not Spec(style, "cast") then return end
+        state = { sizes = { health = {}, cast = {} }, gates = {} }
         states[plate] = state
     end
     state.style, state.unit = style, plate.unit
+    state.targetContext, state.targetExpected = context, false
     Apply(plate, state)
+    local targetState = targetedStates[plate]
+    if context then
+        if not targetState then
+            targetState = { sizes = state.sizes, gates = {} }
+            targetedStates[plate] = targetState
+        end
+        targetState.style, targetState.unit = context.candidates.me.style, plate.unit
+        targetState.targetContext, targetState.targetExpected = context, true
+        Apply(plate, targetState)
+    elseif targetState then
+        targetState.style, targetState.targetContext = nil, nil
+        Apply(plate, targetState)
+    end
+end
+function addon.RefreshConditionalRuleGlows(plate)
+    local state, targetState = states[plate], targetedStates[plate]
+    if state and state.targetContext then Apply(plate, state) end
+    if targetState and targetState.targetContext then Apply(plate, targetState) end
 end
 function addon.InstallGlowHooks(plate)
     if hooked[plate] then return end
@@ -243,26 +322,57 @@ function addon.InstallGlowHooks(plate)
                     hooksecurefunc(bar, method, function(_, a, b)
                         local state = states[plate]
                         if not state then return end
+                        if method == "Hide" or (method == "SetShown" and not Secret(a) and a == false) then
+                            Stop(state[prefix])
+                            if prefix == "cast" then ReleaseImportant(state) end
+                            local targetState = targetedStates[plate]
+                            if targetState then Stop(targetState[prefix]); if prefix == "cast" then ReleaseImportant(targetState) end end
+                            return
+                        end
+                        if method == "SetShown" and Secret(a) then return end
                         local size = state.sizes[prefix]
                         if (method == "SetSize" or method == "SetWidth") and not Secret(a) and type(a) == "number" then size.width = Number(a, 180, 1, 2000) end
                         local height = method == "SetHeight" and a or method == "SetSize" and b
                         if not Secret(height) and type(height) == "number" then size.height = Number(height, 17, 1, 2000) end
                         Apply(plate, state)
+                        local targetState = targetedStates[plate]
+                        if targetState then Apply(plate, targetState) end
                     end)
                 end
             end
         end
     end
-    for _, method in ipairs({ "UpdateCast", "ApplyAppearance", "UpdateImportantCastGlow", "ClearImportantCastGlow" }) do
+    for _, method in ipairs({ "UpdateCast", "UpdateCastText", "ApplyAppearance", "UpdateImportantCastGlow", "ClearImportantCastGlow" }) do
         if type(plate[method]) == "function" then
             hooksecurefunc(plate, method, function()
                 local state = states[plate]
                 if state then Apply(plate, state) end
+                local targetState = targetedStates[plate]
+                if targetState then Apply(plate, targetState) end
             end)
         end
     end
 end
 addon.GetRuleGlowFrames = function(plate)
     local state = states[plate]
+    if state then return state.health, state.cast end
+end
+addon.GetRuleCastGlowGate = function(plate)
+    local state = targetedStates[plate]
+    local gate = state and state.gates.cast
+    return gate and gate.frame
+end
+addon.GetTargetedCastGlowStatus = function(plate)
+    local state = targetedStates[plate]
+    if not state then return "no rule glow applied" end
+    if not state.targetContext then
+        return "targeting not enabled on the live glow rule"
+    end
+    if not state.castRunning then return "glow stopped; " .. (state.targetStatus or "cast bar hidden or no glow style") end
+    return (state.targetStatus or "target gate not evaluated")
+        .. "; renderer=" .. (state.cast and state.cast._extrasGlowKind or "none")
+end
+addon.GetConditionalRuleGlowFrames = function(plate)
+    local state = targetedStates[plate]
     if state then return state.health, state.cast end
 end

@@ -257,17 +257,18 @@ local function PrebuildTest()
         "Cast-bar texture", "Cast border size",
         "Override target arrows", "Target-arrow style", "Health border texture", "Cast border texture",
         "Health border glow", "Health glow color", "Cast border glow", "Cast glow color",
-        "Override text", "Top text", "Cast timer text", "+ Add Text Slot", "Player combat state", "Instance Type" }) do
+        "Override text", "Top text", "Cast timer text", "+ Add Text Slot", "Player combat state", "Instance Type", "Cast target" }) do
         assert(index[label], "prebuild missed " .. label)
     end
     assert(not index["Name text color"] and not index["Left text"], "compact text search should omit separate colors and unused slots")
     assert(index["Top text"].tooltip:find("color", 1, true), "slot search retains color description")
     assert(index["Unit type"].tooltip:find("Any creature", 1, true), "condition tooltip lost")
+    assert(index["Cast target"].tooltip:find("fill colors and glows", 1, true), "target-condition search explains supported effects")
     assert(index["Spell school"] == nil, "retired condition must not appear in search")
     for _, text in ipairs(actions) do assert(index[text], "action search entry lost: " .. text) end
     Build()
-    assert(#refreshes >= 8, "live condition refresh registrations missing")
-    for _, label in ipairs({ "Unit type", "Reaction", "Classification", "Target state", "Cast state", "Threat", "Player combat state", "Instance Type" }) do
+    assert(#refreshes >= 9, "live condition refresh registrations missing")
+    for _, label in ipairs({ "Unit type", "Reaction", "Classification", "Target state", "Cast state", "Threat", "Player combat state", "Instance Type", "Cast target" }) do
         assert(dropdowns[label] and rawget(dropdowns[label].parent, "nativeFrame"), "live dropdown missing: " .. label)
         assert(dropdowns[label].parent._slotLabel == label, "slot highlight metadata lost")
     end
@@ -288,7 +289,7 @@ local function PrebuildTest()
     assert(not unit.get("npc") and unit.get("player"), "deselect erased another selection")
     unit.set("player", false)
     assert(next(db.rules[1].conditions.unitType) == nil, "empty selection must mean Any")
-    print("PASS prebuild: actual GlobalSearch pass/index; two wrapper frames, zero controls; eight live dropdowns")
+    print("PASS prebuild: actual GlobalSearch pass/index; two wrapper frames, zero controls; nine live dropdowns")
 end
 local function SectionsTest()
     Build() -- first registration is retained, exactly like GlobalSearch.
@@ -298,7 +299,7 @@ local function SectionsTest()
     fields["Rule name"].set("Renamed second rule")
     local liveSections = {}
     for _, row in ipairs(pageRows) do if row._sectionName then liveSections[row._sectionName] = true end end
-    for _, label in ipairs({ "Edit rule", "Unit type", "Target state", "Cast state", "Nameplate size (%)",
+    for _, label in ipairs({ "Edit rule", "Unit type", "Target state", "Cast state", "Cast target", "Nameplate size (%)",
         "Health-bar texture", "Cast border size" }) do
         local section = destinations[label]
         assert(liveSections[section], "stale exact search destination for " .. label .. ": " .. section)

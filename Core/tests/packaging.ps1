@@ -39,6 +39,14 @@ foreach ($path in $archives) {
         $reader = New-Object System.IO.StreamReader($archive.GetEntry("$identity/$identity.toc").Open())
         try { $packagedToc = $reader.ReadToEnd() } finally { $reader.Dispose() }
         Check ($packagedToc -ceq $toc) 'Default ZIP preserves the dual-client source TOC'
+        if ($name -eq 'Nameplates') {
+            Check (Test-Path -LiteralPath (Join-Path $root 'Nameplates/TargetLayers.lua') -PathType Leaf) 'Nameplates preserves the development-only layer prototype source'
+            Check ($toc -notmatch 'TargetLayers\.lua') 'Nameplates source TOC does not load the development-only layer prototype'
+            Check ($packagedToc -notmatch 'TargetLayers\.lua') 'Nameplates packaged TOC does not load the development-only layer prototype'
+            Check (-not ($entries | Where-Object { $_ -match '(?i)(?:^|/)TargetLayers\.lua$' })) 'Nameplates ZIP excludes the development-only layer prototype'
+            $ignoredFiles = [regex]::Match($pkgmeta, '(?ms)^ignore:\r?\n(.*?)(?=^\S|\z)').Groups[1].Value
+            Check ($ignoredFiles -match '(?m)^\s+- Nameplates/TargetLayers\.lua\r?$') 'Nameplates release metadata explicitly ignores the development-only layer prototype'
+        }
         $iconPath = [regex]::Match($toc, '(?m)^## IconTexture: ([^\r\n]+)').Groups[1].Value
         Check ($iconPath -ceq "Interface\AddOns\$identity\Media\Icon.tga") 'Addon-list icon belongs to its own installed addon'
         $icon = $archive.GetEntry("$identity/Media/Icon.tga")

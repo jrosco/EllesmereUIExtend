@@ -44,7 +44,7 @@ Check(rule.style.healthGlowBackground and rule.style.healthGlowBackgroundColor.b
 Check(Preview("Health")._glow._mockGlowSpec.lines == 12, "cog updates existing preview immediately")
 local castShine = rows["Cast glow settings"]
 Check(not castShine.disabled() and #castShine.rows == 1 and castShine.rows[1].label == "Sparkle size (%)",
-    "Auto-Cast Shine cog exposes only sparkle sizing")
+    "Auto-Cast Shine cog exposes sparkle sizing; targeting belongs to rule conditions")
 castShine.rows[1].set(200)
 Check(rule.style.castGlowShineSize == 200 and rule.style.healthGlowShineSize == nil, "sparkle size saved independently per bar")
 Near(Preview("Cast")._glow._euiAcData.sparkles[1].width, 14, "sparkle sizing updates existing cast preview immediately")
